@@ -29,7 +29,14 @@ interface ModeCardProps {
   blurb: string;
   /** What the client does themselves in this mode. */
   youDo: string[];
-  /** What Autopilot takes off their hands. Empty for manual. */
+  /**
+   * What Autopilot takes off their hands.
+   *
+   * Rendered even when empty, with an explicit "nothing" — the two cards are a
+   * comparison, and a column that simply omits the section leaves a hole where
+   * the reader is trying to look across. Saying "nothing, this one is yours"
+   * answers the question the gap was posing.
+   */
   agentDoes: string[];
   cta: string;
   onPick: () => void;
@@ -82,11 +89,11 @@ function ModeCard({
           </ul>
         </div>
 
-        {agentDoes.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Autopilot does
-            </h3>
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Autopilot does
+          </h3>
+          {agentDoes.length > 0 ? (
             <ul className="mt-2.5 space-y-2">
               {agentDoes.map((line) => (
                 <li key={line} className="flex gap-2.5 text-sm">
@@ -98,8 +105,12 @@ function ModeCard({
                 </li>
               ))}
             </ul>
-          </div>
-        )}
+          ) : (
+            <p className="mt-2.5 text-sm text-muted-foreground">
+              Nothing. This one is entirely yours.
+            </p>
+          )}
+        </div>
       </div>
 
       <Button
