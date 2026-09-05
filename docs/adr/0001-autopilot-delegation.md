@@ -1,0 +1,150 @@
+# ADR 0001 — Autopilot needs a scoped job manager on-chain
+
+**Status:** accepted, not yet implemented
+**Date:** 2026-09-05
+
+---
+
+## The claim we want to make
+
+Atelier's middle row — a human client, managed by Autopilot — is only worth
+anything if this sentence is true:
+
+> The agent can pay the freelancer. It can never pay itself, move your money
+> anywhere else, or settle a dispute. Escrow and dispute rights stay yours.
+
+`PostJobPage` says exactly this to the client at the moment they choose the
+mode. It is the reason handing a job to an agent is a reasonable thing to do
+rather than a leap of faith.
+
+**It is not true today.** This ADR records why, and what has to be built.
+
+## Why it is not true today
+
+Every management function on the deployed contract checks the depositor:
+
+```solidity
+// SecureFlow.sol
+function approveMilestone(uint256 escrowId, uint256 milestoneIndex) external … {
+    Escrow storage esc = _requireEscrow(escrowId);
+    if (esc.depositor != msg.sender) revert Unauthorized();
+```
+
+`rejectMilestone` and `acceptFreelancer` carry the same check. So an agent
+cannot manage an escrow that a client funded — there is no seat at the table
+for a third party.
+
+Patron works around this by **being the depositor itself.** When a human
+commissions Patron today (`POST /api/instruct`), they deposit into Patron's
+shared treasury, and `createEscrow` is then called with Patron's own Circle
+Agent Wallet as the signer:
+
+```ts
+// patron/daemon/src/web3/secureflow.ts
+account: signer.address,   // Patron's wallet — not the human's
+```
+
+The human's position is a row in Patron's SQLite ledger. On-chain they are
+nobody. Concretely, a human client of Patron today:
+
+- is **not** the escrow depositor
+- **cannot** approve or reject a milestone
+- **cannot** raise a dispute — `disputeMilestone` admits only the depositor
+  and the beneficiary
+- **cannot** cancel, extend, or reclaim after the deadline
+- relies on Patron's honesty and uptime for the return of unspent funds
+
+That is a custodial arrangement. It is fine for what Patron was — an agent
+spending *its own* money — and it is not fine as the basis for asking a
+stranger to hand over management of *their* money.
+
+**This gap is the single most valuable thing to fix in the merge**, because it
+is the difference between the middle row existing and merely appearing to.
+
+## Decision
+
+Add a **scoped job manager** to the escrow contract.
+
+```solidity
+mapping(uint256 => address) public jobManager;
+
+function setJobManager(uint256 escrowId, address manager) external;   // depositor only
+function revokeJobManager(uint256 escrowId) external;                  // depositor only
+```
+
+A manager may do the *labour* of managing, and nothing else:
+
+| Function | Depositor | Manager |
+|---|:--:|:--:|
+| `acceptFreelancer` | ✅ | ✅ |
+| `submitMilestone` (freelancer) | — | — |
+| `approveMilestone` | ✅ | ✅ |
+| `rejectMilestone` | ✅ | ✅ |
+| `disputeMilestone` | ✅ | ❌ |
+| `cancelJob` | ✅ | ❌ |
+| `withdrawJobFunds` / `addJobFunds` | ✅ | ❌ |
+| `extendDeadline` | ✅ | ❌ |
+| `emergencyRefundAfterDeadline` | ✅ | ❌ |
+| `setJobManager` / `revokeJobManager` | ✅ | ❌ |
+
+### The one-way key, stated as an invariant
+
+> **No action by a manager can cause value to reach the manager.**
+
+Approval pays `esc.beneficiary` and nothing else, so a manager that approves is
+paying the freelancer by construction. The attack this leaves open is the
+manager hiring *itself* (or a confederate) as the freelancer and then approving
+its own work — so the guard is not optional:
+
+- `setJobManager` reverts if `manager == esc.beneficiary`
+- `acceptFreelancer` reverts if the caller is the manager and
+  `freelancer == msg.sender`
+- while a manager is set, `acceptFreelancer` reverts if
+  `freelancer == jobManager[escrowId]`, whoever calls it
+
+Collusion with an unrelated address remains possible and is **not** solvable in
+the contract — it is bounded instead by the client keeping dispute rights, the
+ability to revoke the manager at any moment, and per-job escrow amounts. Say
+this plainly in the submission rather than implying the contract prevents it.
+
+### Tests this needs before the claim goes back in the UI
+
+Written against the case we did *not* design for, per BRIEF.md:
+
+1. Manager cannot approve into its own address, by any path
+2. Manager cannot become the beneficiary — direct, or via `acceptFreelancer`
+3. Manager cannot dispute, cancel, extend, or withdraw
+4. Revocation is immediate: a revoked manager's next call reverts
+5. Depositor retains every one of its powers while a manager is set
+6. A dispute mid-Autopilot resolves normally and pays out from reserve
+7. Fuzz: for random action sequences by a manager, the manager's balance
+   never increases
+
+## Consequences
+
+- **A new contract deployment.** The deployed `0x6142…ab59` cannot gain this;
+  Arc mainnet is already on the schedule for Sept 14, so this rides along.
+- **Patron's daemon changes shape** for human-commissioned jobs: it stops being
+  the depositor and starts being the manager of an escrow the client funded.
+  Its agent-commissioned path (`/api/hire`, x402) is unaffected — there, Patron
+  genuinely is the client and should be the depositor.
+- **The `verified`/reputation work stacks on top**, because the manager is now
+  a distinct on-chain role that can carry its own record.
+- Until it ships, `PostJobPage`'s guarantee paragraph is marked in-source as
+  not-yet-true and must not be deployed.
+
+## Alternatives rejected
+
+**EIP-2771 meta-transactions** (already in the codebase for gasless applies):
+the client signs, the relayer submits. Rejected because it needs the client
+present to sign each approval, which is precisely the labour Autopilot is
+supposed to remove. It solves gas, not delegation.
+
+**Keep Patron as depositor, add an off-chain promise.** Rejected: it is the
+current arrangement, and no amount of UI can make a SQLite row into an escrow.
+
+**A generic account-abstraction session key.** Stronger in the abstract, but it
+delegates *transaction signing* rather than *a role*, so the one-way-key
+invariant would live in policy configuration instead of in the contract, and
+could not be unit-tested as a property of the escrow. A narrow, auditable
+per-escrow role is the smaller and more defensible surface.
