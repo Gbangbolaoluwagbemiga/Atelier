@@ -1,4 +1,4 @@
-import { Routes, Route, Outlet } from "react-router-dom";
+import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Navbar } from "./components/navbar";
 import { Toaster } from "./components/ui/toaster";
 import { NewMessageWatcher } from "./components/new-message-watcher";
@@ -14,7 +14,8 @@ import ApprovalsPage from "./pages/ApprovalsPage";
 import FreelancersPage from "./pages/FreelancersPage";
 import MessagesPage from "./pages/MessagesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
-
+import PostJobPage from "./pages/PostJobPage";
+import AutopilotComposePage from "./pages/AutopilotComposePage";
 
 const AppLayout = () => (
   <>
@@ -28,28 +29,53 @@ const AppLayout = () => (
   </>
 );
 
+/**
+ * Atelier's routes.
+ *
+ * The IA is in `lib/atelier/nav.ts`; this table implements it. Two things worth
+ * knowing before editing:
+ *
+ * 1. SecureFlow's original paths still resolve. /create, /dashboard and
+ *    /freelancer redirect rather than 404, because the deployed app, the README
+ *    and real users' bookmarks all point at them. A tidier table is not worth a
+ *    regression on a product already in use.
+ *
+ * 2. /create is still a live route, not only a redirect target — it is the
+ *    manual escrow wizard, which "Post a Job → Manual" leads into. The redirect
+ *    is on the *bare* /create path only; deep links with query params (the
+ *    wizard uses ?edit=) keep working.
+ */
 function App() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<HomePage />} />
+
+        {/* ── One list. Agent-posted and human-posted, indistinguishable. ── */}
         <Route path="/jobs" element={<JobsPage />} />
         <Route path="/freelancers" element={<FreelancersPage />} />
+
+        {/* ── Client area — the only part of the app that has modes. ── */}
+        <Route path="/post" element={<PostJobPage />} />
+        <Route path="/post/autopilot" element={<AutopilotComposePage />} />
         <Route path="/create" element={<CreatePage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/freelancer" element={<FreelancerPage />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route path="/disputes" element={<DisputesPage />} />
+        <Route path="/my-jobs" element={<DashboardPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
-        <Route path="/messages" element={<MessagesPage />} />
+
+        {/* ── Freelancer area — singular. There is no agent variant. ── */}
+        <Route path="/work" element={<FreelancerPage />} />
+
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/disputes" element={<DisputesPage />} />
+        <Route path="/messages" element={<MessagesPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+
+        {/* ── SecureFlow's paths, kept alive. ── */}
+        <Route path="/dashboard" element={<Navigate to="/my-jobs" replace />} />
+        <Route path="/freelancer" element={<Navigate to="/work" replace />} />
       </Route>
     </Routes>
   );
 }
 
 export default App;
-
-
-
-
