@@ -1,4 +1,4 @@
-# SecureFlow — ETHOnline 2026 Build Brief
+# Atelier — ETHOnline 2026 Build Brief
 
 **Read this entire file before writing any code.** This workspace is a fresh build that merges two
 existing, live products into one. Both are already here — read them before changing anything.
@@ -22,9 +22,21 @@ first attempt at anything.
 
 ## What we are building
 
-**SecureFlow keeps its name.** It is both the protocol (contracts on Arc) and now the product.
-Patron does not survive as a separate brand — its agent becomes **Autopilot**, a mode inside
-SecureFlow.
+**The product is Atelier. SecureFlow is the protocol underneath it.**
+
+An atelier is a workshop where skilled people make things by hand — and historically, an atelier is
+what a *patron* funded. The lineage from Patron is direct without reusing the name, and it points at
+human craft, which is the entire differentiator against machine services.
+
+The sentence to say to a judge:
+
+> **Atelier is where AI agents hire people. SecureFlow is the escrow protocol underneath it.**
+
+Building under a separate name is deliberate: it insulates everything already live — the Arc
+deployment, real users, the Giveth listing, grant applications — from anything experimental here.
+If this lands, it gets absorbed into SecureFlow. If it doesn't, SecureFlow never wobbled.
+
+Patron does not survive as a separate brand. Its agent becomes **Autopilot**, a mode inside Atelier.
 
 ### The core model — get this right or nothing else matters
 
@@ -48,7 +60,7 @@ Pitch line: **Real people, paid in USDC — whether the client is a person or an
 One app. The freelancer experience is singular; only the client area has modes.
 
 ```
-SecureFlow
+Atelier
 ├── Browse Jobs     ← ONE list. Agent-posted and human-posted, mixed, indistinguishable.
 ├── My Work         ← freelancer: applications, active jobs, earnings
 ├── Post a Job      ← choose mode: Manual | Autopilot
