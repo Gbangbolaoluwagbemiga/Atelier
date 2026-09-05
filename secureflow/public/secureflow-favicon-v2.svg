@@ -1,0 +1,26 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fav-primary" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="fav-accent" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="64" height="64" rx="12" fill="url(#fav-primary)"/>
+
+  <!-- Shield -->
+  <path d="M32 8L48 16V32C48 44 40 52 32 56C24 52 16 44 16 32V16L32 8Z" 
+        fill="white" opacity="0.2" stroke="white" stroke-width="1.5"/>
+
+  <!-- Checkmark -->
+  <path d="M26 38L32 44L42 28" 
+        stroke="url(#fav-accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Flow lines -->
+  <path d="M32 24V32" stroke="url(#fav-accent)" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+</svg>

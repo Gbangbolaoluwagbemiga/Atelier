@@ -1,0 +1,144 @@
+import { useState, useEffect } from "react";
+import { encodeJobId } from "@/lib/id-codec";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { motion } from "framer-motion";
+import { Clock, AlertCircle, Star } from "lucide-react";
+import type { Escrow } from "@/lib/web3/types";
+import { ContractService } from "@/lib/web3/contract-service";
+import { CONTRACTS } from "@/lib/web3/config";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
+
+interface JobCardProps {
+  job: Escrow;
+  index: number;
+  hasApplied: boolean;
+  isContractPaused: boolean;
+  ongoingProjectsCount: number;
+  onApply: (job: Escrow) => void;
+}
+
+export function JobCard({
+  job,
+  index,
+  hasApplied,
+  isContractPaused,
+  ongoingProjectsCount,
+  onApply,
+}: JobCardProps) {
+  const [clientRating, setClientRating] = useState<{ average: number; count: number } | null>(null);
+
+  useEffect(() => {
+    if (!job.payer) return;
+    const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+    svc.getAverageClientRating(job.payer)
+      .then((r: any) => { if (r.count > 0) setClientRating({ average: r.averageX100 / 100, count: r.count }); })
+      .catch(() => {});
+  }, [job.payer]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "active":
+        return "bg-blue-100 text-blue-800";
+      case "completed":
+        return "bg-green-100 text-green-800";
+      case "disputed":
+        return "bg-red-100 text-red-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.1 }}
+    >
+      <Card className="glass border-primary/20 p-4 md:p-6 hover:border-primary/40 transition-colors">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              <h3 className="text-xl font-bold">
+                {job.projectTitle || job.projectDescription || encodeJobId(job.id)}
+              </h3>
+              <Badge variant="secondary" className="gap-1">
+                <Clock className="h-3 w-3" />
+                {job.duration > 0 ? Math.max(1, Math.round(job.duration / 86400)) : 0} days
+              </Badge>
+              <Badge className={getStatusColor(job.status)}>{job.status}</Badge>
+            </div>
+
+            <p className="text-muted-foreground mb-4 break-words overflow-hidden">
+              {job.projectDescription || "No description available"}
+            </p>
+
+            <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+              <span>Posted {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : "Recently"}</span>
+              <span>•</span>
+              <span>
+                Budget: {formatTokenAmount(job.totalAmount, job.token)}
+              </span>
+              {clientRating && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1" title={`Client rated ${clientRating.average}/5 by ${clientRating.count} freelancer(s)`}>
+                    <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                    <span className="font-medium text-foreground">{clientRating.average.toFixed(1)}</span>
+                    <span className="text-xs">({clientRating.count})</span>
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-4 w-full lg:w-auto">
+            <div className="text-right w-full lg:w-auto">
+              <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
+              <p className="text-2xl md:text-3xl font-bold text-primary break-all">
+                {formatTokenAmount(job.totalAmount, job.token)}
+              </p>
+            </div>
+
+            <Button
+              onClick={() => onApply(job)}
+              disabled={
+                hasApplied ||
+                isContractPaused ||
+                job.isJobCreator ||
+                ongoingProjectsCount >= 3
+              }
+              className="w-full lg:w-auto min-w-[140px]"
+            >
+              {(() => {
+                const buttonText = isContractPaused ? (
+                  <>
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    Contract Paused
+                  </>
+                ) : job.isJobCreator ? (
+                  "Your Job"
+                ) : hasApplied ? (
+                  "Applied"
+                ) : ongoingProjectsCount >= 3 ? (
+                  <>
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    Project Limit (3/3)
+                  </>
+                ) : (
+                  "Apply Now"
+                );
+                return buttonText;
+              })()}
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}

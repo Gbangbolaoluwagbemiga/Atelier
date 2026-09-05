@@ -1,0 +1,14 @@
+{
+  "name": "secureflow-subgraph",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy:goldsky": "goldsky subgraph deploy secureflow/v1 --path ."
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.81.0",
+    "@graphprotocol/graph-ts": "^0.35.1"
+  }
+}

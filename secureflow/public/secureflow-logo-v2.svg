@@ -1,0 +1,51 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="primaryGradient" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="128" fill="url(#primaryGradient)" opacity="0.1"/>
+
+  <!-- Main Shield -->
+  <g filter="url(#shadow)">
+    <!-- Shield body -->
+    <path d="M128 32L192 64V128C192 176 160 208 128 224C96 208 64 176 64 128V64L128 32Z" 
+          fill="url(#primaryGradient)" stroke="white" stroke-width="2"/>
+    
+    <!-- Inner shield highlight -->
+    <path d="M128 48L176 72V128C176 168 152 192 128 208C104 192 80 168 80 128V72L128 48Z" 
+          fill="white" opacity="0.1"/>
+  </g>
+
+  <!-- Flowing lines (representing secure transactions) -->
+  <g stroke="url(#accentGradient)" stroke-width="3" stroke-linecap="round" fill="none">
+    <!-- Left flow -->
+    <path d="M100 120C95 125 92 135 95 145" opacity="0.8"/>
+    <!-- Center flow -->
+    <path d="M128 110C128 120 128 135 128 145" opacity="1"/>
+    <!-- Right flow -->
+    <path d="M156 120C161 125 164 135 161 145" opacity="0.8"/>
+  </g>
+
+  <!-- Checkmark (verification/completion) -->
+  <g stroke="url(#accentGradient)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M110 155L125 170L155 135"/>
+  </g>
+
+  <!-- Lock icon (security) - subtle -->
+  <g opacity="0.6">
+    <rect x="112" y="100" width="32" height="28" rx="4" fill="none" stroke="white" stroke-width="2"/>
+    <path d="M120 100V88C120 80 124 76 128 76C132 76 136 80 136 88V100" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="128" cy="118" r="2" fill="white"/>
+  </g>
+</svg>

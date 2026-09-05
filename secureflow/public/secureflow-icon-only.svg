@@ -1,0 +1,57 @@
+<svg width="1200" height="1200" viewBox="0 0 1200 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="1200" y2="1200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D0D0D"/>
+      <stop offset="100%" stop-color="#1A0033"/>
+    </linearGradient>
+    <linearGradient id="shield-grad" x1="300" y1="150" x2="900" y2="1050" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#7D00FF"/>
+    </linearGradient>
+    <linearGradient id="accent-grad" x1="440" y1="480" x2="820" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E879F9"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shield-glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="0" stdDeviation="36" flood-color="#7D00FF" flood-opacity="0.65"/>
+    </filter>
+  </defs>
+
+  <!-- Dark background -->
+  <rect width="1200" height="1200" fill="url(#bg-grad)"/>
+
+  <!-- Radial purple glow -->
+  <circle cx="600" cy="600" r="460" fill="#7D00FF" opacity="0.09"/>
+
+  <!-- Shield — centered and taller since no wordmark -->
+  <g filter="url(#shield-glow)">
+    <path d="M600 130L930 305V600C930 835 772 1005 600 1110C428 1005 270 835 270 600V305L600 130Z"
+          fill="url(#shield-grad)" opacity="0.96"/>
+    <!-- Inner highlight -->
+    <path d="M600 235L848 388V600C848 784 730 930 600 1020C470 930 352 784 352 600V388L600 235Z"
+          fill="white" opacity="0.07"/>
+  </g>
+
+  <!-- Flow lines -->
+  <g stroke="url(#accent-grad)" stroke-width="20" stroke-linecap="round" fill="none" filter="url(#glow)" opacity="0.9">
+    <path d="M458 568C428 614 410 684 432 752"/>
+    <path d="M600 500C600 590 600 700 600 795"/>
+    <path d="M742 568C772 614 790 684 768 752"/>
+  </g>
+
+  <!-- Checkmark -->
+  <g stroke="#E879F9" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#glow)">
+    <path d="M452 742L572 862L822 592"/>
+  </g>
+
+  <!-- Lock — subtle -->
+  <g opacity="0.32">
+    <rect x="510" y="390" width="180" height="158" rx="24" fill="none" stroke="white" stroke-width="11"/>
+    <path d="M554 390V262C554 152 600 88 600 88C600 88 646 152 646 262V390" fill="none" stroke="white" stroke-width="11" stroke-linecap="round"/>
+    <circle cx="600" cy="500" r="13" fill="white"/>
+  </g>
+</svg>

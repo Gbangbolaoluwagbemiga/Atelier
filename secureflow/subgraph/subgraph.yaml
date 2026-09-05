@@ -1,0 +1,53 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: SecureFlow
+    network: arc-testnet
+    source:
+      address: "0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59"
+      abi: SecureFlow
+      startBlock: 47239341
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Escrow
+        - Milestone
+        - Evidence
+        - Application
+        - Rating
+      abis:
+        - name: SecureFlow
+          file: ../contracts/solidity/out/SecureFlow.sol/SecureFlow.json
+      eventHandlers:
+        # EscrowCreated now includes platformFee as 7th param
+        - event: EscrowCreated(indexed uint256,indexed address,indexed address,address[],uint256,uint256,uint256,address,uint256,bool)
+          handler: handleEscrowCreated
+        - event: EscrowUpdated(indexed uint256,uint8,uint256)
+          handler: handleEscrowUpdated
+        - event: WorkStarted(indexed uint256,indexed address,uint256)
+          handler: handleWorkStarted
+        - event: DeadlineExtended(indexed uint256,uint256,uint256)
+          handler: handleDeadlineExtended
+        - event: MilestoneSubmitted(indexed uint256,indexed uint256,indexed address,string,uint256)
+          handler: handleMilestoneSubmitted
+        - event: MilestoneApproved(indexed uint256,indexed uint256,indexed address,uint256,uint256)
+          handler: handleMilestoneApproved
+        - event: MilestoneRejected(indexed uint256,indexed uint256,indexed address,string,uint256)
+          handler: handleMilestoneRejected
+        - event: MilestoneDisputed(indexed uint256,indexed uint256,indexed address,string,uint256)
+          handler: handleMilestoneDisputed
+        - event: DisputeResolved(indexed uint256,indexed uint256,indexed address,uint256,uint256,uint256)
+          handler: handleDisputeResolved
+        - event: EvidenceSubmitted(indexed uint256,indexed uint256,indexed address,string)
+          handler: handleEvidenceSubmitted
+        - event: ApplicationSubmitted(indexed uint256,indexed address,string,uint256)
+          handler: handleApplicationSubmitted
+        - event: FreelancerAccepted(indexed uint256,indexed address)
+          handler: handleFreelancerAccepted
+        - event: RatingSubmitted(indexed uint256,indexed address,indexed address,uint8)
+          handler: handleRatingSubmitted
+      file: ./src/mapping.ts

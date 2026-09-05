@@ -1,0 +1,29 @@
+{
+  "name": "SecureFlow - Secure Escrow Platform",
+  "short_name": "SecureFlow",
+  "description": "Decentralized freelancer marketplace with trustless escrow on Arc EVM",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
+  "icons": [
+    {
+      "src": "/secureflow-favicon-v2.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/secureflow-logo-v2.svg",
+      "sizes": "256x256",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/secureflow-social-logo.svg",
+      "sizes": "1200x1200",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
