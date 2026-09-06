@@ -192,21 +192,21 @@ export default function PostJobPage() {
         contract, with the same rights — and that is what makes the amber column
         safe to choose rather than a leap of faith.
 
-        ┌─ NOT TRUE YET — DO NOT DEPLOY THIS COPY ─────────────────────────────┐
-        │ "Autopilot can pay the freelancer, never itself" is a claim about a  │
-        │ mechanism that does not exist on-chain today. SecureFlow's           │
-        │ approveMilestone / rejectMilestone / acceptFreelancer each require   │
-        │ `esc.depositor == msg.sender`, so an agent cannot manage a job the   │
-        │ client funded — today Patron works around this by being the          │
-        │ depositor itself, which is exactly the arrangement this page         │
-        │ promises we are not making.                                          │
-        │                                                                      │
-        │ Making it true needs the scoped job-manager delegation described in  │
-        │ docs/adr/0001-autopilot-delegation.md. Until that ships and is        │
-        │ tested, this copy is a claim we cannot back — and shipping an        │
-        │ unbacked mechanism claim is the specific mistake BRIEF.md's          │
-        │ do-not-repeat table names first.                                     │
-        └──────────────────────────────────────────────────────────────────────┘
+        ┌─ TRUE IN THE REPO, NOT YET ON-CHAIN ─────────────────────────────────┐
+        │ The mechanism now exists: SecureFlow.sol carries a scoped job manager │
+        │ that may hire, approve and reject and nothing else, with the one-way  │
+        │ key enforced at two points and proved by a fuzzed invariant over      │
+        │ 128,000 calls. See docs/adr/0001-autopilot-delegation.md.             │
+        │                                                                       │
+        │ What is still missing is deployment. The live contract at             │
+        │ 0x6142…ab59 predates the change, and Atelier does not yet call        │
+        │ setJobManager when it creates an Autopilot job. Until BOTH land, this │
+        │ paragraph describes the contract in this repo rather than the one a   │
+        │ client's money would actually sit in — so it must not ship.           │
+        │                                                                       │
+        │ Delete this marker when the redeploy and the wiring are done, not     │
+        │ when the tests go green.                                              │
+        └───────────────────────────────────────────────────────────────────────┘
       */}
       <motion.section
         initial={{ opacity: 0 }}

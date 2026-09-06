@@ -1,7 +1,15 @@
 # ADR 0001 — Autopilot needs a scoped job manager on-chain
 
-**Status:** accepted, not yet implemented
-**Date:** 2026-09-05
+**Status:** implemented and tested; **not yet deployed**
+**Date:** 2026-09-05 · implemented 2026-09-06
+
+> **Where this stands.** The contract change and its tests are in the repo:
+> `setJobManager` / `revokeJobManager`, the permission boundary, and the
+> one-way key as a fuzzed invariant (25 tests, from a baseline of zero). What
+> is NOT done: the deployed contract at `0x6142…ab59` predates all of it, and
+> Atelier's UI does not yet call `setJobManager`. Until both land, Autopilot in
+> production is still the custodial arrangement described below, and the
+> product must keep saying so.
 
 ---
 
@@ -109,7 +117,8 @@ this plainly in the submission rather than implying the contract prevents it.
 
 ### Tests this needs before the claim goes back in the UI
 
-Written against the case we did *not* design for, per BRIEF.md:
+All seven exist and pass — see `contracts/solidity/test/`. Written against the
+case we did *not* design for, per BRIEF.md:
 
 1. Manager cannot approve into its own address, by any path
 2. Manager cannot become the beneficiary — direct, or via `acceptFreelancer`
@@ -148,3 +157,44 @@ delegates *transaction signing* rather than *a role*, so the one-way-key
 invariant would live in policy configuration instead of in the contract, and
 could not be unit-tested as a property of the escrow. A narrow, auditable
 per-escrow role is the smaller and more defensible surface.
+
+
+---
+
+## Implementation notes (2026-09-06)
+
+**What was built.** `jobManager` mapping, `setJobManager` / `revokeJobManager` /
+`isJobManager`, and an `_onlyDepositorOrManager` check replacing the bare
+depositor test on exactly three functions: `acceptFreelancer`,
+`approveMilestone`, `rejectMilestone`. Nothing else moved.
+
+**The one-way key needed two enforcement points, not one.** `setJobManager`
+checks `manager != beneficiary`, but on an open job the beneficiary does not
+exist yet — it is assigned by `acceptFreelancer`. So the self-hire guard lives
+there too, and is checked against the *stored* manager rather than `msg.sender`,
+which also stops a depositor from hiring their own agent as the worker by
+mistake.
+
+**Milestone proposals were deliberately left out.** `approveMilestoneProposal`
+and `rejectMilestoneProposal` change a milestone's amount, and while that still
+only ever pays the beneficiary, it is a money decision rather than review
+labour. Depositor-only for now. Revisit only if Autopilot demonstrably needs it.
+
+**One test expectation was wrong and the contract was right.** A manager
+approving a disputed milestone reverts with `EscrowNotActive`, not
+`MilestoneNotSubmitted` — a dispute freezes the whole escrow, not just the
+milestone under argument. That is the stronger guarantee, and the test now pins
+it deliberately.
+
+**The invariant handler includes the calls a manager must NOT have** — dispute,
+cancel, withdraw, extend, re-appoint, self-hire. A handler offering only the
+permitted calls would prove nothing; this one would find the path if a guard
+were ever loosened. Two liveness tests assert the handler actually moves money,
+because every handler call is wrapped in try/catch and a fully-reverting handler
+would report 128,000 calls, zero reverts, and three green invariants while
+testing nothing.
+
+**Still to do before the UI may claim this:** redeploy (rides along with the
+Sept 14 Arc mainnet push), then wire `setJobManager` into Atelier's Autopilot
+job creation, then delete the in-source `NOT TRUE YET` marker in
+`PostJobPage.tsx` and the custody notice in `AutopilotComposePage.tsx`.

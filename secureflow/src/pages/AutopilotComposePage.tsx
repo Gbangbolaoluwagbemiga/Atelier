@@ -118,10 +118,10 @@ export default function AutopilotComposePage() {
             </strong>{" "}
             Autopilot currently funds the escrow from its own wallet against a
             balance you deposit, which means it — not you — is the on-chain
-            client for this job, and dispute rights sit with it. The scoped
-            job-manager delegation that puts your wallet on the escrow is next
-            on the build; until it lands, treat Autopilot as custodial and size
-            jobs accordingly.
+            client for this job, and dispute rights sit with it. The delegation
+            that puts your own wallet on the escrow is built and tested but not
+            yet deployed; until it is live, treat Autopilot as custodial and
+            size jobs accordingly.
           </div>
         </div>
 

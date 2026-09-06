@@ -50,6 +50,9 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     error CannotCancelAssignedJob();
     error NoPendingProposal();
     error ProposalAlreadyExists();
+    error ManagerCannotBeBeneficiary();
+    error ManagerCannotSelfHire();
+    error NoManagerSet();
 
     /* ===================== ENUMS & STRUCTS ===================== */
     enum EscrowStatus { Pending, InProgress, Released, Refunded, Disputed, Expired, Cancelled }
@@ -139,6 +142,37 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     mapping(address => uint256) public userCancellations;
     mapping(address => uint256) public lastCancellationTime;
 
+    /**
+     * Autopilot: a per-escrow manager who may do the LABOUR of managing a job —
+     * hiring, approving, rejecting — on behalf of the depositor, and nothing
+     * else.
+     *
+     * This exists so that a client can delegate the work of running a job to an
+     * agent WITHOUT handing over the money. Before it, the only way an agent
+     * could manage a job was to be the depositor itself, which made the client
+     * a custodial creditor with no on-chain standing: no approval rights, and —
+     * worse — no ability to dispute, since disputeMilestone admits only the
+     * depositor and the beneficiary.
+     *
+     * THE ONE-WAY KEY, the invariant this whole feature rests on:
+     *
+     *     No action available to a manager can cause value to reach the manager.
+     *
+     * It holds structurally rather than by inspection: the only value-moving
+     * call a manager has is approveMilestone, and that pays esc.beneficiary and
+     * nothing else. So the guard that keeps it true is simply that a manager can
+     * never BE the beneficiary — enforced at both ends, in setJobManager and in
+     * acceptFreelancer, because the beneficiary of an open job is assigned after
+     * the manager is appointed.
+     *
+     * What this does NOT prevent: a manager hiring a confederate. No contract
+     * can tell an arm's-length hire from a collusive one. That risk is bounded
+     * off-chain instead — the depositor keeps dispute rights, can revoke the
+     * manager at any moment, and funds only one job at a time. Do not let the
+     * permission table imply otherwise.
+     */
+    mapping(uint256 => address) public jobManager;
+
     /* ===================== EVENTS ===================== */
     event EscrowCreated(
         uint256 indexed escrowId,
@@ -181,6 +215,8 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     event MilestoneProposalSubmitted(uint256 indexed escrowId, uint256 indexed milestoneIndex, address indexed freelancer, uint256 proposedAmount, string proposedDescription);
     event MilestoneProposalApproved(uint256 indexed escrowId, uint256 indexed milestoneIndex, uint256 newAmount, string newDescription);
     event MilestoneProposalRejected(uint256 indexed escrowId, uint256 indexed milestoneIndex);
+    event JobManagerSet(uint256 indexed escrowId, address indexed manager);
+    event JobManagerRevoked(uint256 indexed escrowId, address indexed manager);
 
     /* ===================== MODIFIERS ===================== */
     modifier onlyArbiter() {
@@ -189,6 +225,20 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     }
     function _onlyArbiter() internal view {
         if (!authorizedArbiters[msg.sender]) revert Unauthorized();
+    }
+
+    /**
+     * @dev Callable by the depositor, or by a manager the depositor appointed.
+     *
+     * Guarded against the address(0) case: an unset jobManager is address(0),
+     * and msg.sender is never address(0) in a real transaction, but relying on
+     * that keeps a footgun one refactor away from being live.
+     */
+    function _onlyDepositorOrManager(Escrow storage esc, uint256 escrowId) internal view {
+        if (msg.sender == esc.depositor) return;
+        address mgr = jobManager[escrowId];
+        if (mgr != address(0) && msg.sender == mgr) return;
+        revert Unauthorized();
     }
 
     /* ===================== CONSTRUCTOR ===================== */
@@ -343,7 +393,10 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         external nonReentrant whenNotPaused
     {
         Escrow storage esc = _requireEscrow(escrowId);
-        if (esc.depositor != msg.sender) revert Unauthorized();
+        // Depositor, or the agent they appointed. Payment goes to esc.beneficiary
+        // either way — a manager approving is paying the freelancer by
+        // construction, never itself.
+        _onlyDepositorOrManager(esc, escrowId);
         if (esc.status != EscrowStatus.InProgress) revert EscrowNotActive();
 
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);
@@ -371,7 +424,9 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         external whenNotPaused
     {
         Escrow storage esc = _requireEscrow(escrowId);
-        if (esc.depositor != msg.sender) revert Unauthorized();
+        // Rejection moves no value; it sends the milestone back for revision,
+        // which is exactly the review labour Autopilot exists to do.
+        _onlyDepositorOrManager(esc, escrowId);
         if (esc.status != EscrowStatus.InProgress) revert EscrowNotActive();
 
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);
@@ -544,16 +599,82 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
 
     function acceptFreelancer(uint256 escrowId, address freelancer) external whenNotPaused {
         Escrow storage esc = _requireEscrow(escrowId);
-        if (msg.sender != esc.depositor) revert Unauthorized();
+        _onlyDepositorOrManager(esc, escrowId);
         if (!esc.isOpenJob) revert NotAnOpenJob();
         if (!hasApplied[escrowId][freelancer]) revert FreelancerNotApplied();
         if (freelancer == address(0)) revert InvalidAddress();
+
+        /**
+         * THE ONE-WAY KEY, second enforcement point.
+         *
+         * setJobManager checks manager != beneficiary, but on an open job the
+         * beneficiary is not known yet — it is assigned right here. Without this
+         * check a manager could appoint itself the freelancer and then approve
+         * its own milestones, which is the entire attack the invariant exists to
+         * stop.
+         *
+         * Checked against the stored manager rather than against msg.sender, so
+         * it holds no matter who calls: a depositor cannot accidentally hire
+         * their own agent as the worker either.
+         */
+        if (freelancer == jobManager[escrowId]) revert ManagerCannotSelfHire();
 
         esc.beneficiary = freelancer;
         esc.isOpenJob = false;
         userEscrows[freelancer].push(escrowId);
 
         emit FreelancerAccepted(escrowId, freelancer);
+    }
+
+    /* ===================== AUTOPILOT: SCOPED JOB MANAGER ===================== */
+
+    /**
+     * @notice Appoint an agent to manage this job on your behalf.
+     * @dev Depositor only. The manager may hire, approve and reject. It may not
+     *      dispute, cancel, extend, add or withdraw funds, re-appoint, or become
+     *      the beneficiary — see the jobManager mapping for the invariant.
+     *
+     *      Appointing a new manager replaces the previous one outright; there is
+     *      deliberately no list. One job, one manager, so "who did this" always
+     *      has exactly one answer.
+     */
+    function setJobManager(uint256 escrowId, address manager) external whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+        if (manager == address(0)) revert InvalidAddress();
+
+        // Paying yourself to manage your own job is a configuration mistake, and
+        // silently accepting it would leave a manager set that nobody expects.
+        if (manager == esc.depositor) revert InvalidAddress();
+
+        // THE ONE-WAY KEY. A manager that is also the beneficiary could approve
+        // its own milestones and drain the escrow to itself.
+        if (manager == esc.beneficiary) revert ManagerCannotBeBeneficiary();
+
+        jobManager[escrowId] = manager;
+        emit JobManagerSet(escrowId, manager);
+    }
+
+    /**
+     * @notice Take back management of this job, immediately.
+     * @dev Depositor only. Effective on the next call — a revoked manager's very
+     *      next transaction reverts. This is the client's escape hatch and must
+     *      never depend on the manager's cooperation or on a timelock.
+     */
+    function revokeJobManager(uint256 escrowId) external {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+
+        address mgr = jobManager[escrowId];
+        if (mgr == address(0)) revert NoManagerSet();
+
+        delete jobManager[escrowId];
+        emit JobManagerRevoked(escrowId, mgr);
+    }
+
+    /// @notice Whether `who` may currently manage `escrowId`.
+    function isJobManager(uint256 escrowId, address who) external view returns (bool) {
+        return who != address(0) && jobManager[escrowId] == who;
     }
 
     /* ===================== JOB MANAGEMENT (BEFORE ASSIGNMENT) ===================== */

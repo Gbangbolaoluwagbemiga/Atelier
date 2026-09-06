@@ -8,3 +8,11 @@ build/
 .DS_Store
 coverage/
 .vite/
+
+# OpenZeppelin is declared as a submodule in secureflow/.gitmodules, not
+# vendored. Committing ~2,000 upstream files during the event would bury the
+# work that is actually being judged. Setup:
+#   git clone --depth 1 --branch v5.1.0 \
+#     https://github.com/OpenZeppelin/openzeppelin-contracts \
+#     secureflow/contracts/solidity/lib/openzeppelin-contracts
+secureflow/contracts/solidity/lib/openzeppelin-contracts/
