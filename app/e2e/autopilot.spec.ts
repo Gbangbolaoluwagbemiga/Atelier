@@ -104,7 +104,20 @@ test.describe("Autopilot compose", () => {
     expect(await amounts.count()).toBeGreaterThan(2);
 
     await expect(page.getByText(/you fund this, not autopilot/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /fund this escrow/i })).toBeVisible();
+
+    /*
+     * The funding button, whichever state it is in. With no wallet connected it
+     * reads "Connect a wallet to fund this"; with one it reads "Fund and post —
+     * $75.00". Both are the same control and the test should not care which,
+     * only that the page ends in one action rather than handing off to a wizard.
+     */
+    await expect(
+      page.getByRole("button", { name: /fund (and post|this)|connect a wallet to fund/i }),
+    ).toBeVisible();
+
+    // The review window is askable now — it was always supported by the daemon
+    // and never set by anything.
+    await expect(page.getByLabel(/review applications after/i)).toBeVisible();
   });
 
   test("can go back and change the instruction without losing the page", async ({ page }) => {
