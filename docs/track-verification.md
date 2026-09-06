@@ -140,3 +140,45 @@ pre-existing from new work**, and a demo video focused on the new work.
 - [ETHOnline 2026 prizes](https://ethglobal.com/events/ethonline2026/prizes)
 - [Chainlink VRF v2.5 supported networks](https://docs.chain.link/vrf/v2-5/supported-networks)
 - [The Graph supported networks](https://thegraph.com/docs/en/supported-networks/)
+
+
+---
+
+## Round two, 2026-09-06 — the sponsor list was wider than we thought
+
+The first pass read a search snippet listing eight sponsors. The prize page
+itself lists **eleven**, and two of the missing ones matter:
+
+| | Campaign plan assumed | Actually |
+|---|---|---|
+| **Arc** | ~$3.1k across two tracks | **$10,000** across several |
+| **Bazantic** | $1.5k | **$3,000** across four tracks |
+| **Privy** | listed Tier 2 | confirmed, 2 × $2,500 |
+
+Arc being $10k rather than $3.1k changes the ordering: it is the chain Atelier
+already lives on, the integration is already done, and the remaining work is a
+mainnet deploy that has a deadline of Sept 30 rather than Sept 16.
+
+**Lesson, again:** read the sponsor's own page, not a summary of it. This is the
+second time a summarised source was wrong in a way that would have cost real
+work — the first was VRF.
+
+## Uniswap — verified, and it constrained the build
+
+The track is broad: "the Uniswap API, the Uniswap AMM (v2, v3, or v4), CCA, or
+any other Uniswap protocol." Hooks are not required.
+
+**But v4 is not on Arc testnet.** Probed directly rather than trusted:
+
+```
+cast code 0x8366a39cc670b4001a1121b8f6a443a643e40951 --rpc-url <arc-testnet>
+0x
+```
+
+It is on Arc **mainnet** (opens Sept 16) and on Ethereum, Base and Unichain
+Sepolia. So the escrow-side yield layer is built and fuzz-tested against a
+hostile venue on Arc, and the v4 adapter is written but deliberately fails
+closed until it is proven against a live PoolManager.
+
+`FEEDBACK.md` — required for the track — is written and covers this, the
+v4-core dependency weight, and the missing custodial-vault example.

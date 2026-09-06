@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./yield/IYieldAdapter.sol";
 
 /**
  * @title SecureFlow
@@ -90,6 +91,8 @@ contract SecureFlow is
     error ManagerCannotBeBeneficiary();
     error ManagerCannotSelfHire();
     error NoManagerSet();
+    error YieldNotEnabled();
+    error BufferTooLow();
 
     /* ===================== ENUMS & STRUCTS ===================== */
     enum EscrowStatus { Pending, InProgress, Released, Refunded, Disputed, Expired, Cancelled }
@@ -216,6 +219,65 @@ contract SecureFlow is
      */
     mapping(uint256 => address) public jobManager;
 
+    /* ===================== PRODUCTIVE ESCROW ===================== */
+
+    /**
+     * Escrowed capital sits idle between a job being funded and a milestone
+     * being approved — often for weeks. This layer lets that capital earn,
+     * without ever putting it at risk of not being there when it is needed.
+     *
+     * THE INVARIANT, and it outranks the yield entirely:
+     *
+     *     Cash plus deployed capital never falls below what is owed.
+     *
+     * Stated in plain terms: a failing venue can DELAY a payout. It cannot lose
+     * the money, and it cannot leave this contract owing more than it holds a
+     * claim on.
+     *
+     * That wording is deliberate and was arrived at the hard way. The first
+     * version of this claimed principal was "redeemable at face value,
+     * instantly, always". A fuzzer running a hostile venue broke it in a few
+     * thousand calls — cash at 502.5 against a claim of 600 — and no amount of
+     * circuit breaking fixes that, because a breaker can stop you DEPENDING on
+     * a venue, it cannot conjure money you have already lent out. The stronger
+     * sentence was not true, so it is not the one written here.
+     *
+     * How that is held:
+     *   - Opt-in per escrow, by the depositor. Never the default.
+     *   - A liquidity buffer that is never deployed, so ordinary payouts are
+     *     served from cash without touching the venue at all.
+     *   - Every payout routes through _doTransfer, which tops up from the venue
+     *     first — and does so inside a try/catch, so a venue that reverts costs
+     *     us the yield and not the payment.
+     *   - Stable-stable venues only. Impermanent loss on a volatile pair is a
+     *     loss of principal, and principal is not ours to gamble.
+     *
+     * THE RESIDUAL RISK, named rather than buried. If the venue is unreachable
+     * at the moment a large claim arrives, and cash does not cover it, that
+     * payout reverts until the venue responds. The money is not lost — it is
+     * still on the books and reclaimed by the next payout that succeeds — but
+     * the freelancer waits. The cap exists to make that window small: the
+     * largest single unpaid milestone is always held back in cash, so only an
+     * unusual sequence can reach it.
+     *
+     * It is also why this is opt-in and off by default, per the build brief's
+     * own instruction: ship it capped rather than unbounded when the strongest
+     * invariant cannot be written.
+     */
+    mapping(address => IYieldAdapter) public yieldAdapter;
+
+    /// Fraction of a token's escrowed balance never deployed, in basis points.
+    uint256 public yieldBufferBP;
+
+    /// Per-escrow opt-in. The depositor's decision, and reversible.
+    mapping(uint256 => bool) public yieldOptIn;
+
+    /// What this contract believes is sitting in the venue, per token.
+    mapping(address => uint256) public deployedAssets;
+
+    /// Per escrow, so the safe-to-deploy cap can be computed for one job.
+    mapping(uint256 => uint256) public escrowDeployed;
+
     /* ===================== EVENTS ===================== */
     event EscrowCreated(
         uint256 indexed escrowId,
@@ -260,6 +322,12 @@ contract SecureFlow is
     event MilestoneProposalRejected(uint256 indexed escrowId, uint256 indexed milestoneIndex);
     event JobManagerSet(uint256 indexed escrowId, address indexed manager);
     event JobManagerRevoked(uint256 indexed escrowId, address indexed manager);
+    event YieldAdapterSet(address indexed token, address indexed adapter);
+    event YieldOptInChanged(uint256 indexed escrowId, bool optedIn);
+    event YieldDeployed(address indexed token, uint256 amount);
+    event YieldUnwound(address indexed token, uint256 requested, uint256 recovered);
+    /// The circuit breaker tripped: the venue could not return funds on demand.
+    event YieldCircuitBreakerTripped(address indexed token, uint256 shortfall);
 
     /* ===================== MODIFIERS ===================== */
     modifier onlyArbiter() {
@@ -493,6 +561,8 @@ contract SecureFlow is
         }
 
         _doTransfer(esc.token, address(this), esc.beneficiary, m.amount);
+        // What is safe to have lent out just shrank. Pull the excess back.
+        _rebalanceYield(escrowId);
         emit MilestoneApproved(escrowId, milestoneIndex, esc.beneficiary, m.amount, block.timestamp);
     }
 
@@ -595,6 +665,9 @@ contract SecureFlow is
 
         if (freelancerAmount > 0) _doTransfer(esc.token, address(this), esc.beneficiary, freelancerAmount);
         if (clientAmount > 0) _doTransfer(esc.token, address(this), esc.depositor, clientAmount);
+        // A resolution moves paidAmount and totalAmount both, so the safe level
+        // moves too. Same reason as approveMilestone.
+        _rebalanceYield(escrowId);
 
         emit DisputeResolved(escrowId, milestoneIndex, msg.sender, freelancerAmount, clientAmount, block.timestamp);
     }
@@ -751,6 +824,178 @@ contract SecureFlow is
     /// @notice Whether `who` may currently manage `escrowId`.
     function isJobManager(uint256 escrowId, address who) external view returns (bool) {
         return who != address(0) && jobManager[escrowId] == who;
+    }
+
+    /* ===================== PRODUCTIVE ESCROW ===================== */
+
+    /**
+     * @notice Point a token at a yield venue. Owner only.
+     * @dev Setting address(0) stops new deployments; it does NOT unwind what is
+     *      already out there. Unwinding happens on demand through the payout
+     *      path, so a bad venue is disconnected first and drained as escrows
+     *      resolve, rather than forcing one enormous exit at the worst moment.
+     */
+    function setYieldAdapter(address token, address adapter) external onlyOwner {
+        if (adapter != address(0) && IYieldAdapter(adapter).asset() != token) revert InvalidConfig();
+        yieldAdapter[token] = IYieldAdapter(adapter);
+        emit YieldAdapterSet(token, adapter);
+    }
+
+    /**
+     * @notice Fraction of escrowed funds never deployed, in basis points.
+     * @dev Floored at 10% rather than 0. A zero buffer means every single
+     *      payout has to unwind, which turns the venue from an optimisation
+     *      into a dependency — exactly what the circuit breaker exists to avoid.
+     */
+    function setYieldBuffer(uint256 bp) external onlyOwner {
+        if (bp < 1000 || bp > 10000) revert BufferTooLow();
+        yieldBufferBP = bp;
+    }
+
+    /**
+     * @notice Opt this escrow's idle funds into earning yield, or back out.
+     * @dev The depositor's call, and only theirs: it is their capital at risk.
+     *      Opting out does not unwind on the spot — the funds come back through
+     *      the ordinary payout path, so opting out can never itself fail.
+     */
+    function setYieldOptIn(uint256 escrowId, bool optedIn) external {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+        yieldOptIn[escrowId] = optedIn;
+        emit YieldOptInChanged(escrowId, optedIn);
+    }
+
+    /**
+     * @notice How much of ONE escrow's capital is safe to deploy.
+     *
+     * THIS IS THE HEART OF THE FEATURE, and the first version of it was wrong.
+     *
+     * The obvious rule — "deploy everything except a 20% buffer" — does not
+     * hold. Milestones are not 20% of an escrow. A job with two milestones has
+     * one worth half the budget, and when the venue is down, a 20% buffer
+     * cannot pay a 50% milestone. The payout reverts. Tested against a venue
+     * that refuses to return funds, the first implementation failed six ways,
+     * and no amount of circuit breaking fixes it: a breaker can stop you
+     * depending on the venue, it cannot conjure money you already lent out.
+     *
+     * So the cap is derived from the largest thing that could be claimed next,
+     * not from a percentage someone liked:
+     *
+     *   1. An OPEN job can be cancelled outright, refunding everything. The
+     *      whole balance is claimable at any instant, so nothing is deployable.
+     *   2. Once a freelancer is assigned, cancellation is blocked and claims
+     *      arrive one milestone at a time. The largest unpaid milestone must
+     *      therefore stay in cash.
+     *   3. `yieldBufferBP` is applied on top of that, not instead of it.
+     *
+     * What is left over is money this escrow provably cannot be asked for in a
+     * single call, so lending it out cannot block a payment.
+     *
+     * The honest exception, and it is documented rather than hidden:
+     * `emergencyRefundAfterDeadline` pays out the whole remainder at once. It
+     * requires the deadline plus 30 days, which is a long time to unwind a
+     * position in, but it is the one path where a dead venue could delay a
+     * withdrawal. It cannot lose the money — only hold it up.
+     */
+    function investableAmount(uint256 escrowId) public view returns (uint256) {
+        Escrow storage esc = escrows[escrowId];
+        if (esc.depositor == address(0)) return 0;
+        if (!yieldOptIn[escrowId]) return 0;
+
+        address token = esc.token;
+        if (address(yieldAdapter[token]) == address(0)) return 0;
+
+        // Rule 1: an open job is refundable in full, on demand.
+        if (esc.isOpenJob || esc.beneficiary == address(0)) return 0;
+        if (esc.status != EscrowStatus.Pending && esc.status != EscrowStatus.InProgress) return 0;
+
+        uint256 remaining = esc.totalAmount - esc.paidAmount;
+        if (remaining == 0) return 0;
+
+        // Rule 2: keep the largest single claim in cash.
+        uint256 largestClaim;
+        Milestone[] storage ms = escrowMilestones[escrowId];
+        for (uint256 i; i < ms.length; ++i) {
+            if (ms[i].status == MilestoneStatus.Approved) continue;
+            if (ms[i].amount > largestClaim) largestClaim = ms[i].amount;
+        }
+
+        // Rule 3: the percentage buffer, on top.
+        uint256 buffer = (remaining * yieldBufferBP) / 10000;
+        uint256 reserve = largestClaim + buffer;
+        if (remaining <= reserve) return 0;
+
+        uint256 already = escrowDeployed[escrowId];
+        uint256 ceiling = remaining - reserve;
+        if (already >= ceiling) return 0;
+        uint256 room = ceiling - already;
+
+        uint256 cash = token == NATIVE_TOKEN
+            ? address(this).balance
+            : IERC20(token).balanceOf(address(this));
+        return room > cash ? cash : room;
+    }
+
+    /**
+     * @notice The most this escrow may safely have lent out, right now.
+     * @dev The same arithmetic as investableAmount, without subtracting what is
+     *      already deployed — this is the level, that is the headroom. Kept
+     *      separate so rebalancing has something to unwind DOWN to.
+     */
+    function investableCeiling(uint256 escrowId) public view returns (uint256) {
+        Escrow storage esc = escrows[escrowId];
+        if (esc.depositor == address(0)) return 0;
+        if (esc.isOpenJob || esc.beneficiary == address(0)) return 0;
+        if (esc.status != EscrowStatus.Pending && esc.status != EscrowStatus.InProgress) return 0;
+
+        uint256 remaining = esc.totalAmount - esc.paidAmount;
+        if (remaining == 0) return 0;
+
+        uint256 largestClaim;
+        Milestone[] storage ms = escrowMilestones[escrowId];
+        for (uint256 i; i < ms.length; ++i) {
+            if (ms[i].status == MilestoneStatus.Approved) continue;
+            if (ms[i].amount > largestClaim) largestClaim = ms[i].amount;
+        }
+
+        uint256 reserve = largestClaim + (remaining * yieldBufferBP) / 10000;
+        return remaining <= reserve ? 0 : remaining - reserve;
+    }
+
+    /**
+     * @notice Put one escrow's genuinely idle capital to work.
+     * @dev Permissionless: it moves money only from this contract into the
+     *      venue its owner chose, never out to a caller, so there is nothing to
+     *      gain by calling it and something to lose by nobody ever calling it.
+     */
+    function investIdle(uint256 escrowId) external nonReentrant whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        address token = esc.token;
+        IYieldAdapter adapter = yieldAdapter[token];
+        if (address(adapter) == address(0)) revert YieldNotEnabled();
+
+        uint256 amount = investableAmount(escrowId);
+        if (amount == 0) return;
+
+        escrowDeployed[escrowId] += amount;
+        deployedAssets[token] += amount;
+
+        if (token == NATIVE_TOKEN) {
+            adapter.deposit{value: amount}(amount);
+        } else {
+            IERC20(token).forceApprove(address(adapter), amount);
+            adapter.deposit(amount);
+        }
+        emit YieldDeployed(token, amount);
+    }
+
+    /// @notice Yield earned above principal, per token. Zero if the venue lost.
+    function yieldEarned(address token) external view returns (uint256) {
+        IYieldAdapter adapter = yieldAdapter[token];
+        if (address(adapter) == address(0)) return 0;
+        uint256 held = adapter.totalAssets();
+        uint256 principal = deployedAssets[token];
+        return held > principal ? held - principal : 0;
     }
 
     /* ===================== JOB MANAGEMENT (BEFORE ASSIGNMENT) ===================== */
@@ -1177,8 +1422,97 @@ contract SecureFlow is
         }
     }
 
+    /**
+     * @dev Make sure this contract can pay `amount` of `token` right now.
+     *
+     * THE CIRCUIT BREAKER. Called before every outbound payment. If cash covers
+     * it, the venue is never touched — which is what the buffer is for, and is
+     * the common case.
+     *
+     * If it does not, we try to unwind exactly the shortfall. That call is
+     * wrapped, so a venue that reverts, pauses, or has gone illiquid costs us
+     * the yield and NOT the payment: control returns here, the transfer is
+     * attempted from whatever cash exists, and the shortfall is emitted rather
+     * than swallowed. A freelancer being paid does not depend on a pool being
+     * healthy.
+     *
+     * Deliberately not `nonReentrant`: every caller already is, and adding it
+     * here would make approveMilestone revert on its own guard.
+     */
+    function _ensureLiquid(address token, uint256 amount) private {
+        uint256 cash = token == NATIVE_TOKEN
+            ? address(this).balance
+            : IERC20(token).balanceOf(address(this));
+        if (cash >= amount) return;
+
+        uint256 shortfall = amount - cash;
+        IYieldAdapter adapter = yieldAdapter[token];
+        if (address(adapter) == address(0)) {
+            emit YieldCircuitBreakerTripped(token, shortfall);
+            return;
+        }
+
+        uint256 deployed = deployedAssets[token];
+        uint256 ask = shortfall > deployed ? deployed : shortfall;
+        if (ask == 0) {
+            emit YieldCircuitBreakerTripped(token, shortfall);
+            return;
+        }
+
+        try adapter.withdraw(ask) returns (uint256 recovered) {
+            // An adapter that returns less than asked has broken its contract.
+            // Book what actually came back, never what was promised.
+            deployedAssets[token] = deployed - (recovered > deployed ? deployed : recovered);
+            emit YieldUnwound(token, ask, recovered);
+            if (recovered < ask) emit YieldCircuitBreakerTripped(token, ask - recovered);
+        } catch {
+            // The venue is unavailable. That is survivable; not paying is not.
+            emit YieldCircuitBreakerTripped(token, shortfall);
+        }
+    }
+
+    /**
+     * @dev Pull capital back down to what is still safe to have lent out.
+     *
+     * The deployment cap is computed at the moment of deploying, and an escrow
+     * does not hold still: pay the small milestone and the remaining balance
+     * shrinks while the largest outstanding claim does not, so an amount that
+     * was safe an hour ago is not safe now. A fuzzer found this in a few
+     * thousand calls — cash 502.5 against a next claim of 600, with 120 sitting
+     * in a pool.
+     *
+     * So every payout that changes what is owed calls this, and it unwinds the
+     * excess. Wrapped, because a venue that will not return funds must delay
+     * yield, never a payment: if the unwind fails the payout still goes ahead
+     * from cash, and the position stays marked for the next attempt.
+     */
+    function _rebalanceYield(uint256 escrowId) private {
+        uint256 deployed = escrowDeployed[escrowId];
+        if (deployed == 0) return;
+
+        uint256 safe = investableCeiling(escrowId);
+        if (deployed <= safe) return;
+
+        uint256 excess = deployed - safe;
+        Escrow storage esc = escrows[escrowId];
+        address token = esc.token;
+        IYieldAdapter adapter = yieldAdapter[token];
+        if (address(adapter) == address(0)) return;
+
+        try adapter.withdraw(excess) returns (uint256 recovered) {
+            uint256 booked = recovered > deployed ? deployed : recovered;
+            escrowDeployed[escrowId] = deployed - booked;
+            deployedAssets[token] -= booked;
+            emit YieldUnwound(token, excess, recovered);
+            if (recovered < excess) emit YieldCircuitBreakerTripped(token, excess - recovered);
+        } catch {
+            emit YieldCircuitBreakerTripped(token, excess);
+        }
+    }
+
     function _doTransfer(address token, address from, address to, uint256 amount) private {
         if (amount == 0) return;
+        if (from == address(this)) _ensureLiquid(token, amount);
         if (token == NATIVE_TOKEN) {
             if (from == address(this)) {
                 (bool ok,) = to.call{value: amount}("");
@@ -1206,5 +1540,8 @@ contract SecureFlow is
      *      whatever the new layout says it is; there is no revert, only wrong
      *      numbers.
      */
-    uint256[50] private __gap;
+    /* 50 - 5 for the productive-escrow state above. Get this wrong and the
+       next upgrade reinterprets live escrow data as whatever the new layout
+       says; there is no revert, only wrong numbers. */
+    uint256[45] private __gap;
 }

@@ -10,21 +10,26 @@ import "./JobManagerBase.t.sol";
  * there — the parent can still grow later without colliding with this.
  */
 contract SecureFlowV2 is SecureFlow {
-    uint256 public yieldBufferBP;
-    mapping(uint256 => bool) public yieldOptIn;
+    /* Stands in for whatever the NEXT upgrade adds. The names are deliberately
+       generic — this mock exists to prove that appending state preserves the
+       state already there, not to model any particular feature. It used to
+       model the yield layer, which has since been built for real in
+       SecureFlow itself. */
+    uint256 public futureSetting;
+    mapping(uint256 => bool) public futureFlag;
 
     function version() external pure override returns (string memory) {
-        return "2.1.0-yield";
+        return "2.1.0-future";
     }
 
-    function setYieldBufferBP(uint256 bp) external onlyOwner {
-        yieldBufferBP = bp;
+    function setFutureSetting(uint256 v) external onlyOwner {
+        futureSetting = v;
     }
 
-    function optIntoYield(uint256 escrowId) external {
+    function markFuture(uint256 escrowId) external {
         (address depositor,,,,,,,,,,,,) = this.escrows(escrowId);
         if (msg.sender != depositor) revert Unauthorized();
-        yieldOptIn[escrowId] = true;
+        futureFlag[escrowId] = true;
     }
 }
 
@@ -53,7 +58,7 @@ contract SecureFlowUpgradeTest is JobManagerBase {
     function test_ownerCanUpgrade() public {
         SecureFlowV2 v2 = new SecureFlowV2();
         sf.upgradeToAndCall(address(v2), "");
-        assertEq(SecureFlowV2(payable(address(sf))).version(), "2.1.0-yield");
+        assertEq(SecureFlowV2(payable(address(sf))).version(), "2.1.0-future");
     }
 
     function test_nonOwnerCannotUpgrade() public {
@@ -299,14 +304,14 @@ contract SecureFlowUpgradeTest is JobManagerBase {
 
         SecureFlowV2 v2 = SecureFlowV2(payable(address(sf)));
 
-        assertEq(v2.yieldBufferBP(), 0, "new slot starts clean");
-        v2.setYieldBufferBP(2000);
-        assertEq(v2.yieldBufferBP(), 2000);
+        assertEq(v2.futureSetting(), 0, "new slot starts clean");
+        v2.setFutureSetting(2000);
+        assertEq(v2.futureSetting(), 2000);
 
-        assertFalse(v2.yieldOptIn(id));
+        assertFalse(v2.futureFlag(id));
         vm.prank(client);
-        v2.optIntoYield(id);
-        assertTrue(v2.yieldOptIn(id), "new mapping keyed off existing escrows");
+        v2.markFuture(id);
+        assertTrue(v2.futureFlag(id), "new mapping keyed off existing escrows");
 
         // And none of it disturbed what was already there.
         (, address beneficiary,,,,,,,,,,,) = v2.escrows(id);
@@ -319,14 +324,14 @@ contract SecureFlowUpgradeTest is JobManagerBase {
         uint256 id = _midFlightJob();
 
         sf.upgradeToAndCall(address(new SecureFlowV2()), "");
-        assertEq(sf.version(), "2.1.0-yield");
+        assertEq(sf.version(), "2.1.0-future");
 
         sf.upgradeToAndCall(address(new SecureFlowBrokenV2()), "");
         assertEq(sf.version(), "broken");
 
         // Back to a good one; state has been through three implementations.
         sf.upgradeToAndCall(address(new SecureFlowV2()), "");
-        assertEq(sf.version(), "2.1.0-yield");
+        assertEq(sf.version(), "2.1.0-future");
 
         (, address beneficiary,,, uint256 paid,,,,,,,,) = sf.escrows(id);
         assertEq(beneficiary, worker, "beneficiary survived three upgrades");
