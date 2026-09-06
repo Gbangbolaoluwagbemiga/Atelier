@@ -133,7 +133,7 @@ Uniswap is also larger than planned: $3,000 open plus $2,000 Continuity, and
 
 Every Continuity track additionally requires a README that **separates
 pre-existing from new work**, and a demo video focused on the new work.
-`BASELINE.md` covers the first; the video does not exist yet.
+`ATTRIBUTION.md` covers the first; the video does not exist yet.
 
 ## Sources
 
@@ -182,3 +182,37 @@ closed until it is proven against a live PoolManager.
 
 `FEEDBACK.md` — required for the track — is written and covers this, the
 v4-core dependency weight, and the missing custodial-vault example.
+
+---
+
+## Strategy reset, 2026-09-06 evening
+
+Two facts from the submission form change everything above.
+
+**1. A maximum of three partners may be applied to.** Not ten. The portfolio
+approach the campaign plan was built on — spread across ten tracks for ~$19.7k
+addressable — is not a thing that can be submitted. Three is the number.
+
+**2. We are entering as a new project, not on Continuity.** The reasoning is
+the entrant's own and it is sound: Continuity puts Atelier beside projects that
+arrive with real users and real volume, and Atelier has neither. It is a week
+old. Competing on "what did you build this week" is a fair fight; competing on
+traction is not one we can win.
+
+So `BASELINE.md` is gone and `ATTRIBUTION.md` replaces it. The difference
+matters: the baseline existed to prove which code predated the event, which is
+the question Continuity asks. Attribution answers the question a from-scratch
+entry is asked instead — what is this built on — and answers it honestly, naming
+our own prior open-source work as the boilerplate it is.
+
+### The three
+
+| Partner | Prize | Why |
+|---|---|---|
+| **The Graph** | $15,000 | Largest pool. The agent polls the subgraph to hire, score and pay — load-bearing, not decorative. Blocked only on a Studio key. |
+| **Arc** | $10,000 | Atelier is an Arc application: USDC-native, deployed, upgradeable, agentic. Mainnet opens Sept 16 with a Sept 30 deadline. |
+| **Uniswap** | $5,000 | Productive escrow, fuzz-tested, with a `FEEDBACK.md` that names three real integration frictions. |
+
+Not applying to: World, Privy, Ledger, Chainlink, 1inch, ENS, Hedera, Bazantic.
+Bazantic is the closest call — its recipe is written and it needs only an
+account — but three is three, and $3,000 does not displace any of the above.
