@@ -16,6 +16,7 @@ import MessagesPage from "./pages/MessagesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import PostJobPage from "./pages/PostJobPage";
 import AutopilotComposePage from "./pages/AutopilotComposePage";
+import DevPreviewPage from "./pages/DevPreviewPage";
 
 const AppLayout = () => (
   <>
@@ -69,6 +70,16 @@ function App() {
         <Route path="/disputes" element={<DisputesPage />} />
         <Route path="/messages" element={<MessagesPage />} />
         <Route path="/admin" element={<AdminPage />} />
+
+        {/*
+          Dev-only surface preview. Gated on the build flag rather than hidden,
+          so the route does not exist in production and the component is dropped
+          from the bundle — this page would otherwise show one client's decision
+          log to anyone who guessed the URL.
+        */}
+        {import.meta.env.DEV && (
+          <Route path="/dev" element={<DevPreviewPage />} />
+        )}
 
         {/* ── SecureFlow's paths, kept alive. ── */}
         <Route path="/dashboard" element={<Navigate to="/my-jobs" replace />} />
