@@ -21,6 +21,8 @@ import { JobsStats } from "@/components/jobs/jobs-stats";
 import { JobCard } from "@/components/jobs/job-card";
 import { ApplicationDialog } from "@/components/jobs/application-dialog";
 import { JobsLoading } from "@/components/jobs/jobs-loading";
+import { currentWorkerId, apply as workerApply } from "@/lib/atelier/worker";
+import { toastError } from "@/lib/atelier/errors";
 import {
   Select,
   SelectContent,
@@ -102,12 +104,18 @@ export default function JobsPage() {
     return "pending";
   };
 
+  /*
+   * The board loads for everyone, wallet or not.
+   *
+   * It used to load only when a wallet was connected, which made the public
+   * marketplace invisible to the exact people the managed-worker door was built
+   * for: someone who signed up with a name and has no wallet at all saw
+   * "Wallet Not Connected" on the one page they needed. Reading open jobs
+   * requires no signature and no address — only applying does.
+   */
   useEffect(() => {
-    if (wallet.address) {
-      fetchOpenJobs();
-      countOngoingProjects();
-    } else {
-    }
+    fetchOpenJobs();
+    if (wallet.address) countOngoingProjects();
     checkContractPauseStatus();
   }, [wallet.address]);
 
@@ -478,7 +486,45 @@ export default function JobsPage() {
     coverLetter: string,
     proposedTimeline: string
   ) => {
-    if (!job || !wallet.isConnected) return;
+    if (!job) return;
+
+    /*
+     * Two kinds of freelancer reach this button.
+     *
+     * Someone with a wallet signs applyToJob themselves, below. Someone who
+     * joined through /get-hired has no wallet and no gas — the daemon signs for
+     * them with the Circle MPC wallet it provisioned. Routing both through the
+     * same handler is what stops the marketplace splitting into two, which is
+     * the whole point of one job list.
+     */
+    if (!wallet.isConnected) {
+      const workerId = currentWorkerId();
+      if (!workerId) {
+        toast({
+          title: "Sign in first",
+          description:
+            "Connect a wallet, or get an account in one step from Get Hired.",
+          variant: "destructive",
+        });
+        return;
+      }
+      try {
+        await workerApply({
+          workerId,
+          escrowId: String(job.id),
+          coverLetter,
+          proposedTimelineDays: Number(proposedTimeline) || undefined,
+        });
+        toast({
+          title: "Application sent",
+          description: "No gas, no signature — we signed it for you.",
+        });
+        setHasApplied((prev: Record<string, boolean>) => ({ ...prev, [job.id]: true }));
+      } catch (e) {
+        toast(toastError("Could not send that application", e));
+      }
+      return;
+    }
 
     // Check if user is the job creator (should not be able to apply to own job)
     if (
@@ -639,8 +685,10 @@ export default function JobsPage() {
     return matchesSearch && matchesStatus && isNotCancelled && isNotExpired;
   });
 
-  if (!wallet.isConnected || loading) {
-    return <JobsLoading isConnected={wallet.isConnected} />;
+  /* Only a genuine load blocks the page now. A missing wallet does not — see
+     the fetch effect above. */
+  if (loading) {
+    return <JobsLoading isConnected />;
   }
 
   return (
