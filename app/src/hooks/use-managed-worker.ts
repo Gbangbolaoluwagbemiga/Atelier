@@ -21,8 +21,17 @@ import {
   type Worker,
 } from "@/lib/atelier/worker";
 
-export function useManagedWorker(): Worker | null {
+export interface ManagedWorkerState {
+  worker: Worker | null;
+  /** Re-read the account and its balance now. */
+  refresh: () => Promise<void>;
+  /** True while a manual refresh is in flight. */
+  refreshing: boolean;
+}
+
+export function useManagedWorker(): ManagedWorkerState {
   const [worker, setWorker] = useState<Worker | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const id = currentWorkerId();
@@ -46,5 +55,14 @@ export function useManagedWorker(): Worker | null {
     return () => clearInterval(id);
   }, [load]);
 
-  return worker;
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
+
+  return { worker, refresh, refreshing };
 }

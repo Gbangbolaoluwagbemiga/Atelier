@@ -20,43 +20,36 @@ import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useState } from "react";
 import { useAppKit } from "@reown/appkit/react";
-import { Link } from "react-router-dom";
 import { useManagedWorker } from "@/hooks/use-managed-worker";
+import { ManagedWalletMenu } from "@/components/atelier/managed-wallet-menu";
 
 export function WalletButton() {
   const { wallet, connectWallet } = useWeb3();
   const [networkIconError, setNetworkIconError] = useState(false);
   const [walletIconError, setWalletIconError] = useState(false);
   const { open } = useAppKit();
-  const managedWorker = useManagedWorker();
+  const {
+    worker: managedWorker,
+    refresh: refreshWorker,
+    refreshing: refreshingWorker,
+  } = useManagedWorker();
 
   /*
    * A managed worker is signed in without a wallet, and telling them to
    * "Connect Wallet" is both wrong and slightly insulting — the entire point of
-   * their account is that they never had to. Show the Circle MPC address they
-   * actually have, and send them to their own page rather than a wallet modal.
+   * their account is that they never had to. They get their own menu, with the
+   * same affordances Reown gives a wallet user: full address, copy, refresh,
+   * explorer, sign out.
    */
   if (!wallet.isConnected || !wallet.address) {
     if (managedWorker) {
       return (
-        <Button
-          asChild
-          variant="secondary"
-          className="actor-human font-mono flex items-center gap-2 px-2.5 sm:px-3 md:px-4 bg-muted/50 hover:bg-muted/70 border border-border/40 max-w-[170px] sm:max-w-none"
-        >
-          <Link to="/get-hired" title={managedWorker.address}>
-            <span className="actor-dot shrink-0" aria-hidden="true" />
-            <span className="hidden lg:inline tabular-nums">
-              {Number(managedWorker.balance ?? 0).toFixed(2)} USDC
-            </span>
-            <span className="hidden lg:inline text-muted-foreground" aria-hidden="true">
-              ·
-            </span>
-            <span className="truncate">
-              {managedWorker.address.slice(0, 6)}…{managedWorker.address.slice(-4)}
-            </span>
-          </Link>
-        </Button>
+        <ManagedWalletMenu
+          worker={managedWorker}
+          onRefresh={() => void refreshWorker()}
+          refreshing={refreshingWorker}
+          onSignOut={() => window.location.assign("/get-hired")}
+        />
       );
     }
 

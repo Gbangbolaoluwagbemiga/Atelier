@@ -261,7 +261,11 @@ function Earnings({
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const balance = Number(worker.balance ?? 0);
+  /* null means the daemon could not read it, which is not the same as zero.
+     Showing 0.00 for an unreadable balance is a wrong number presented as a
+     right one, and this is the screen where that matters most. */
+  const balanceKnown = worker.balance !== null && worker.balance !== undefined;
+  const balance = balanceKnown ? Number(worker.balance) : 0;
   const validDest = /^0x[a-fA-F0-9]{40}$/.test(destination.trim());
   const validAmount = Number(amount) > 0 && Number(amount) <= balance;
 
@@ -296,11 +300,17 @@ function Earnings({
             Earned
           </div>
           <div className="actor-figure figure-lg mt-1">
-            ${balance.toFixed(2)}
+            {balanceKnown ? `$${balance.toFixed(2)}` : "—"}
             <span className="text-sm font-sans font-medium text-muted-foreground ml-2">
               USDC
             </span>
           </div>
+          {!balanceKnown && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Could not read your balance just now. It is not zero — try again in
+              a moment.
+            </p>
+          )}
           <div className="text-xs text-muted-foreground mt-2 font-mono">
             {worker.address.slice(0, 10)}…{worker.address.slice(-6)}
             {worker.mode === "managed" && " · held for you"}
