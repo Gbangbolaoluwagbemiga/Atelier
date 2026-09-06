@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useWriteContract } from "wagmi";
 import { useWeb3 } from "@/contexts/web3-context";
 import { contractService } from "@/lib/web3/contract-service";
+import { humanizeError } from "@/lib/atelier/errors";
 import {
   AUTOPILOT_CONFIGURED,
   fetchAutopilotAddress,
@@ -83,7 +84,7 @@ export function useJobManager(escrowId: number | null): JobManagerState {
       await refresh();
       return hash;
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = humanizeError(e);
       setError(message);
       throw e;
     } finally {
@@ -103,7 +104,7 @@ export function useJobManager(escrowId: number | null): JobManagerState {
       await refresh();
       return hash;
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = humanizeError(e);
       setError(message);
       throw e;
     } finally {

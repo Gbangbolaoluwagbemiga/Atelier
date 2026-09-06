@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { toastError } from "@/lib/atelier/errors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,10 @@ export default function AdminPage() {
   const [isCheckingOwner, setIsCheckingOwner] = useState(true);
   const [tokenAddress, setTokenAddress] = useState(USDC_ADDRESS);
   const [isWhitelisting, setIsWhitelisting] = useState(false);
+  const [isDelisting, setIsDelisting] = useState(false);
+  const [delistAddress, setDelistAddress] = useState("");
+  /* Read from the contract rather than assumed — see the display card. */
+  const [usdcWhitelisted, setUsdcWhitelisted] = useState(false);
 
   // Platform fee state
   const [currentFeeBP, setCurrentFeeBP] = useState<number | null>(null);
@@ -188,6 +193,14 @@ export default function AdminPage() {
     }
   };
 
+  const refreshTokenStatus = useCallback(async () => {
+    setUsdcWhitelisted(await contractService.isTokenWhitelisted(USDC_ADDRESS));
+  }, []);
+
+  useEffect(() => {
+    void refreshTokenStatus();
+  }, [refreshTokenStatus]);
+
   const handleWhitelistToken = async () => {
     if (!tokenAddress || !/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
       toast({
@@ -219,6 +232,32 @@ export default function AdminPage() {
       });
     } finally {
       setIsWhitelisting(false);
+    }
+  };
+
+  /**
+   * Stop accepting a token for NEW escrows.
+   *
+   * Deliberately worded as "stop accepting" rather than "remove": escrows
+   * already funded in this token keep releasing and refunding normally. An
+   * owner delisting something needs to know they are not stranding money that
+   * is already in flight.
+   */
+  const handleDelistToken = async (token: string) => {
+    setIsDelisting(true);
+    try {
+      const hash = await contractService.delistToken(token, (args) =>
+        writeContractAsync(args)
+      );
+      toast({
+        title: "Token delisted",
+        description: `No new escrows can be funded in it. Existing ones are unaffected. Transaction: ${hash.slice(0, 10)}…`,
+      });
+      void refreshTokenStatus();
+    } catch (error) {
+      toast(toastError("Could not delist that token", error));
+    } finally {
+      setIsDelisting(false);
     }
   };
 
@@ -429,17 +468,80 @@ export default function AdminPage() {
               <CardDescription>Active tokens in the system</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                  <p className="text-sm font-semibold text-green-900 dark:text-green-100">
-                    1 Token Whitelisted
+              {/* This card used to say "1 Token Whitelisted" unconditionally,
+                  which is a claim about chain state made without reading chain
+                  state — it would have kept saying it after a delist. */}
+              <div className="space-y-3">
+                <div
+                  className={`rounded-lg p-3 border ${
+                    usdcWhitelisted
+                      ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                      : "bg-muted/40 border-border"
+                  }`}
+                >
+                  <p className="text-sm font-semibold">
+                    {usdcWhitelisted
+                      ? "USDC is accepted for new escrows"
+                      : "USDC is not currently accepted"}
                   </p>
+                  {!usdcWhitelisted && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      No new job can be funded until a token is whitelisted.
+                    </p>
+                  )}
                 </div>
-                <div className="space-y-1">
-                  <div className="text-xs font-mono bg-muted p-2 rounded break-all">
-                    <span className="text-muted-foreground">USDC: </span>
-                    {USDC_ADDRESS}
+
+                <div className="text-xs font-mono bg-muted p-2 rounded break-all">
+                  <span className="text-muted-foreground">USDC: </span>
+                  {USDC_ADDRESS}
+                </div>
+
+                {usdcWhitelisted && (
+                  <Button
+                    variant="outline"
+                    className="w-full border-destructive/40 text-destructive hover:bg-destructive/10"
+                    disabled={isDelisting}
+                    onClick={() => void handleDelistToken(USDC_ADDRESS)}
+                  >
+                    {isDelisting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Delisting…
+                      </>
+                    ) : (
+                      "Stop accepting USDC"
+                    )}
+                  </Button>
+                )}
+
+                <div className="pt-1 space-y-2">
+                  <Label htmlFor="delistAddress" className="text-xs">
+                    Delist another token
+                  </Label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      id="delistAddress"
+                      placeholder="0x…"
+                      value={delistAddress}
+                      onChange={(e) => setDelistAddress(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      disabled={isDelisting || !/^0x[a-fA-F0-9]{40}$/.test(delistAddress)}
+                      onClick={() => {
+                        void handleDelistToken(delistAddress);
+                        setDelistAddress("");
+                      }}
+                    >
+                      Delist
+                    </Button>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Existing escrows in a delisted token still release and refund
+                    normally — this only stops new ones.
+                  </p>
                 </div>
               </div>
             </CardContent>

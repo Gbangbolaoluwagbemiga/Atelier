@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useJobManager } from "@/hooks/use-job-manager";
 import { AUTOPILOT_CONFIGURED } from "@/lib/atelier/patron";
+import { toastError } from "@/lib/atelier/errors";
 
 function shortAddress(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -48,11 +49,7 @@ export function AutopilotControl({
           "It can hire, review and pay. It can never move your money elsewhere, and disputes stay yours.",
       });
     } catch (e) {
-      toast({
-        variant: "destructive",
-        title: "Could not hand over the job",
-        description: e instanceof Error ? e.message : String(e),
-      });
+      toast(toastError("Could not hand over the job", e));
     } finally {
       setPending(null);
     }
@@ -67,11 +64,7 @@ export function AutopilotControl({
         description: "Autopilot's next action on it will be rejected on-chain.",
       });
     } catch (e) {
-      toast({
-        variant: "destructive",
-        title: "Could not take back control",
-        description: e instanceof Error ? e.message : String(e),
-      });
+      toast(toastError("Could not take back control", e));
     } finally {
       setPending(null);
     }

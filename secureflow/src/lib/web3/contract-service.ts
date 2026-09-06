@@ -251,6 +251,13 @@ export class ContractService {
     }
   }
 
+  /** Whether this token may be used for new escrows. Reads chain state. */
+  async isTokenWhitelisted(token: string): Promise<boolean> {
+    try {
+      return await this.contract.read.whitelistedTokens([token as Address]);
+    } catch { return false; }
+  }
+
   async isAuthorizedArbiter(addr: string): Promise<boolean> {
     try { return await this.contract.read.authorizedArbiters([addr as Address]); } catch { return false; }
   }
@@ -736,6 +743,22 @@ export class ContractService {
       address: this.addr,
       abi: SecureFlowABI.abi,
       functionName: "whitelistToken",
+      args: [token as `0x${string}`],
+    });
+  }
+
+  /**
+   * Stop accepting a token for new escrows.
+   *
+   * Does not touch escrows already funded in it — those still release and
+   * refund normally, which is the whole point of being able to delist something
+   * without stranding anyone's money.
+   */
+  async delistToken(token: string, write: WagmiWrite): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: SecureFlowABI.abi,
+      functionName: "delistToken",
       args: [token as `0x${string}`],
     });
   }

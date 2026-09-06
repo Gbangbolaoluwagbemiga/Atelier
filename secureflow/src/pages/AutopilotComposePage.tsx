@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { toastError } from "@/lib/atelier/errors";
 import {
   AUTOPILOT_CONFIGURED,
   AUTOPILOT_BRIEF_KEY,
@@ -71,11 +72,7 @@ export default function AutopilotComposePage() {
       const result = await previewBrief(trimmed);
       setBrief(result);
     } catch (e) {
-      toast({
-        variant: "destructive",
-        title: "Autopilot could not write that brief",
-        description: e instanceof Error ? e.message : String(e),
-      });
+      toast(toastError("Autopilot could not write that brief", e));
     } finally {
       setThinking(false);
     }

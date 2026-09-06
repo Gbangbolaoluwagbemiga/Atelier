@@ -31,6 +31,7 @@ import { ApprovalsStats } from "@/components/approvals/approvals-stats";
 import { JobCard } from "@/components/approvals/job-card";
 import { ApprovalsLoading } from "@/components/approvals/approvals-loading";
 import { BadgeDisplay, RatingDisplay } from "@/components/rating/badge-display";
+import { humanizeError } from "@/lib/atelier/errors";
 
 interface JobWithApplications extends Escrow {
   applications: Application[];
@@ -317,7 +318,7 @@ export default function ApprovalsPage() {
       setTimeout(() => setLoading(false), 100);
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : String(error);
+        humanizeError(error);
 
       toast({
         title: "Approval Failed",

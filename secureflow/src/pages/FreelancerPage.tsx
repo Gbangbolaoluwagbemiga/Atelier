@@ -136,7 +136,7 @@ function OverdueFreelancerBanner({
   const [reason, setReason] = useState("");
 
   return (
-    <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-800 space-y-2">
+    <div className="mt-4 space-y-2.5">
       <div className="flex items-start gap-2 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700">
         <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
         <p className="text-sm text-orange-700 dark:text-orange-400">
@@ -2573,8 +2573,14 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                           );
                         })()}
 
-                        {/* Actions */}
-                        <div className="flex gap-3">
+                        {/* Actions
+                            The overdue banner above ends in a full-width
+                            Request Arbitration button and this row started
+                            immediately under it, so Start Work sat flush
+                            against it and the two read as one double-height
+                            control rather than two separate decisions.
+                            Wraps rather than squeezing on a phone. */}
+                        <div className="flex flex-wrap items-center gap-3 mt-5 pt-4 border-t border-border/40">
                           {escrow.status === "pending" && (
                             <Button
                               onClick={() => startWork(escrow.id)}
