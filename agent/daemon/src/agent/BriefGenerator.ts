@@ -18,7 +18,23 @@ import { config } from "../config.js";
 import type { AcceptanceBrief } from "../web3/types.js";
 
 const BriefMilestoneSchema = z.object({
-  description: z.string().describe("What this milestone delivers"),
+  /*
+   * Written FOR THE FREELANCER, who is the person who has to act on it.
+   *
+   * The model's instinct is to produce a file manifest — "Deliver
+   * explainer_voiceover.wav (48kHz, 16-bit PCM) and explainer_voiceover.mp3
+   * (320kbps)" — which is precise, unarguable, and reads like a ticket nobody
+   * wants to pick up. The exact formats belong in the acceptance criteria,
+   * where they are checked. A milestone is the piece of WORK.
+   */
+  description: z
+    .string()
+    .describe(
+      "What the freelancer produces in this milestone, in plain language a person would " +
+        "use talking about the work — 'Record and deliver the final voiceover', not a list " +
+        "of file names and codecs. One sentence, no jargon, no formats. The exact formats " +
+        "and technical requirements go in criteria, not here.",
+    ),
   amount: z.number().describe("USDC allocated to this milestone — all milestones must sum to the total budget"),
 });
 

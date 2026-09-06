@@ -281,7 +281,66 @@ export interface AutopilotBrief {
   revisionRounds: number;
   milestones: BriefMilestone[];
   briefHash: string;
+  /** How long applications stay open before the agent judges them together. */
   applicationWindowMinutes?: number;
+}
+
+/**
+ * Make the milestones add up to the budget.
+ *
+ * The generator is an LLM, and occasionally it returns milestones whose amounts
+ * do not sum to the budget it just stated — sometimes zeros. That produced a
+ * brief reading "Total $0.00" with a milestone worth nothing, and the escrow it
+ * would have opened was worth nothing either.
+ *
+ * The escrow contract requires the milestones to sum to the total exactly, so
+ * this is not cosmetic: an unreconciled brief either creates a worthless job or
+ * reverts at createEscrow with MilestoneSumMismatch, and neither is a thing to
+ * show someone who is about to fund it.
+ *
+ * Reconciled toward the BUDGET, because that is the number the client typed and
+ * the one they will be charged. The split is the agent's suggestion; the total
+ * is the client's instruction.
+ */
+export function reconcileMilestones(brief: AutopilotBrief): AutopilotBrief {
+  const budget = Number(brief.budget) || 0;
+  const milestones = (brief.milestones ?? []).map((m) => ({
+    description: m.description,
+    amount: Number(m.amount) || 0,
+  }));
+
+  if (budget <= 0 || milestones.length === 0) return { ...brief, milestones };
+
+  const sum = milestones.reduce((t, m) => t + m.amount, 0);
+  if (sum === budget) return { ...brief, milestones };
+
+  // Nothing to scale proportionally — split the budget evenly instead.
+  if (sum <= 0) {
+    const each = Math.floor((budget / milestones.length) * 100) / 100;
+    const scaled = milestones.map((m) => ({ ...m, amount: each }));
+    scaled[scaled.length - 1].amount = round2(
+      budget - each * (milestones.length - 1),
+    );
+    return { ...brief, milestones: scaled };
+  }
+
+  // Scale to fit, then put every rounding remainder on the LAST milestone so
+  // the total is exact. Spreading the remainder would leave the sum a cent out,
+  // which is precisely what the contract rejects.
+  const scaled = milestones.map((m) => ({
+    ...m,
+    amount: round2((m.amount / sum) * budget),
+  }));
+  const scaledSum = scaled.reduce((t, m) => t + m.amount, 0);
+  scaled[scaled.length - 1].amount = round2(
+    scaled[scaled.length - 1].amount + (budget - scaledSum),
+  );
+
+  return { ...brief, milestones: scaled };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /**
@@ -319,7 +378,8 @@ export async function previewBrief(
   if (!payload.brief || !Array.isArray(payload.brief.milestones)) {
     throw new Error("Autopilot returned a brief we could not read.");
   }
-  return payload.brief;
+  // Reconciled before it is ever shown. See reconcileMilestones.
+  return reconcileMilestones(payload.brief);
 }
 
 /** Where a brief waits while the client is sent to the funding wizard. */
