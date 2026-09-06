@@ -108,22 +108,15 @@ export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className="actor-human max-w-lg"
+      /* The pitch lives on the page beside this; the card is only the form.
+         Keeping both in one column made a short signup feel like a long one. */
+      className="actor-human rounded-2xl glass p-5 sm:p-6"
     >
-      <span className="actor-chip">
-        <span className="actor-dot" />
-        Get hired
-      </span>
+      <h2 className="font-display text-xl font-semibold">
+        {useOwnWallet ? "Link your wallet" : "Create your account"}
+      </h2>
 
-      <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mt-4">
-        Start earning in one step
-      </h1>
-      <p className="text-muted-foreground mt-3 leading-relaxed">
-        No install, no seed phrase, no gas. Pick a name and you are a freelancer
-        who can apply to funded work and be paid in USDC.
-      </p>
-
-      <div className="space-y-4 mt-8">
+      <div className="space-y-4 mt-5">
         <div>
           <Label htmlFor="handle">What should we call you?</Label>
           <Input
@@ -176,21 +169,18 @@ export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
           </p>
         </div>
 
-        {/* ── The honest bit, before anyone earns anything ── */}
-        <div className="rounded-xl border border-border/60 p-4">
-          <div className="flex gap-3">
+        {/* The custody trade-off is explained in full beside this card; what
+            stays here is the choice, next to the button that acts on it. */}
+        <div className="rounded-xl border border-border/60 p-3.5">
+          <div className="flex gap-2.5">
             <Wallet
               className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground"
               aria-hidden="true"
             />
-            <div className="text-sm text-muted-foreground leading-relaxed">
-              <strong className="text-foreground font-medium">
-                We will hold your wallet for you.
-              </strong>{" "}
-              That is what removes the setup — but it means we control the keys,
-              not you. Withdraw to an address you own once you have been paid,
-              and switch to your own wallet whenever you like.
-            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              We hold the keys to the wallet we create for you. Withdraw to an
+              address you own once you are paid.
+            </p>
           </div>
 
           <button

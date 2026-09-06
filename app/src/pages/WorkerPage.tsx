@@ -85,7 +85,7 @@ export default function WorkerPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-10 sm:py-14 max-w-3xl">
+    <div className="container mx-auto px-4 py-10 sm:py-14 max-w-5xl">
       {worker ? (
         <>
           <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
@@ -116,10 +116,81 @@ export default function WorkerPage() {
           <TelegramCard handle={worker.handle} />
         </>
       ) : (
-        <>
-          <WorkerJoin onJoined={setWorker} />
-          <TelegramCard />
-        </>
+        /*
+          Two columns: why on the left, the form on the right.
+          
+          A signup with five fields does not need a full-width column, and
+          stacking the pitch, the form, the custody note and the Telegram card
+          in one made a short flow read as a long one — the button sat below the
+          fold on a laptop, which is the worst place for the only thing anyone
+          came here to press.
+        */
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_26rem] gap-8 lg:gap-12 items-start">
+          <div className="actor-human">
+            <span className="actor-chip">
+              <span className="actor-dot" />
+              Get hired
+            </span>
+
+            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mt-4">
+              Start earning in one step
+            </h1>
+            <p className="text-lg text-muted-foreground mt-4 leading-relaxed max-w-prose">
+              No install, no seed phrase, no gas. Sign in, pick a name, and you
+              are a freelancer who can apply to funded work and be paid in USDC.
+            </p>
+
+            <ol className="mt-8 space-y-5">
+              {[
+                [
+                  "Sign in and pick a name",
+                  "We create a wallet for you. Nothing to install, nothing to write down.",
+                ],
+                [
+                  "Apply with a sentence",
+                  "No gas and no signature — we sign on your instruction. An agent scores every applicant together when the window closes, so nobody wins by refreshing fastest.",
+                ],
+                [
+                  "Deliver, and get paid in USDC",
+                  "Payment is released from on-chain escrow the moment your work is approved. Withdraw to a wallet you own whenever you like.",
+                ],
+              ].map(([title, body], i) => (
+                <li key={title} className="flex gap-4">
+                  <span className="actor-figure figure-md shrink-0 w-7 tabular-nums">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-medium">{title}</div>
+                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                      {body}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            {/* The custody trade-off, stated where there is room to state it
+                properly rather than crammed beside the button. */}
+            <div className="mt-8 rounded-xl border border-border/60 p-4 max-w-prose">
+              <h2 className="font-medium text-sm">Who holds the keys</h2>
+              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                The wallet we create is held by us, not you. That is the trade
+                that removes the setup, and it is the reason we say it here
+                rather than when you try to withdraw. Move your earnings to an
+                address you control once you are paid — or bring your own wallet
+                from the start and sign everything yourself.
+              </p>
+            </div>
+
+            <div className="mt-6">
+              <TelegramCard />
+            </div>
+          </div>
+
+          <div className="lg:sticky lg:top-24">
+            <WorkerJoin onJoined={setWorker} />
+          </div>
+        </div>
       )}
     </div>
   );
