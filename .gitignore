@@ -17,3 +17,12 @@ coverage/
 #     secureflow/contracts/solidity/lib/openzeppelin-contracts
 secureflow/contracts/solidity/lib/openzeppelin-contracts/
 secureflow/contracts/solidity/lib/openzeppelin-contracts-upgradeable/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Patron daemon's local SQLite — machine-local demo state, never shared
+patron/daemon/data/

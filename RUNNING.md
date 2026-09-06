@@ -1,0 +1,104 @@
+# Running Atelier locally
+
+Three services. Start them in any order; the frontend degrades gracefully if the
+others are missing rather than erroring.
+
+| Service | Port | What it is | Needed for |
+|---|---|---|---|
+| **Frontend** | `5173`/`5174` | Atelier — React + Vite | everything |
+| **SecureFlow backend** | `8787` | Express — AI writers, gasless relay, uploads, messages | cover letters, file upload, chat |
+| **Patron daemon** | `8080` | Autopilot's brain — runs 24/7, holds keys | decision log, Autopilot mode |
+
+## First time
+
+Secrets are not in this repo. Copy them from the source projects:
+
+```bash
+cp ../../Arc/Secureflow/SecureFlow-scaffold/.env          secureflow/.env
+cp ../../Arc/Secureflow/SecureFlow-scaffold/backend/.env  secureflow/backend/.env
+cp ../../Arc/Patron/daemon/.env                           patron/daemon/.env
+```
+
+Then two edits, because both backends default to port 8787:
+
+```bash
+# patron/daemon/.env
+PORT=8080
+
+# secureflow/.env — point Atelier at the daemon
+VITE_PATRON_API_URL=http://localhost:8080
+```
+
+Install:
+
+```bash
+(cd secureflow && npm install)
+(cd secureflow/backend && npm install)
+(cd patron/daemon && npm install)
+```
+
+Contracts need OpenZeppelin fetched — see
+[`contracts/solidity/README.md`](secureflow/contracts/solidity/README.md).
+
+## Start
+
+```bash
+(cd secureflow/backend && npm run dev)   # :8787
+(cd patron/daemon     && npm start)      # :8080
+(cd secureflow        && npm run dev)    # :5173 or :5174
+```
+
+Check all three:
+
+```bash
+curl -s -o /dev/null -w "backend  %{http_code}\n" http://localhost:8787/health
+curl -s -o /dev/null -w "daemon   %{http_code}\n" http://localhost:8080/api/tasks
+curl -s -o /dev/null -w "frontend %{http_code}\n" http://localhost:5174/
+```
+
+## Seeing the Autopilot surfaces
+
+A freshly started daemon has an empty database, so the decision log renders
+nothing. Seed two demo jobs — one the agent runs cleanly, one that escalates to
+a human:
+
+```bash
+node scripts/seed-local-demo.mjs 1 2
+```
+
+Then open **http://localhost:5174/dev** — a dev-only page that renders the
+Autopilot surfaces directly, so you can see them without a wallet. The route
+does not exist in production builds.
+
+Every seeded reasoning is prefixed `[LOCAL DEMO]`. It is for looking at the UI,
+**not** for screenshots, videos, or anything a judge sees. Undo with
+`rm -rf patron/daemon/data`.
+
+## What you can click right now
+
+| Works | Where |
+|---|---|
+| The whole existing SecureFlow app | everywhere — nothing was removed |
+| Post a Job → mode chooser | `/post` |
+| Autopilot compose, with validation | `/post/autopilot` |
+| Decision log, live from the daemon | `/dev`, or inside your own job on `/my-jobs` |
+| Autopilot control (delegate / revoke) | `/my-jobs` → expand a job you funded |
+
+**Delegation will fail on-chain.** The deployed contract at `0x6142…ab59`
+predates `setJobManager`; the button is wired and correct, and it reverts until
+the UUPS proxy is deployed. See
+[`docs/adr/0001-autopilot-delegation.md`](docs/adr/0001-autopilot-delegation.md).
+
+## Tests
+
+```bash
+(cd secureflow && npm test)                       # 63 unit/component
+(cd secureflow/backend && npx vitest run)         # 32 backend routes
+(cd secureflow/contracts/solidity && forge test)  # 47 contract, incl. fuzz + upgrade
+(cd secureflow && npm run e2e)                    # 33 full-stack, needs all 3 running
+```
+
+The E2E suite drives a real browser against the real services. It is the only
+layer that catches what breaks *between* them — a dead route, a missing CORS
+header, a response shape that drifted. Everything else passes with the daemon
+switched off, which is both the point of those tests and their limit.

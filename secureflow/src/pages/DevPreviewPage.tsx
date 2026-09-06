@@ -34,9 +34,22 @@ const SAMPLE: Decision[] = [
   { id: "s6", by: "human", action: "Dispute resolved", rationale: "Arbiter ruled a partial split: the brief was ambiguous about scope, so the work was not wholly outside it.", at: Date.now() - 300_000, amountUsdc: "30.00" },
 ];
 
-function Section({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
+function Section({
+  title,
+  note,
+  testId,
+  children,
+}: {
+  title: string;
+  note: string;
+  /* Tests must be able to tell the hand-written sample apart from the live
+     daemon data. Without this, a selector matching both would silently assert
+     against the sample and prove nothing about the integration. */
+  testId: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mt-12">
+    <section className="mt-12" data-testid={testId}>
       <h2 className="font-display text-2xl font-semibold">{title}</h2>
       <p className="text-sm text-muted-foreground mt-1.5 mb-5 max-w-prose">{note}</p>
       {children}
@@ -78,6 +91,7 @@ export default function DevPreviewPage() {
       </div>
 
       <Section
+        testId="sample-log"
         title="The colour semantic"
         note="Teal is a decision a person made; amber is one the agent made. This log escalates two thirds of the way down, and the trail turns teal from that point and stays teal — the record of a machine handing control back."
       >
@@ -85,6 +99,7 @@ export default function DevPreviewPage() {
       </Section>
 
       <Section
+        testId="live-log"
         title="A real job's log, from the daemon"
         note="Live data from the running daemon, joined task → escrow. Seed some with `node scripts/seed-local-demo.mjs 1 2` from the repo root."
       >
@@ -113,6 +128,7 @@ export default function DevPreviewPage() {
       </Section>
 
       <Section
+        testId="collapsed-log"
         title="Collapsed, as it appears in a job card"
         note="How the log actually ships: one line inside the escrow card, opened on demand, so a client scanning six jobs is not scrolling past forty entries."
       >

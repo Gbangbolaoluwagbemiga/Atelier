@@ -1,0 +1,182 @@
+import { test, expect } from "@playwright/test";
+
+/**
+ * THE AUTOPILOT SURFACES, END TO END.
+ *
+ * Browser → Vite → Patron daemon → SQLite, with nothing stubbed. These are the
+ * tests that fail when the seam breaks rather than when the logic does: a CORS
+ * header the daemon stopped sending, a response shape that drifted, a join that
+ * silently returns nothing.
+ *
+ * They need the local daemon running with demo data:
+ *   node scripts/seed-local-demo.mjs 1 2
+ */
+
+test.describe("Post a Job — where the semantic is taught", () => {
+  test("presents both modes without calling either one 'AI does the work'", async ({ page }) => {
+    await page.goto("/post");
+
+    await expect(page.getByRole("heading", { name: "You run it" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "The agent runs it" })).toBeVisible();
+
+    /*
+     * The misreading this page exists to prevent. If the word "freelancer" or
+     * "person" ever stops appearing next to Autopilot, someone will conclude the
+     * agent does the design work itself — the single worst thing a visitor could
+     * take away from this product.
+     */
+    await expect(page.getByText(/a real person does the work either way/i)).toBeVisible();
+  });
+
+  test("promises the same escrow in both modes", async ({ page }) => {
+    await page.goto("/post");
+    await expect(page.getByText(/either way, the money works the same/i)).toBeVisible();
+    await expect(page.getByText(/only you can raise a dispute|dispute/i).first()).toBeVisible();
+  });
+
+  test("both columns answer the same questions, so they can be compared", async ({ page }) => {
+    await page.goto("/post");
+    // The manual card used to omit "Autopilot does" entirely, leaving a hole
+    // exactly where the eye tries to read across.
+    await expect(page.getByText("Autopilot does")).toHaveCount(2);
+    await expect(page.getByText(/nothing\. this one is entirely yours/i)).toBeVisible();
+  });
+
+  test("Manual leads to the existing escrow wizard", async ({ page }) => {
+    await page.goto("/post");
+    await page.getByRole("button", { name: /set up manually/i }).click();
+    await expect(page).toHaveURL(/\/create$/);
+  });
+
+  test("Autopilot leads to the compose page", async ({ page }) => {
+    await page.goto("/post");
+    await page.getByRole("button", { name: /hand it to autopilot/i }).click();
+    await expect(page).toHaveURL(/\/post\/autopilot$/);
+  });
+});
+
+test.describe("Autopilot compose", () => {
+  test("will not submit an instruction with no budget in it", async ({ page }) => {
+    await page.goto("/post/autopilot");
+
+    const submit = page.getByRole("button", { name: /write the brief/i });
+    await expect(submit).toBeDisabled();
+
+    await page.getByLabel(/what do you need made/i).fill("A logo for a coffee roastery");
+    await expect(submit).toBeDisabled();
+    await expect(page.getByText(/add a budget/i)).toBeVisible();
+
+    await page.getByLabel(/what do you need made/i).fill("A logo for a coffee roastery. Budget $50, 3 days.");
+    await expect(submit).toBeEnabled();
+  });
+
+  /**
+   * The honesty notice. It says Autopilot is currently the on-chain client and
+   * holds the dispute rights, which is true until the delegation is deployed.
+   * If this disappears before that happens, the product is overclaiming.
+   */
+  test("discloses the interim custody arrangement before the client commits", async ({ page }) => {
+    await page.goto("/post/autopilot");
+    await expect(page.getByText(/while this is in progress/i)).toBeVisible();
+    await expect(page.getByText(/treat autopilot as custodial/i)).toBeVisible();
+  });
+
+  test("offers example instructions that fill the field", async ({ page }) => {
+    await page.goto("/post/autopilot");
+    await page.getByRole("button", { name: /a logo for a coffee roastery/i }).click();
+    await expect(page.getByLabel(/what do you need made/i)).toHaveValue(/budget \$50/i);
+  });
+});
+
+test.describe("the decision log, against the live daemon", () => {
+  /*
+   * Every assertion below is scoped to [data-testid="live-log"].
+   *
+   * The dev page also renders a hand-written sample log that contains some of
+   * the same strings, so an unscoped selector would match it and pass with the
+   * daemon switched off — proving nothing about the integration these tests
+   * exist for.
+   */
+  test("reaches the daemon and renders a real job's decisions", async ({ page }) => {
+    await page.goto("/dev");
+    const live = page.getByTestId("live-log");
+
+    // Escrow 1 is the clean run from the seeder.
+    await expect(live.getByText(/^\d+ decisions$/)).toBeVisible({ timeout: 15_000 });
+    await expect(live.getByText("Job posted and escrow funded")).toBeVisible();
+    await expect(live.getByText("Freelancer hired")).toBeVisible();
+
+    // The seeder marks its own rows. Their presence proves the text came from
+    // SQLite via the daemon rather than from anything compiled into the page.
+    await expect(live.getByText(/\[LOCAL DEMO\]/).first()).toBeVisible();
+  });
+
+  test("carries the agent's own reasoning through unedited", async ({ page }) => {
+    await page.goto("/dev");
+    // Summarising the reasoning would defeat the purpose — the client is
+    // checking the agent's thinking, not being reassured about it.
+    await expect(
+      page
+        .getByTestId("live-log")
+        .getByText(/answers the stacked-lockup requirement specifically/i),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  /**
+   * The escalation latch, visible. Escrow 2 exhausts its revision rounds and
+   * goes to a human; from that point the trail must read teal, and the agent
+   * must not appear to take the wheel back.
+   */
+  test("turns the trail over to a human when a job escalates", async ({ page }) => {
+    await page.goto("/dev");
+    await page.getByLabel(/escrow id/i).fill("2");
+
+    const live = page.getByTestId("live-log");
+    await expect(live.getByText("Escalated to a human arbiter")).toBeVisible({ timeout: 15_000 });
+
+    // Before the escalation, the agent was acting.
+    await expect(live.locator("li", { hasText: "Brief written" })).toHaveClass(/actor-agent/);
+
+    // From the escalation onward, everything is a person's.
+    await expect(
+      live.locator("li", { hasText: "Escalated to a human arbiter" }),
+    ).toHaveClass(/actor-human/);
+    await expect(
+      live.locator("li", { hasText: "Dispute resolved" }),
+    ).toHaveClass(/actor-human/);
+  });
+
+  test("marks agent decisions as the agent's", async ({ page }) => {
+    await page.goto("/dev");
+    const brief = page.getByTestId("live-log").locator("li", { hasText: "Brief written" });
+    await expect(brief).toHaveClass(/actor-agent/, { timeout: 15_000 });
+  });
+
+  test("says nothing rather than something false for an unknown escrow", async ({ page }) => {
+    await page.goto("/dev");
+    const live = page.getByTestId("live-log");
+
+    // Start from a job that exists, so the empty state below is a real answer
+    // from the daemon rather than what this page looks like when nothing loaded.
+    // Without this the test passes with the daemon switched off, which is
+    // exactly the case it is supposed to distinguish from.
+    await expect(live.getByText("Freelancer hired")).toBeVisible({ timeout: 15_000 });
+
+    await page.getByLabel(/escrow id/i).fill("999999");
+    await expect(live.getByText("0 decisions")).toBeVisible({ timeout: 15_000 });
+    await expect(
+      live.getByText(/what a manually-managed job looks like/i),
+    ).toBeVisible();
+  });
+
+  test("collapses inside a job card, and opens on demand", async ({ page }) => {
+    await page.goto("/dev");
+
+    const toggle = page.getByRole("button", { name: /autopilot activity/i });
+    await expect(toggle).toBeVisible({ timeout: 15_000 });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+});
