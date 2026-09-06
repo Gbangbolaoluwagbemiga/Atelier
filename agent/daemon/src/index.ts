@@ -882,15 +882,41 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = JSON.parse(await readBody(req)) as {
         handle?: string;
+        email?: string;
         skills?: string;
         ownAddress?: string;
         channelRef?: string;
       };
       if (!body.handle) return json(res, 400, { error: "handle is required" });
+
+      /**
+       * EMAIL IS THE IDENTITY, and this is a money bug rather than a nicety.
+       *
+       * join() is idempotent on channelRef, and the web door never sent one — so
+       * every sign-up minted a NEW Circle wallet. Someone who joined as "ada",
+       * earned, cleared their browser and joined as "ada" again got a different
+       * address, and whatever was in the first one was unreachable. A handle is
+       * a display name; it was never an identity and should not have been
+       * treated as one.
+       *
+       * Normalised before use, because Ada@Example.com and ada@example.com are
+       * one person and must not be two wallets.
+       */
+      const email = body.email?.trim().toLowerCase() || undefined;
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        return json(res, 400, { error: "That does not look like an email address." });
+      }
+      if (!email && !body.ownAddress) {
+        return json(res, 400, {
+          error:
+            "An email is required for a managed wallet — it is what lets you back into the same wallet later.",
+        });
+      }
+
       const worker = await workers.join({
         handle: body.handle,
         channel: "web",
-        channelRef: body.channelRef,
+        channelRef: email ?? body.channelRef,
         skills: body.skills,
         ownAddress: body.ownAddress as `0x${string}` | undefined,
       });
@@ -905,6 +931,35 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       return json(res, 500, { error: clientError(err) });
     }
+  }
+
+  /**
+   * Come back to an account you already have.
+   *
+   * Same email, same wallet. Deliberately a lookup and NOT a sign-in: there is
+   * no password and no verification here, so anyone who knows the address can
+   * see the balance — the same as any public chain address. Withdrawal is what
+   * needs protecting, and that is the daemon's key, not this endpoint's.
+   *
+   * Called out plainly rather than dressed up: this is convenience, not
+   * authentication, and a managed wallet is a way to start rather than a bank.
+   */
+  if (req.method === "GET" && url.pathname === "/api/worker/recover") {
+    const email = url.searchParams.get("email")?.trim().toLowerCase();
+    if (!email) return json(res, 400, { error: "email is required" });
+
+    const worker = store.getWorkerByChannelRef("web", email);
+    if (!worker) {
+      return json(res, 404, {
+        error: "No account for that email yet. Create one and it will be yours from then on.",
+      });
+    }
+    return json(res, 200, {
+      id: worker.id,
+      handle: worker.handle,
+      address: worker.walletAddress,
+      mode: worker.mode,
+    });
   }
 
   if (req.method === "GET" && url.pathname === "/api/worker/quests") {

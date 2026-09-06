@@ -7,6 +7,7 @@ import {
 } from "@/lib/atelier/nav";
 
 const NOBODY: NavRoles = {
+  hasOwnWallet: false,
   isFreelancer: false,
   isClient: false,
   isArbiter: false,
@@ -40,8 +41,9 @@ describe("visibleNav", () => {
       const paths = visibleNav(roles).map((i) => i.to);
       expect(paths).toContain("/jobs");
       expect(paths).toContain("/post");
-      // The no-wallet door must survive every role combination — hiding it
-      // from anyone hides it from the people it exists for.
+      // Get Hired survives every ROLE combination — hiding it by role would
+      // hide it from the people it exists for. It is hidden by WALLET instead,
+      // which is tested separately below.
       expect(paths).toContain("/get-hired");
     }
   });
@@ -68,6 +70,21 @@ describe("visibleNav", () => {
 
   it("hides My Jobs from someone who has neither posted nor been hired", () => {
     expect(visibleNav(NOBODY).map((i) => i.to)).not.toContain("/my-jobs");
+  });
+
+  /**
+   * Someone who connected their own wallet has stopped being the person Get
+   * Hired is for — they sign for themselves. An entrance offering to hold their
+   * keys is clutter at best and confusing at worst.
+   */
+  it("hides Get Hired once a wallet of their own is connected", () => {
+    const paths = visibleNav({ ...NOBODY, hasOwnWallet: true }).map((i) => i.to);
+    expect(paths).not.toContain("/get-hired");
+  });
+
+  it("still shows it to a freelancer who has no wallet of their own", () => {
+    const paths = visibleNav({ ...NOBODY, isFreelancer: true }).map((i) => i.to);
+    expect(paths).toContain("/get-hired");
   });
 
   it("reveals admin only to an admin", () => {

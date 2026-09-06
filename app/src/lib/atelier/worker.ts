@@ -152,6 +152,16 @@ async function call<T>(
  */
 export async function join(input: {
   handle: string;
+  /**
+   * Required for a managed wallet, and it is the identity rather than the
+   * handle.
+   *
+   * The daemon derives the account from this: same email, same wallet, always.
+   * Without it every sign-up minted a fresh Circle wallet, so someone who
+   * cleared their browser and typed the same name got a different address and
+   * whatever was in the first one was gone.
+   */
+  email?: string;
   skills?: string;
   ownAddress?: string;
 }): Promise<Worker> {
@@ -239,4 +249,20 @@ export async function linkOwnWallet(input: {
 /** Minutes until applications close, floored at zero. */
 export function minutesUntilClose(quest: Quest, now = Date.now()): number {
   return Math.max(0, Math.ceil((quest.closesAt - now) / 60_000));
+}
+
+/**
+ * Get back into an account from its email.
+ *
+ * A lookup, not a sign-in — there is no password here. Say so in the UI rather
+ * than implying security this does not have: anyone who knows the email can see
+ * the balance, exactly as anyone who knows a public address can. What actually
+ * protects the money is that withdrawal needs the daemon's key.
+ */
+export async function recover(email: string): Promise<Worker> {
+  const worker = await call<Worker>(
+    `/api/worker/recover?email=${encodeURIComponent(email.trim().toLowerCase())}`,
+  );
+  rememberWorker(worker.id);
+  return worker;
 }

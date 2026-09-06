@@ -31,7 +31,15 @@ export interface NavItem {
    * appears when the connected wallet has earned it, which is how the nav stays
    * short for a first-time visitor.
    */
-  visibility: "always" | "participant" | "freelancer" | "client" | "arbiter" | "admin";
+  visibility:
+    | "always"
+    | "participant"
+    | "freelancer"
+    | "client"
+    | "arbiter"
+    | "admin"
+    /** Only for someone who has NOT connected a wallet of their own. */
+    | "no-wallet";
 }
 
 /**
@@ -41,13 +49,15 @@ export interface NavItem {
 export const PRIMARY_NAV: readonly NavItem[] = [
   { to: "/jobs", label: "Browse Jobs", visibility: "always" },
   /*
-   * The no-wallet door, and it is "always" on purpose.
+   * The no-wallet door, shown to everyone who does not already have a wallet.
    *
-   * Someone who has never held a private key is exactly who this is for, so
-   * gating it on a connected wallet — or on already being a freelancer — would
-   * hide it from every single person it was built for.
+   * It is for someone who has never held a private key, so gating it on being a
+   * freelancer would hide it from every person it was built for. But once
+   * somebody connects their OWN wallet they have stopped being that person —
+   * they sign for themselves, and an entrance offering to hold their keys is
+   * clutter at best and confusing at worst.
    */
-  { to: "/get-hired", label: "Get Hired", visibility: "always" },
+  { to: "/get-hired", label: "Get Hired", visibility: "no-wallet" },
   { to: "/post", label: "Post a Job", visibility: "always" },
   /*
    * One destination for both sides of the table.
@@ -71,6 +81,8 @@ export const PRIMARY_NAV: readonly NavItem[] = [
 
 /** What the connected wallet is entitled to see. */
 export interface NavRoles {
+  /** True once the visitor has connected a wallet they control. */
+  hasOwnWallet?: boolean;
   isFreelancer: boolean;
   isClient: boolean;
   isArbiter: boolean;
@@ -88,6 +100,8 @@ export function visibleNav(
       // Either side of the table. My Jobs sorts out which tabs to show.
       case "participant":
         return roles.isFreelancer || roles.isClient;
+      case "no-wallet":
+        return !roles.hasOwnWallet;
       case "freelancer":
         return roles.isFreelancer;
       case "client":

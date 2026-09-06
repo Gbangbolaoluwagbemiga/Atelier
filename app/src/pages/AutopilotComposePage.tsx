@@ -55,9 +55,15 @@ export default function AutopilotComposePage() {
   const [brief, setBrief] = useState<AutopilotBrief | null>(null);
   const [thinking, setThinking] = useState(false);
   const [funding, setFunding] = useState(false);
-  /* Minutes applications stay open before the agent judges them together.
-     Three is the daemon's default; the UI offers longer for real jobs. */
-  const [reviewWindow, setReviewWindow] = useState(5);
+  /* The review window is entered in whatever unit suits the job and stored in
+     minutes, which is what the daemon takes. */
+  const [windowValue, setWindowValue] = useState(5);
+  const [windowUnit, setWindowUnit] = useState<"minutes" | "hours" | "days">(
+    "minutes",
+  );
+  const reviewWindow =
+    windowValue *
+    (windowUnit === "hours" ? 60 : windowUnit === "days" ? 1440 : 1);
 
   const trimmed = instruction.trim();
   /* The daemon rejects an instruction with no budget, with a message the client
@@ -232,7 +238,13 @@ export default function AutopilotComposePage() {
                 who were visibly getting closer.
               </p>
 
-              {/* The review window — how long applications stay open. */}
+              {/*
+                The review window, in whichever unit the client is thinking in.
+                A real job is "give people a day"; a demo is "wait five minutes".
+                Forcing 1440 into a minutes box for the first is arithmetic
+                nobody should have to do, so the unit is switchable and the
+                value is stored in minutes underneath.
+              */}
               <div className="rounded-xl actor-panel p-4">
                 <Label htmlFor="window" className="text-xs">
                   Review applications after
@@ -242,33 +254,37 @@ export default function AutopilotComposePage() {
                     id="window"
                     type="number"
                     min={1}
-                    value={reviewWindow}
-                    onChange={(e) => setReviewWindow(Math.max(1, Number(e.target.value) || 1))}
+                    value={windowValue}
+                    onChange={(e) => setWindowValue(Math.max(1, Number(e.target.value) || 1))}
                     className="h-9 w-24 tabular-nums"
                   />
-                  <span className="text-sm text-muted-foreground">minutes</span>
+                  <div className="flex rounded-md border border-border/60 overflow-hidden">
+                    {(["minutes", "hours", "days"] as const).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setWindowUnit(u)}
+                        className={`px-2.5 py-1.5 text-xs transition-colors ${
+                          windowUnit === u
+                            ? "bg-[var(--actor-soft)] actor-text"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
                   Autopilot waits this long, then scores every applicant together
-                  and picks one. Longer windows get more applicants; shorter ones
-                  get someone started sooner.
+                  and picks one — so nobody wins by refreshing fastest. Longer
+                  windows get more applicants; shorter ones get someone started
+                  sooner.
                 </p>
-                <div className="flex flex-wrap gap-1.5 mt-2.5">
-                  {[
-                    ["5 min", 5],
-                    ["1 hour", 60],
-                    ["1 day", 1440],
-                  ].map(([label, mins]) => (
-                    <button
-                      key={label as string}
-                      type="button"
-                      onClick={() => setReviewWindow(mins as number)}
-                      className="text-xs px-2.5 py-1 rounded-full border border-border/60 text-muted-foreground hover:actor-text hover:border-[var(--actor-border)] transition-colors"
-                    >
-                      {label as string}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  That is <strong className="text-foreground">{reviewWindow}</strong>{" "}
+                  minute{reviewWindow === 1 ? "" : "s"} in total.
+                </p>
               </div>
             </div>
 

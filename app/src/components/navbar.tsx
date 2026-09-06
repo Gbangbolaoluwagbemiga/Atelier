@@ -75,9 +75,10 @@ export function Navbar() {
   const { isAdmin, isArbiter } = useAdminStatus();
   const { isJobCreator } = useJobCreatorStatus();
   const { hasPendingApprovals } = usePendingApprovals();
-  useWeb3();
+  const { wallet } = useWeb3();
 
   const items = visibleNav({
+    hasOwnWallet: wallet.isConnected,
     isFreelancer,
     isClient: isJobCreator,
     isArbiter,

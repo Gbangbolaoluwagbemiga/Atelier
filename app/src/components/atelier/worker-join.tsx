@@ -20,25 +20,42 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { toastError } from "@/lib/atelier/errors";
-import { join, type Worker } from "@/lib/atelier/worker";
+import { join, recover, type Worker } from "@/lib/atelier/worker";
 
 export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
   const { toast } = useToast();
   const [handle, setHandle] = useState("");
+  const [email, setEmail] = useState("");
   const [skills, setSkills] = useState("");
+  const [returning, setReturning] = useState(false);
   const [ownAddress, setOwnAddress] = useState("");
   const [useOwnWallet, setUseOwnWallet] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const validOwnAddress =
     !useOwnWallet || /^0x[a-fA-F0-9]{40}$/.test(ownAddress.trim());
-  const ready = handle.trim().length >= 2 && validOwnAddress;
+  const validEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+  /* Email is required for a managed wallet — it is what makes the account
+     recoverable. Someone bringing their own address does not need it. */
+  const ready =
+    handle.trim().length >= 2 && validOwnAddress && (useOwnWallet || validEmail);
 
   async function submit() {
     setBusy(true);
     try {
+      if (returning) {
+        const existing = await recover(email.trim());
+        toast({
+          title: `Welcome back, ${existing.handle}`,
+          description: "Same account, same wallet.",
+        });
+        onJoined(existing);
+        return;
+      }
+
       const worker = await join({
         handle: handle.trim(),
+        email: useOwnWallet ? undefined : email.trim(),
         skills: skills.trim() || undefined,
         ownAddress: useOwnWallet ? ownAddress.trim() : undefined,
       });
@@ -88,6 +105,30 @@ export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
             autoComplete="off"
           />
         </div>
+
+        {!useOwnWallet && (
+          <div>
+            <Label htmlFor="email">Your email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="mt-1.5"
+              autoComplete="email"
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              This is how you get back to the same wallet later. Use a different
+              email and you get a different wallet — with different money in it.
+            </p>
+            {email.trim().length > 3 && !validEmail && (
+              <p className="text-xs text-destructive mt-1">
+                That does not look like an email address.
+              </p>
+            )}
+          </div>
+        )}
 
         <div>
           <Label htmlFor="skills">
@@ -168,8 +209,24 @@ export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
           {busy && (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
           )}
-          {useOwnWallet ? "Link my wallet" : "Create my account"}
+          {useOwnWallet
+            ? "Link my wallet"
+            : returning
+              ? "Get back into my account"
+              : "Create my account"}
         </Button>
+
+        {!useOwnWallet && (
+          <button
+            type="button"
+            onClick={() => setReturning((v) => !v)}
+            className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {returning
+              ? "Actually, I am new here"
+              : "I have been here before — get me back into my account"}
+          </button>
+        )}
       </div>
     </motion.div>
   );
