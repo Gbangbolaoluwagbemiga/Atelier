@@ -92,6 +92,6 @@ layout and carries on, with wrong numbers and real money behind them.
 | Network | Address | Notes |
 |---|---|---|
 | Arc EVM Testnet (`5042002`) | `0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59` | **Pre-ETHOnline.** Not upgradeable, no job manager. Superseded; keeps its own escrows. |
-| Arc EVM Testnet (`5042002`) | **`0x370e1517Fe56fF3ebCFc3D7ed08563fB88910C11`** | **Current.** UUPS proxy, `2.0.0-autopilot`, deployed in block `60794918`. Implementation `0x1Eda695152Ad4c14432Aa7941D21494cF24C0D1C`. |
+| Arc EVM Testnet (`5042002`) | **`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`** | **Current.** UUPS proxy, `2.0.0-autopilot`, deployed in block `60797735`. Implementation `0x38c42aBd2C652784AE3F2100Fa34127Ad67cAc5f`. |
 
 See `docs/adr/0001-autopilot-delegation.md`.

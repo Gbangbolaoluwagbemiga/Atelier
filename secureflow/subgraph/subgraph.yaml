@@ -6,11 +6,11 @@ dataSources:
     name: SecureFlow
     network: arc-testnet
     source:
-      address: "0x370e1517Fe56fF3ebCFc3D7ed08563fB88910C11"
+      address: "0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE"
       abi: SecureFlow
       # The block the ERC1967 proxy was deployed in. Too low and indexing
       # crawls millions of empty blocks; too high and escrows go missing.
-      startBlock: 60794918
+      startBlock: 60797735
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

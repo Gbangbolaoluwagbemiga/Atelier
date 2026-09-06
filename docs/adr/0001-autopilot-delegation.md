@@ -7,13 +7,20 @@
 >
 > | | |
 > |---|---|
-> | Proxy (this is the contract) | `0x370e1517Fe56fF3ebCFc3D7ed08563fB88910C11` |
-> | Implementation | `0x1Eda695152Ad4c14432Aa7941D21494cF24C0D1C` |
+> | Proxy (this is the contract) | `0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE` |
+> | Implementation | `0x38c42aBd2C652784AE3F2100Fa34127Ad67cAc5f` |
 > | `version()` | `2.0.0-autopilot` |
-> | Deploy block | `60794918` |
+> | Deploy block | `60797735` |
 >
 > The pre-existing `0x6142…ab59` is superseded and keeps its own escrows; it is
 > not upgradeable and has no job manager.
+>
+> There is a second, abandoned proxy at `0x370e…0C11` from earlier the same day.
+> It is identical code and it worked — the live delegation was first proved on
+> it — but it carries a cancelled smoke-test escrow, so `nextEscrowId` starts at
+> 2 there. Atelier runs on a contract with no history at all rather than one
+> whose first job is a test, and the redeploy cost about \$0.30 of faucet gas.
+> Nothing points at `0x370e…0C11` any more.
 >
 > The in-source markers in `PostJobPage.tsx` and `AutopilotComposePage.tsx` have
 > been resolved, because the mechanism they were hedging now exists on-chain.

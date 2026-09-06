@@ -89,6 +89,23 @@ cd secureflow && npm run sync-abi
 
 ---
 
+## Gate 1 is done
+
+| | |
+|---|---|
+| Proxy (this is the contract) | `0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE` |
+| Implementation | `0x38c42aBd2C652784AE3F2100Fa34127Ad67cAc5f` |
+| Deploy block | `60797735` |
+| USDC accepted / arbiter set | yes / yes |
+| Escrows | none — clean history |
+
+**`VITE_GRAPH_URL` and `GRAPH_URL` are deliberately blank.** The Goldsky
+endpoint indexes the pre-Atelier contract, so leaving it set made Browse Jobs
+list 65 escrow ids that do not exist on this contract, each rendering as
+"0 USDC / No description available". Blank means the app falls back to RPC
+multicall against the contract it is actually pointed at. **Fill them in with
+the Studio query URL below — not with the old Goldsky one.**
+
 ## Gate 2 — the subgraph (Subgraph Studio)
 
 This is the $5,000 Graph track. Goldsky does not qualify; the track asks for

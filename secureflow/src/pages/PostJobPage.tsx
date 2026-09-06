@@ -193,7 +193,7 @@ export default function PostJobPage() {
         safe to choose rather than a leap of faith.
 
         This paragraph is now backed by a deployed contract, not a promise.
-        SecureFlow at 0x370e1517Fe56fF3ebCFc3D7ed08563fB88910C11 carries a scoped
+        SecureFlow at 0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE carries a scoped
         job manager that may hire, approve and reject and nothing else — no
         dispute, no cancel, no withdrawal, and it can never become the
         beneficiary. The one-way key is enforced at two points and proved by a
