@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +14,7 @@ import { useCreateEscrow } from "@/hooks/use-escrows";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { parseEther, parseUnits } from "viem";
+import { AUTOPILOT_BRIEF_KEY } from "@/lib/atelier/patron";
 
 const USDC_ADDRESS = (
   (import.meta.env.VITE_USDC_TOKEN_CONTRACT as string | undefined) ?? ""
@@ -99,20 +100,74 @@ export default function CreateEscrowPage() {
 
   const prefillFreelancer = searchParams.get("freelancer") ?? "";
 
+  /**
+   * A brief handed over from Autopilot's compose flow.
+   *
+   * Read from sessionStorage rather than the URL: a brief with several
+   * milestones and a paragraph of criteria makes a URL long enough to be
+   * truncated somewhere in the middle, and the failure would be a quietly
+   * half-filled form rather than an error.
+   *
+   * Read once, in the initialiser, so editing a field and re-rendering does not
+   * snap the form back to the agent's version. The key is cleared as soon as it
+   * is read — a stale brief resurfacing on a later unrelated visit to this page
+   * would be baffling.
+   */
+  const autopilotBrief = useMemo(() => {
+    if (searchParams.get("from") !== "autopilot") return null;
+    try {
+      const raw = sessionStorage.getItem(AUTOPILOT_BRIEF_KEY);
+      sessionStorage.removeItem(AUTOPILOT_BRIEF_KEY);
+      if (!raw) return null;
+      const b = JSON.parse(raw) as {
+        title?: string;
+        instruction?: string;
+        deliverableFormat?: string;
+        criteria?: string[];
+        durationDays?: number;
+        budget?: number;
+        milestones?: { description: string; amount: number }[];
+      };
+      if (!Array.isArray(b.milestones) || b.milestones.length === 0) return null;
+      return b;
+    } catch {
+      return null;
+    }
+  }, [searchParams]);
+
   const [formData, setFormData] = useState({
-    projectTitle: "",
-    projectDescription: "",
-    duration: "",
-    totalBudget: "",
+    projectTitle: autopilotBrief?.title ?? "",
+    projectDescription: autopilotBrief
+      ? [
+          autopilotBrief.instruction,
+          autopilotBrief.deliverableFormat
+            ? `Deliverable: ${autopilotBrief.deliverableFormat}`
+            : "",
+          autopilotBrief.criteria?.length
+            ? `Acceptance criteria:\n${autopilotBrief.criteria.map((c) => `• ${c}`).join("\n")}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+      : "",
+    duration: autopilotBrief?.durationDays ? String(autopilotBrief.durationDays) : "",
+    totalBudget: autopilotBrief?.budget ? String(autopilotBrief.budget) : "",
     beneficiary: prefillFreelancer,
     // Default to native USDC, no external token needed
     token: "",
     useNativeToken: true,
-    isOpenJob: false,
-    milestones: [
-      { description: "", amount: "" },
-      { description: "", amount: "" },
-    ] as Milestone[],
+    // An Autopilot job is posted openly — the agent's whole job is to read the
+    // applications and pick someone.
+    isOpenJob: autopilotBrief ? true : false,
+    milestones: (autopilotBrief?.milestones
+      ? autopilotBrief.milestones.map((m) => ({
+          description: m.description,
+          amount: String(m.amount),
+        }))
+      : [
+          { description: "", amount: "" },
+          { description: "", amount: "" },
+        ]) as Milestone[],
   });
 
   const calculateTotalMilestones = () =>

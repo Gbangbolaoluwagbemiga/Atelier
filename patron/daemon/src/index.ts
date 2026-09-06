@@ -24,7 +24,7 @@ import * as store from "./store.js";
 import * as workers from "./workers/service.js";
 import * as telegram from "./workers/telegram.js";
 import { setLlmPausedUntil } from "./llm-status.js";
-import { extractStatedBudget } from "./agent/BriefGenerator.js";
+import { extractStatedBudget, generateBrief } from "./agent/BriefGenerator.js";
 
 const PORT = config.port;
 
@@ -492,6 +492,55 @@ const server = http.createServer(async (req, res) => {
 
       const result = await runHireFlow(body.instruction, "agent", payment?.payer);
       json(res, 200, result);
+    } catch (err) {
+      json(res, 500, { error: clientError(err) });
+    }
+    return;
+  }
+
+  /**
+   * Read-only brief preview.
+   *
+   * Atelier needs to show a client what the agent proposes — title, budget,
+   * duration, acceptance criteria, and the milestone split — BEFORE any money
+   * moves. /api/instruct cannot serve that: it generates the brief and opens a
+   * funded escrow in the same call, so the only way to see the agent's proposal
+   * was to have already paid for it.
+   *
+   * This runs the same BriefGenerator and stops. It creates no task, opens no
+   * escrow, debits no treasury and writes nothing to the store — so it needs no
+   * signature and no deposit, and a client can try three phrasings before
+   * committing to one.
+   *
+   * It does cost an LLM call, which is why the instruction is length-capped:
+   * this endpoint is unauthenticated by design and would otherwise be a free
+   * inference proxy for anyone who found it.
+   */
+  if (req.method === "POST" && url.pathname === "/api/brief/preview") {
+    try {
+      const body = JSON.parse(await readBody(req)) as { instruction?: string };
+      const instruction = (body.instruction ?? "").trim();
+
+      if (!instruction) return json(res, 400, { error: "instruction is required" });
+      if (instruction.length > 1000) {
+        return json(res, 400, { error: "That instruction is too long — describe the job in a sentence or two." });
+      }
+
+      const stated = extractStatedBudget(instruction);
+      if (stated == null) {
+        return json(res, 400, { error: 'State a budget in the instruction, e.g. "Budget $50".' });
+      }
+      if (stated > config.maxJobBudgetUsdc) {
+        return json(res, 400, {
+          error: `That is over the current per-job cap of $${config.maxJobBudgetUsdc}.`,
+        });
+      }
+
+      const { brief, stopReason } = await generateBrief(instruction);
+
+      // Said explicitly in the payload so a caller cannot mistake a preview for
+      // a commissioned job — nothing here has been paid for or posted.
+      json(res, 200, { brief, stopReason, preview: true, escrowId: null });
     } catch (err) {
       json(res, 500, { error: clientError(err) });
     }

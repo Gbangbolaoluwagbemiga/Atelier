@@ -70,15 +70,55 @@ test.describe("Autopilot compose", () => {
     await expect(submit).toBeEnabled();
   });
 
-  /**
-   * The honesty notice. It says Autopilot is currently the on-chain client and
-   * holds the dispute rights, which is true until the delegation is deployed.
-   * If this disappears before that happens, the product is overclaiming.
-   */
-  test("discloses the interim custody arrangement before the client commits", async ({ page }) => {
+  test("promises nothing is funded before the brief is shown", async ({ page }) => {
     await page.goto("/post/autopilot");
-    await expect(page.getByText(/while this is in progress/i)).toBeVisible();
-    await expect(page.getByText(/treat autopilot as custodial/i)).toBeVisible();
+    await expect(page.getByText(/nothing is funded at this step/i)).toBeVisible();
+  });
+
+  /**
+   * Step two, against the real daemon and a real LLM call.
+   *
+   * This is the screen the whole mode rests on: "the agent writes your brief"
+   * is only reassuring if you can read the brief before your money is involved.
+   * The test asserts the agent actually produced milestones with amounts, and
+   * that the page says plainly who funds the escrow — which is the CLIENT, and
+   * is the difference between this and the custodial arrangement the daemon's
+   * own /api/instruct still uses.
+   */
+  test("shows the agent's proposed brief, with editable milestones", async ({ page }) => {
+    test.slow(); // a real generation round trip
+    await page.goto("/post/autopilot");
+
+    await page
+      .getByLabel(/what do you need made/i)
+      .fill("A logo for a coffee roastery. Budget $50, 3 days.");
+    await page.getByRole("button", { name: /write the brief/i }).click();
+
+    await expect(page.getByText(/autopilot wrote this/i)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("heading", { name: /milestones/i })).toBeVisible();
+
+    // Amounts are editable, and the total is derived from them — the contract
+    // requires the milestones to sum to the escrow total, so a separately
+    // editable budget could be put out of step with them.
+    const amounts = page.locator('input[type="number"]');
+    expect(await amounts.count()).toBeGreaterThan(2);
+
+    await expect(page.getByText(/you fund this, not autopilot/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /fund this escrow/i })).toBeVisible();
+  });
+
+  test("can go back and change the instruction without losing the page", async ({ page }) => {
+    test.slow();
+    await page.goto("/post/autopilot");
+    await page
+      .getByLabel(/what do you need made/i)
+      .fill("A logo for a coffee roastery. Budget $50, 3 days.");
+    await page.getByRole("button", { name: /write the brief/i }).click();
+
+    await expect(page.getByText(/autopilot wrote this/i)).toBeVisible({ timeout: 60_000 });
+    await page.getByRole("button", { name: /change the instruction/i }).click();
+
+    await expect(page.getByLabel(/what do you need made/i)).toHaveValue(/coffee roastery/i);
   });
 
   test("offers example instructions that fill the field", async ({ page }) => {

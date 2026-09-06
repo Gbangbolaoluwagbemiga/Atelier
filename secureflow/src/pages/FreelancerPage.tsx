@@ -1724,7 +1724,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
                           <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
                             <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                             <div>

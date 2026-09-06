@@ -80,14 +80,14 @@ export function EscrowCard({
       case "resolved":
         return "bg-purple-100 text-purple-800";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
       case "pending":
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
       case "submitted":
         return "bg-yellow-100 text-yellow-800";
       case "approved":
@@ -97,7 +97,7 @@ export function EscrowCard({
       case "resolved":
         return "bg-blue-100 text-blue-800";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -126,7 +126,7 @@ export function EscrowCard({
               <CardTitle className="text-lg mb-2">
                 {escrow.projectDescription}
               </CardTitle>
-              <div className="flex items-center gap-4 text-sm text-gray-600">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
                   <span>
@@ -167,13 +167,13 @@ export function EscrowCard({
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-gray-600">Total Amount:</span>
+                <span className="text-muted-foreground">Total Amount:</span>
                 <div className="font-semibold">
                   {formatTokenAmount(escrow.totalAmount, escrow.token)}
                 </div>
               </div>
               <div>
-                <span className="text-gray-600">Released:</span>
+                <span className="text-muted-foreground">Released:</span>
                 <div className="font-semibold">
                   {formatTokenAmount(escrow.releasedAmount, escrow.token)}
                 </div>

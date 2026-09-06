@@ -67,7 +67,10 @@ export function FreelancerStats({
   const badgeLabel = badge || "Beginner";
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6 mb-8">
+    // Two up on a phone rather than one. Six single-column tiles is a screen and
+    // a half of scrolling before the actual jobs, which is what somebody opened
+    // this page to see.
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6 mb-8">
       <Card className="glass border-primary/20 p-4 md:p-6">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>

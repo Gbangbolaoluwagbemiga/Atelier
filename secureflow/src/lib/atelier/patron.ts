@@ -264,3 +264,63 @@ export async function fetchAutopilotAddress(
     explorerUrl: w.explorerUrl ?? "",
   };
 }
+
+/* ── Brief preview ───────────────────────────────────────────────────────── */
+
+export interface BriefMilestone {
+  description: string;
+  amount: number;
+}
+
+export interface AutopilotBrief {
+  title: string;
+  budget: number;
+  durationDays: number;
+  criteria: string[];
+  deliverableFormat: string;
+  revisionRounds: number;
+  milestones: BriefMilestone[];
+  briefHash: string;
+  applicationWindowMinutes?: number;
+}
+
+/**
+ * Ask Autopilot what it would post, without commissioning anything.
+ *
+ * The daemon's /api/instruct writes the brief and opens a funded escrow in one
+ * call, which meant the only way to see the agent's proposal was to have
+ * already paid for it. This runs the same generator and stops — no task, no
+ * escrow, no treasury movement — so a client can read the milestones the agent
+ * chose, and try another phrasing, before any money is involved.
+ */
+export async function previewBrief(
+  instruction: string,
+  signal?: AbortSignal,
+): Promise<AutopilotBrief> {
+  if (!AUTOPILOT_CONFIGURED) throw new AutopilotUnavailable();
+
+  const res = await fetch(`${BASE}/api/brief/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instruction }),
+    signal,
+  });
+
+  const payload = (await res.json().catch(() => ({}))) as {
+    brief?: AutopilotBrief;
+    error?: string;
+  };
+
+  if (!res.ok) {
+    // The daemon's own message is written for the client ("State a budget in
+    // the instruction"), so it is better than anything generic we would add.
+    throw new Error(payload.error ?? `Autopilot returned ${res.status}`);
+  }
+  if (!payload.brief || !Array.isArray(payload.brief.milestones)) {
+    throw new Error("Autopilot returned a brief we could not read.");
+  }
+  return payload.brief;
+}
+
+/** Where a brief waits while the client is sent to the funding wizard. */
+export const AUTOPILOT_BRIEF_KEY = "atelier:autopilot-brief";

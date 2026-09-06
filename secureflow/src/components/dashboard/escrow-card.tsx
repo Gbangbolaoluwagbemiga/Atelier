@@ -155,7 +155,7 @@ export function EscrowCard({
       case "Dispute Resolved":
         return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -198,7 +198,7 @@ export function EscrowCard({
       case "rejected":
         return "bg-orange-100 text-orange-800";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -232,7 +232,7 @@ export function EscrowCard({
                   {escrow.projectDescription}
                 </p>
               )}
-              <div className="flex items-center gap-4 text-sm text-gray-600">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
                   <span>
@@ -301,22 +301,26 @@ export function EscrowCard({
               <Progress value={progressPercentage} className="h-2" />
             </div>
 
-            <div className="grid grid-cols-3 gap-4 text-sm">
+            {/* Two columns on a phone, three once there is room. This was a
+                bare grid-cols-3, so on mobile a USDC figure, a released amount
+                and a deadline were sharing about 100px each and wrapping mid
+                number. */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-sm">
               <div>
-                <span className="text-gray-600">Total Amount:</span>
+                <span className="text-muted-foreground">Total Amount:</span>
                 <div className="font-semibold">
                   {formatTokenAmount(escrow.totalAmount, escrow.token)}
                 </div>
               </div>
               <div>
-                <span className="text-gray-600">Released:</span>
+                <span className="text-muted-foreground">Released:</span>
                 <div className="font-semibold">
                   {formatTokenAmount(escrow.releasedAmount, escrow.token)}
                 </div>
               </div>
               {(escrow.status === "pending" || escrow.status === "active") && (
                 <div>
-                  <span className="text-gray-600">Days Left:</span>
+                  <span className="text-muted-foreground">Days Left:</span>
                   <div className="font-semibold flex items-center gap-1">
                     <Clock className="h-4 w-4" />
                     {(() => {
