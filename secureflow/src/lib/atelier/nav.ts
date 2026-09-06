@@ -30,7 +30,7 @@ export interface NavItem {
    * appears when the connected wallet has earned it, which is how the nav stays
    * short for a first-time visitor.
    */
-  visibility: "always" | "freelancer" | "client" | "arbiter" | "admin";
+  visibility: "always" | "participant" | "freelancer" | "client" | "arbiter" | "admin";
 }
 
 /**
@@ -39,11 +39,24 @@ export interface NavItem {
  */
 export const PRIMARY_NAV: readonly NavItem[] = [
   { to: "/jobs", label: "Browse Jobs", visibility: "always" },
-  { to: "/work", label: "My Work", visibility: "freelancer" },
   { to: "/post", label: "Post a Job", visibility: "always" },
-  { to: "/my-jobs", label: "My Jobs", visibility: "client" },
+  /*
+   * One destination for both sides of the table.
+   *
+   * "My Work" and "My Jobs" used to be separate entries, which made sense to
+   * whoever built it and to nobody using it — most people here hire someone one
+   * week and take a job the next, and two nav entries meant two dashboards and
+   * two places to check whether anything needed them. The page shows tabs only
+   * when you actually have both roles.
+   */
+  { to: "/my-jobs", label: "My Jobs", visibility: "participant" },
   { to: "/analytics", label: "Analytics", visibility: "always" },
-  { to: "/disputes", label: "Disputes", visibility: "arbiter" },
+  /*
+   * Disputes is NOT here. It is arbitration — a staff tool, not a place a
+   * client or freelancer navigates to. It lives behind Admin, which is where it
+   * was before and where the link back to it still points. Someone in a dispute
+   * reaches it from the job itself, which is the context they need anyway.
+   */
   { to: "/admin", label: "Admin", visibility: "admin" },
 ] as const;
 
@@ -63,6 +76,9 @@ export function visibleNav(
     switch (item.visibility) {
       case "always":
         return true;
+      // Either side of the table. My Jobs sorts out which tabs to show.
+      case "participant":
+        return roles.isFreelancer || roles.isClient;
       case "freelancer":
         return roles.isFreelancer;
       case "client":
@@ -97,5 +113,7 @@ export function isCurrent(pathname: string, to: string): boolean {
 export const LEGACY_REDIRECTS: Readonly<Record<string, string>> = {
   "/create": "/post",
   "/dashboard": "/my-jobs",
-  "/freelancer": "/work",
+  // Both freelancer paths now land on the merged page, on the working side.
+  "/freelancer": "/my-jobs?tab=working",
+  "/work": "/my-jobs?tab=working",
 } as const;

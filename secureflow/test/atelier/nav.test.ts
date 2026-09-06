@@ -42,11 +42,50 @@ describe("visibleNav", () => {
     }
   });
 
-  it("reveals each role's own area and nothing more", () => {
-    expect(visibleNav({ ...NOBODY, isFreelancer: true }).map((i) => i.to)).toContain("/work");
-    expect(visibleNav({ ...NOBODY, isFreelancer: true }).map((i) => i.to)).not.toContain("/my-jobs");
+  /**
+   * My Jobs is one destination for both sides of the table. Either role earns
+   * it, and the page itself decides whether to show tabs — so the nav must not
+   * try to distinguish them.
+   */
+  it("shows My Jobs to either side of the table", () => {
+    expect(visibleNav({ ...NOBODY, isFreelancer: true }).map((i) => i.to)).toContain("/my-jobs");
     expect(visibleNav({ ...NOBODY, isClient: true }).map((i) => i.to)).toContain("/my-jobs");
+  });
+
+  it("offers it exactly once to someone with both roles", () => {
+    const paths = visibleNav({
+      isFreelancer: true,
+      isClient: true,
+      isArbiter: false,
+      isAdmin: false,
+    }).map((i) => i.to);
+    expect(paths.filter((p) => p === "/my-jobs")).toHaveLength(1);
+  });
+
+  it("hides My Jobs from someone who has neither posted nor been hired", () => {
+    expect(visibleNav(NOBODY).map((i) => i.to)).not.toContain("/my-jobs");
+  });
+
+  it("reveals admin only to an admin", () => {
     expect(visibleNav({ ...NOBODY, isAdmin: true }).map((i) => i.to)).toContain("/admin");
+  });
+
+  /**
+   * Disputes is arbitration — a staff tool reached from Admin, not a place a
+   * client or freelancer navigates to. It must not reappear in the nav for
+   * anyone, including an arbiter, who gets there through Admin.
+   */
+  it("never puts Disputes in the nav, for any role", () => {
+    const everyone: NavRoles[] = [
+      NOBODY,
+      { ...NOBODY, isFreelancer: true },
+      { ...NOBODY, isClient: true },
+      { ...NOBODY, isArbiter: true },
+      { isFreelancer: true, isClient: true, isArbiter: true, isAdmin: true },
+    ];
+    for (const roles of everyone) {
+      expect(visibleNav(roles).map((i) => i.to)).not.toContain("/disputes");
+    }
   });
 
   it("keeps admin out of an ordinary user's nav", () => {
@@ -57,7 +96,6 @@ describe("visibleNav", () => {
       isAdmin: false,
     }).map((i) => i.to);
     expect(paths).not.toContain("/admin");
-    expect(paths).not.toContain("/disputes");
   });
 
   it("preserves declaration order regardless of roles", () => {

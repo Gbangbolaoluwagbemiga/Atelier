@@ -187,7 +187,8 @@ function OverdueFreelancerBanner({
   );
 }
 
-export default function FreelancerPage() {
+/** See DashboardPage — same reason, same minimal change. */
+export default function FreelancerPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { wallet, getContract } = useWeb3();
   const { signMessageAsync } = useSignMessage();
   const { writeContractAsync } = useWriteContract();
@@ -1489,17 +1490,20 @@ export default function FreelancerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              Freelancer Dashboard
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Manage your assigned projects and track your earnings
-            </p>
-          </div>
+    /* bg-gray-50/dark:bg-gray-900 was hardcoded here, which is why this page
+       read as a slightly different product from the rest of the app — it
+       ignored the theme tokens every other surface uses. */
+    <div className={embedded ? "" : "min-h-screen"}>
+      <div className={`container mx-auto px-4 ${embedded ? "" : "py-8"}`}>
+        <div className={`mb-8 flex items-start gap-4 ${embedded ? "justify-end" : "justify-between"}`}>
+          {!embedded && (
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Freelancer Dashboard</h1>
+              <p className="text-muted-foreground">
+                Manage your assigned projects and track your earnings
+              </p>
+            </div>
+          )}
           {/* Header actions */}
           <div className="flex items-center gap-2">
             <Link to="/messages">

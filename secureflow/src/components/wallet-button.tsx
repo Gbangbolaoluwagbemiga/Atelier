@@ -1,161 +1,93 @@
+/**
+ * The wallet control.
+ *
+ * This used to be a hand-built dropdown: copy address, refresh balance,
+ * disconnect. Reown's AppKit is already initialised for connecting, and its
+ * account modal does all three plus network switching, balance, transaction
+ * history and the wallet's own branding — so the custom menu was a worse copy of
+ * something already paid for, and one that had to be maintained separately every
+ * time the wallet layer changed.
+ *
+ * Now the button is just a button. Reown owns everything behind it.
+ *
+ * What is kept is the trigger's own content — network, balance and address —
+ * because that is the piece Reown does not render for you, and a wallet control
+ * that shows nothing until you click it makes people click it to check they are
+ * still connected.
+ */
+
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useState } from "react";
-import { Copy, LogOut, RefreshCw } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { useAppKit } from "@reown/appkit/react";
 
 export function WalletButton() {
-  const { wallet, connectWallet, disconnectWallet, refreshBalance } = useWeb3();
+  const { wallet, connectWallet } = useWeb3();
   const [networkIconError, setNetworkIconError] = useState(false);
   const [walletIconError, setWalletIconError] = useState(false);
-  const { toast } = useToast();
   const { open } = useAppKit();
-
-  const handleConnect = () => {
-    void connectWallet();
-  };
-
-  const handleDisconnect = () => {
-    disconnectWallet();
-  };
-
-  const handleCopyAddress = async () => {
-    if (wallet.address) {
-      await navigator.clipboard.writeText(wallet.address);
-      toast({
-        title: "Address copied",
-        description: "Wallet address copied to clipboard",
-      });
-    }
-  };
-
-  const handleRefreshBalance = async () => {
-    if (refreshBalance) {
-      await refreshBalance();
-      toast({
-        title: "Balance refreshed",
-        description: "Wallet balance has been updated",
-      });
-    }
-  };
 
   if (!wallet.isConnected || !wallet.address) {
     return (
-      <Button
-        onClick={() => {
-          void handleConnect();
-        }}
-        variant="default"
-      >
-        Connect Wallet
+      <Button onClick={() => void connectWallet()} variant="default">
+        <span className="hidden sm:inline">Connect Wallet</span>
+        <span className="sm:hidden">Connect</span>
       </Button>
     );
   }
 
+  const short = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`;
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="secondary"
-          className="font-mono flex items-center gap-2 px-3 md:px-4 py-2 bg-muted/50 hover:bg-muted/70 border border-border/40 max-w-[160px] md:max-w-none"
-        >
-          {/* Desktop/tablet: show network + balance + avatar */}
-          <div className="hidden md:flex items-center gap-2">
-            {/* Arc network icon */}
-            <div className="w-4 h-4 rounded-full overflow-hidden flex items-center justify-center">
-              {!networkIconError ? (
-                <img
-                  src="/arc-icon.svg"
-                  alt="Arc"
-                  className="w-full h-full object-contain"
-                  onError={() => setNetworkIconError(true)}
-                />
-              ) : (
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="w-full h-full"
-                >
-                  <circle cx="8" cy="8" r="8" fill="#7D00FF" />
-                  <path
-                    d="M8 2L9.5 6.5L14 8L9.5 9.5L8 14L6.5 9.5L2 8L6.5 6.5L8 2Z"
-                    fill="white"
-                  />
-                </svg>
-              )}
-            </div>
+    <Button
+      variant="secondary"
+      onClick={() => void open({ view: "Account" })}
+      aria-label={`Wallet ${short} — open account`}
+      className="font-mono flex items-center gap-2 px-2.5 sm:px-3 md:px-4 bg-muted/50 hover:bg-muted/70 border border-border/40 max-w-[150px] sm:max-w-none"
+    >
+      {/* Network + balance are desktop-only: on a phone the address alone has to
+          fit beside the menu button, and truncating everything to make room for
+          a 4px network dot helps nobody. */}
+      <span className="hidden lg:flex items-center gap-2">
+        <span className="w-4 h-4 rounded-full overflow-hidden flex items-center justify-center shrink-0">
+          {!networkIconError ? (
+            <img
+              src="/arc-icon.svg"
+              alt=""
+              aria-hidden="true"
+              className="w-full h-full object-contain"
+              onError={() => setNetworkIconError(true)}
+            />
+          ) : (
+            <span className="w-full h-full rounded-full bg-primary" />
+          )}
+        </span>
 
-            <span>{Number(wallet.balance || 0).toFixed(2)} USDC</span>
-            <span className="text-muted-foreground">·</span>
+        <span className="tabular-nums">
+          {Number(wallet.balance || 0).toFixed(2)} USDC
+        </span>
+        <span className="text-muted-foreground" aria-hidden="true">
+          ·
+        </span>
+      </span>
 
-            {/* Dynamic wallet avatar */}
-            <div className="w-4 h-4 rounded-full overflow-hidden">
-              {!walletIconError ? (
-                <img
-                  src={`https://effigy.im/a/${wallet.address}.svg`}
-                  alt="Wallet"
-                  className="w-full h-full object-cover"
-                  onError={() => setWalletIconError(true)}
-                />
-              ) : (
-                <div className="w-full h-full bg-linear-to-br from-blue-400 to-blue-600 rounded-full"></div>
-              )}
-            </div>
-          </div>
+      <span className="w-4 h-4 rounded-full overflow-hidden shrink-0">
+        {!walletIconError ? (
+          <img
+            src={`https://effigy.im/a/${wallet.address}.svg`}
+            alt=""
+            aria-hidden="true"
+            className="w-full h-full object-cover"
+            onError={() => setWalletIconError(true)}
+          />
+        ) : (
+          <span className="block w-full h-full bg-gradient-to-br from-primary to-accent rounded-full" />
+        )}
+      </span>
 
-          {/* Always show just the address on mobile; also show on desktop after icons */}
-          <span className="truncate md:ml-1" title={wallet.address}>
-            {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}
-          </span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <div className="px-2 py-1.5 text-sm">
-          <div className="font-medium">Connected Wallet</div>
-          <div className="text-xs text-muted-foreground font-mono truncate">
-            {wallet.address}
-          </div>
-          <div className="text-xs text-muted-foreground mt-1">
-            Balance: {Number(wallet.balance || 0).toFixed(2)} USDC
-          </div>
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => {
-            void handleCopyAddress();
-          }}
-        >
-          <Copy className="mr-2 h-4 w-4" />
-          Copy Address
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => {
-            void handleRefreshBalance();
-          }}
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh Balance
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={handleDisconnect}
-          className="text-destructive"
-        >
-          <LogOut className="mr-2 h-4 w-4" />
-          Disconnect
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      <span className="truncate" title={wallet.address}>
+        {short}
+      </span>
+    </Button>
   );
 }

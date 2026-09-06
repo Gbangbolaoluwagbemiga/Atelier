@@ -11,7 +11,7 @@ import { test, expect } from "@playwright/test";
  */
 
 test.describe("routes resolve", () => {
-  for (const path of ["/", "/jobs", "/post", "/post/autopilot", "/analytics"]) {
+  for (const path of ["/", "/jobs", "/post", "/post/autopilot", "/analytics", "/my-jobs"]) {
     test(`${path} renders without a crash`, async ({ page }) => {
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));
@@ -35,7 +35,9 @@ test.describe("legacy SecureFlow paths still work", () => {
    */
   const redirects: [string, string][] = [
     ["/dashboard", "/my-jobs"],
-    ["/freelancer", "/work"],
+    // Both freelancer paths now land on the merged page, on the working side.
+    ["/freelancer", "/my-jobs\\?tab=working"],
+    ["/work", "/my-jobs\\?tab=working"],
   ];
 
   for (const [from, to] of redirects) {
@@ -64,10 +66,29 @@ test.describe("the navigation", () => {
     await page.goto("/");
     const nav = page.locator("nav").first();
 
-    // My Work, My Jobs and Admin are earned, not default. A first-time visitor
-    // seeing an empty "My Jobs" learns the product is not for them yet.
+    // My Jobs and Admin are earned, not default. A first-time visitor seeing an
+    // empty "My Jobs" learns the product is not for them yet.
     await expect(nav.getByRole("link", { name: "Admin" })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "My Jobs" })).toHaveCount(0);
+  });
+
+  /**
+   * Disputes is arbitration — a staff tool reached from Admin. It must not be
+   * in the nav for anybody, and a client or freelancer in a dispute reaches it
+   * from the job, which is the context they need anyway.
+   */
+  test("never lists Disputes in the nav", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page.locator("nav").first().getByRole("link", { name: "Disputes" }),
+    ).toHaveCount(0);
+  });
+
+  /** The two entries that were split and are now one destination. */
+  test("offers a single My Jobs entry, not My Work and My Jobs", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.locator("nav").first();
+    await expect(nav.getByRole("link", { name: "My Work" })).toHaveCount(0);
   });
 
   test("marks the current section", async ({ page }) => {

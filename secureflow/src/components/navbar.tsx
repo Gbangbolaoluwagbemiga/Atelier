@@ -118,7 +118,7 @@ export function Navbar() {
               the wordmark says so rather than making a judge infer it. */}
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
             <img
-              src="/secureflow-favicon-v2.svg"
+              src="/atelier-mark.svg"
               alt=""
               aria-hidden="true"
               className="h-7 w-7 shrink-0"
@@ -133,7 +133,7 @@ export function Navbar() {
             </span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-0.5 lg:gap-1 min-w-0 overflow-x-auto">
             {items.map((item) => (
               <NavLink
                 key={item.to}

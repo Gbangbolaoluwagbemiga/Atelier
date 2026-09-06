@@ -94,6 +94,12 @@ export function EscrowCard({
   const surplusAmount = totalAmountNum - milestoneAmountSum;
   const hasSurplus = escrow.isClient && surplusAmount >= 1000; // ≥ 0.001 USDC in raw units
 
+  /* A freelancer is on this job. Not the same as "work has started" — accepting
+     someone leaves the escrow Pending until they call startWork. */
+  const hasFreelancerAssigned =
+    !!escrow.beneficiary &&
+    escrow.beneficiary !== "0x0000000000000000000000000000000000000000";
+
   const now = Date.now();
   const deadlineAt = escrow.deadlineAt ?? 0;
 
@@ -621,7 +627,7 @@ export function EscrowCard({
                     </p>
                     <p className="text-orange-600/80 dark:text-orange-400/70 text-xs mt-0.5">
                       {escrow.isClient
-                        ? escrow.status === "pending"
+                        ? !hasFreelancerAssigned
                           ? "No freelancer has been assigned yet. Cancel this job below to get your full funds back instantly, or extend the deadline to keep the listing open."
                           : "You may extend the deadline to give the freelancer more time, or raise a dispute for arbiter review."
                         : "If the client is unresponsive, you can raise a dispute so an arbiter reviews the situation fairly."}
@@ -665,8 +671,23 @@ export function EscrowCard({
                   </div>
                 )}
 
-                {/* Both: request arbitration — not applicable for pending jobs (no freelancer assigned) */}
-                {onRaiseOverdueDispute && escrow.status !== "pending" && (
+                {/*
+                  Both sides: request arbitration.
+
+                  Gated on a freelancer actually being ASSIGNED, not on
+                  status !== "pending". That test was standing in for "nobody is
+                  hired yet", and it is wrong in exactly one case which turns out
+                  to be common: the client accepts a freelancer, the freelancer
+                  has not called startWork, so the escrow is still Pending. The
+                  client then saw a deadline-passed warning with no way to act,
+                  while the freelancer — reaching the same contract call from
+                  their own view — could dispute fine.
+
+                  The contract has always allowed it: raiseOverdueDispute admits
+                  depositor or beneficiary and rejects only Released, Refunded
+                  and Expired. Pending is fine. This was a UI-only lockout.
+                */}
+                {onRaiseOverdueDispute && hasFreelancerAssigned && (
                   <div>
                     {!showDisputeForm ? (
                       <Button

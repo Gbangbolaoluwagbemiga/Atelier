@@ -45,7 +45,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 
-export default function DashboardPage() {
+/**
+ * `embedded` hides this page's own title so it can sit under My Jobs' tabs
+ * without stacking two headings. The page is otherwise unchanged — it is 1,200
+ * lines of working escrow management and the merge is not an excuse to rewrite
+ * it.
+ */
+export default function DashboardPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { wallet, getContract } = useWeb3();
   const { writeContractAsync } = useWriteContract();
   const { toast } = useToast();
@@ -1092,7 +1098,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen py-12 relative">
+    <div className={`relative ${embedded ? "" : "min-h-screen py-12"}`}>
       {/* Spinner overlay when refreshing */}
       {isRefreshing && (
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -1103,13 +1109,15 @@ export default function DashboardPage() {
         </div>
       )}
       <div className="container mx-auto px-4">
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-2">Dashboard</h1>
-            <p className="text-xl text-muted-foreground">
-              Manage your escrows and track your projects
-            </p>
-          </div>
+        <div className={`mb-8 flex items-start gap-4 ${embedded ? "justify-end" : "justify-between"}`}>
+          {!embedded && (
+            <div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-2">Dashboard</h1>
+              <p className="text-xl text-muted-foreground">
+                Manage your escrows and track your projects
+              </p>
+            </div>
+          )}
           {/* Refresh Button */}
           <Button
             variant="outline"

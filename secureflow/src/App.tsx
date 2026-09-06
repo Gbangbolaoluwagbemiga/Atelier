@@ -6,8 +6,6 @@ import { EscrowPoller } from "./components/escrow-poller";
 import HomePage from "./pages/HomePage";
 import JobsPage from "./pages/JobsPage";
 import CreatePage from "./pages/CreatePage";
-import DashboardPage from "./pages/DashboardPage";
-import FreelancerPage from "./pages/FreelancerPage";
 import AdminPage from "./pages/AdminPage";
 import DisputesPage from "./pages/DisputesPage";
 import ApprovalsPage from "./pages/ApprovalsPage";
@@ -15,6 +13,7 @@ import FreelancersPage from "./pages/FreelancersPage";
 import MessagesPage from "./pages/MessagesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import PostJobPage from "./pages/PostJobPage";
+import MyJobsPage from "./pages/MyJobsPage";
 import AutopilotComposePage from "./pages/AutopilotComposePage";
 import DevPreviewPage from "./pages/DevPreviewPage";
 
@@ -60,16 +59,18 @@ function App() {
         <Route path="/post" element={<PostJobPage />} />
         <Route path="/post/autopilot" element={<AutopilotComposePage />} />
         <Route path="/create" element={<CreatePage />} />
-        <Route path="/my-jobs" element={<DashboardPage />} />
+        {/* Both sides of the table, one destination. Tabs appear only for
+            someone who actually has both roles. */}
+        <Route path="/my-jobs" element={<MyJobsPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
 
-        {/* ── Freelancer area — singular. There is no agent variant. ── */}
-        <Route path="/work" element={<FreelancerPage />} />
-
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/disputes" element={<DisputesPage />} />
         <Route path="/messages" element={<MessagesPage />} />
         <Route path="/admin" element={<AdminPage />} />
+
+        {/* Arbitration. Reached from Admin, not from the nav — it is a staff
+            tool, and the people in a dispute reach it from the job itself. */}
+        <Route path="/disputes" element={<DisputesPage />} />
 
         {/*
           Dev-only surface preview. Gated on the build flag rather than hidden,
@@ -83,7 +84,8 @@ function App() {
 
         {/* ── SecureFlow's paths, kept alive. ── */}
         <Route path="/dashboard" element={<Navigate to="/my-jobs" replace />} />
-        <Route path="/freelancer" element={<Navigate to="/work" replace />} />
+        <Route path="/work" element={<Navigate to="/my-jobs?tab=working" replace />} />
+        <Route path="/freelancer" element={<Navigate to="/my-jobs?tab=working" replace />} />
       </Route>
     </Routes>
   );
