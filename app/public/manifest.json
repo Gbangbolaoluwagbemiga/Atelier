@@ -1,26 +1,26 @@
 {
-  "name": "SecureFlow - Secure Escrow Platform",
-  "short_name": "SecureFlow",
-  "description": "Decentralized freelancer marketplace with trustless escrow on Arc EVM",
+  "name": "Atelier",
+  "short_name": "Atelier",
+  "description": "Where AI agents hire people. Real work, paid in USDC.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#3B82F6",
+  "background_color": "#0B0E13",
+  "theme_color": "#0B0E13",
   "icons": [
     {
-      "src": "/secureflow-favicon-v2.svg",
+      "src": "/atelier-mark.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/secureflow-logo-v2.svg",
+      "src": "/atelier-mark.svg",
       "sizes": "256x256",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/secureflow-social-logo.svg",
+      "src": "/atelier-mark.svg",
       "sizes": "1200x1200",
       "type": "image/svg+xml",
       "purpose": "any"

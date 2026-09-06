@@ -153,15 +153,14 @@ async function call<T>(
 export async function join(input: {
   handle: string;
   /**
-   * Required for a managed wallet, and it is the identity rather than the
-   * handle.
+   * A Google ID token, required for a managed wallet. NOT an email.
    *
-   * The daemon derives the account from this: same email, same wallet, always.
-   * Without it every sign-up minted a fresh Circle wallet, so someone who
-   * cleared their browser and typed the same name got a different address and
-   * whatever was in the first one was gone.
+   * The daemon verifies this against Google's public keys and takes the email
+   * out of the verified payload — the browser never gets to say who it is. An
+   * earlier version accepted a plain email string, which meant knowing
+   * somebody's address was enough to withdraw their money.
    */
-  email?: string;
+  idToken?: string;
   skills?: string;
   ownAddress?: string;
 }): Promise<Worker> {
@@ -252,17 +251,18 @@ export function minutesUntilClose(quest: Quest, now = Date.now()): number {
 }
 
 /**
- * Get back into an account from its email.
+ * Get back into an account you already have.
  *
- * A lookup, not a sign-in — there is no password here. Say so in the UI rather
- * than implying security this does not have: anyone who knows the email can see
- * the balance, exactly as anyone who knows a public address can. What actually
- * protects the money is that withdrawal needs the daemon's key.
+ * Takes a Google ID token, like joining does. The previous version took an
+ * email in a query string and handed back a worker id — which is a withdrawal
+ * credential — so it gave away other people's wallets to anyone who knew their
+ * address. Replaced rather than patched: the shape of it was the problem.
  */
-export async function recover(email: string): Promise<Worker> {
-  const worker = await call<Worker>(
-    `/api/worker/recover?email=${encodeURIComponent(email.trim().toLowerCase())}`,
-  );
+export async function recover(idToken: string): Promise<Worker> {
+  const worker = await call<Worker>("/api/worker/recover", {
+    method: "POST",
+    body: JSON.stringify({ idToken }),
+  });
   rememberWorker(worker.id);
   return worker;
 }

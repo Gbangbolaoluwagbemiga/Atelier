@@ -94,6 +94,13 @@ export const config = {
   workerWalletSetId: process.env.WORKER_WALLET_SET_ID?.trim() || "",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN?.trim() || "",
 
+  /**
+   * Google OAuth client id, used to VERIFY sign-in tokens rather than to issue
+   * them. Unset means the managed-worker door is closed rather than open — an
+   * unauthenticated wallet service is worse than no wallet service.
+   */
+  googleClientId: process.env.GOOGLE_CLIENT_ID?.trim() || "",
+
   port: Number(process.env.PORT ?? 8787),
 };
 

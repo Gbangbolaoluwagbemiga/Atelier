@@ -190,3 +190,32 @@ is fine, but the honest sentence stays:
 > The contract cannot take your money, and the owner can change the contract.
 
 Keep the second clause in the submission.
+
+
+---
+
+## Gate 3 — Google sign-in for managed wallets
+
+The managed-worker door provisions a Circle MPC wallet, so it needs to know who
+somebody is before it hands them one. Without this configured the door is closed
+rather than open — an unauthenticated wallet service is worse than none.
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) →
+   **Create credentials** → **OAuth client ID** → **Web application**.
+2. Authorised JavaScript origins: `http://localhost:5174` for local, plus your
+   deployed origin.
+3. Copy the **client ID** (the `.apps.googleusercontent.com` one). There is no
+   secret to copy — this flow verifies a signed token rather than exchanging a
+   code, so nothing confidential ends up in the browser.
+
+```env
+# app/.env
+VITE_GOOGLE_CLIENT_ID=…apps.googleusercontent.com
+
+# agent/daemon/.env  — the SAME id
+GOOGLE_CLIENT_ID=…apps.googleusercontent.com
+```
+
+The daemon uses it as the expected **audience** when verifying tokens. Getting
+that check wrong is what turns any Google-signed token on the internet into a
+valid login here, so the two values must match exactly.

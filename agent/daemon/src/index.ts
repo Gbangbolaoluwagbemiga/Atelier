@@ -25,6 +25,7 @@ import * as workers from "./workers/service.js";
 import * as telegram from "./workers/telegram.js";
 import { setLlmPausedUntil } from "./llm-status.js";
 import { extractStatedBudget, generateBrief } from "./agent/BriefGenerator.js";
+import { verifyGoogleIdToken } from "./workers/google-auth.js";
 
 const PORT = config.port;
 
@@ -880,43 +881,57 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "POST" && url.pathname === "/api/worker/join") {
     try {
+      /**
+       * NOTE what is NOT in this shape: channelRef.
+       *
+       * join() short-circuits on channelRef and returns the existing worker for
+       * that key before it looks at anything else — so accepting one from the
+       * request body was the same wallet-theft hole through a second door.
+       * `{ ownAddress: mine, channelRef: "victim@example.com" }` would have
+       * handed back the victim's account, token or no token. The only channelRef
+       * this endpoint may use is the one derived from a verified sign-in.
+       */
       const body = JSON.parse(await readBody(req)) as {
         handle?: string;
-        email?: string;
+        /** A Google ID token. NOT an email — see below. */
+        idToken?: string;
         skills?: string;
         ownAddress?: string;
-        channelRef?: string;
       };
       if (!body.handle) return json(res, 400, { error: "handle is required" });
 
       /**
-       * EMAIL IS THE IDENTITY, and this is a money bug rather than a nicety.
+       * THE EMAIL MUST BE PROVEN, not typed.
        *
-       * join() is idempotent on channelRef, and the web door never sent one — so
-       * every sign-up minted a NEW Circle wallet. Someone who joined as "ada",
-       * earned, cleared their browser and joined as "ada" again got a different
-       * address, and whatever was in the first one was unreachable. A handle is
-       * a display name; it was never an identity and should not have been
-       * treated as one.
+       * This used to take `email` as a plain string and select a wallet from
+       * it. A worker id grants the right to WITHDRAW, so that turned a
+       * freelancer's email address into their private key: anyone who knew it
+       * could take their money. It was wrong and it is fixed here.
        *
-       * Normalised before use, because Ada@Example.com and ada@example.com are
-       * one person and must not be two wallets.
+       * A managed wallet now requires a Google ID token, verified against
+       * Google's public keys — signature, issuer, audience and email_verified —
+       * before any account is selected. The client presents evidence of an
+       * identity; it never gets to assert one.
+       *
+       * Someone bringing their OWN address needs none of this: they hold the
+       * keys, so there is nothing here to steal.
        */
-      const email = body.email?.trim().toLowerCase() || undefined;
-      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-        return json(res, 400, { error: "That does not look like an email address." });
-      }
-      if (!email && !body.ownAddress) {
-        return json(res, 400, {
-          error:
-            "An email is required for a managed wallet — it is what lets you back into the same wallet later.",
-        });
+      let email: string | undefined;
+      if (!body.ownAddress) {
+        try {
+          const identity = await verifyGoogleIdToken(body.idToken ?? "");
+          email = identity.email;
+        } catch (err) {
+          return json(res, 401, {
+            error: err instanceof Error ? err.message : "Sign-in failed.",
+          });
+        }
       }
 
       const worker = await workers.join({
         handle: body.handle,
         channel: "web",
-        channelRef: email ?? body.channelRef,
+        channelRef: email,
         skills: body.skills,
         ownAddress: body.ownAddress as `0x${string}` | undefined,
       });
@@ -936,30 +951,41 @@ const server = http.createServer(async (req, res) => {
   /**
    * Come back to an account you already have.
    *
-   * Same email, same wallet. Deliberately a lookup and NOT a sign-in: there is
-   * no password and no verification here, so anyone who knows the address can
-   * see the balance — the same as any public chain address. Withdrawal is what
-   * needs protecting, and that is the daemon's key, not this endpoint's.
-   *
-   * Called out plainly rather than dressed up: this is convenience, not
-   * authentication, and a managed wallet is a way to start rather than a bank.
+   * POST, not GET, and it takes a Google ID token rather than an email. The GET
+   * version of this took ?email= and handed back a worker id, which is a
+   * withdrawal credential — so it was a public endpoint that gave away other
+   * people's wallets to anyone who knew their address. Replaced rather than
+   * patched, because the shape of it was the problem.
    */
-  if (req.method === "GET" && url.pathname === "/api/worker/recover") {
-    const email = url.searchParams.get("email")?.trim().toLowerCase();
-    if (!email) return json(res, 400, { error: "email is required" });
+  if (req.method === "POST" && url.pathname === "/api/worker/recover") {
+    try {
+      const body = JSON.parse(await readBody(req)) as { idToken?: string };
 
-    const worker = store.getWorkerByChannelRef("web", email);
-    if (!worker) {
-      return json(res, 404, {
-        error: "No account for that email yet. Create one and it will be yours from then on.",
+      let email: string;
+      try {
+        const identity = await verifyGoogleIdToken(body.idToken ?? "");
+        email = identity.email;
+      } catch (err) {
+        return json(res, 401, {
+          error: err instanceof Error ? err.message : "Sign-in failed.",
+        });
+      }
+
+      const worker = store.getWorkerByChannelRef("web", email);
+      if (!worker) {
+        return json(res, 404, {
+          error: "No account for that Google account yet. Create one and it is yours from then on.",
+        });
+      }
+      return json(res, 200, {
+        id: worker.id,
+        handle: worker.handle,
+        address: worker.walletAddress,
+        mode: worker.mode,
       });
+    } catch (err) {
+      return json(res, 500, { error: clientError(err) });
     }
-    return json(res, 200, {
-      id: worker.id,
-      handle: worker.handle,
-      address: worker.walletAddress,
-      mode: worker.mode,
-    });
   }
 
   if (req.method === "GET" && url.pathname === "/api/worker/quests") {

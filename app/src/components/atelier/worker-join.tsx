@@ -12,7 +12,7 @@
  * needed", is what makes the convenience an offer rather than a trick.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { KeyRound, Loader2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,30 +21,60 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { toastError } from "@/lib/atelier/errors";
 import { join, recover, type Worker } from "@/lib/atelier/worker";
+import {
+  GOOGLE_SIGNIN_AVAILABLE,
+  renderGoogleButton,
+} from "@/lib/atelier/google-signin";
 
 export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
   const { toast } = useToast();
   const [handle, setHandle] = useState("");
-  const [email, setEmail] = useState("");
   const [skills, setSkills] = useState("");
   const [returning, setReturning] = useState(false);
+  /* The verified token, and the address it belongs to purely for display. The
+     browser is never the authority on who this is — the daemon reads that out
+     of Google's signature. */
+  const [idToken, setIdToken] = useState<string | null>(null);
+  const [signedInAs, setSignedInAs] = useState<string | null>(null);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
   const [ownAddress, setOwnAddress] = useState("");
   const [useOwnWallet, setUseOwnWallet] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const validOwnAddress =
     !useOwnWallet || /^0x[a-fA-F0-9]{40}$/.test(ownAddress.trim());
-  const validEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
-  /* Email is required for a managed wallet — it is what makes the account
-     recoverable. Someone bringing their own address does not need it. */
+  /* A managed wallet needs a verified sign-in. Somebody bringing their own
+     address needs none of it — they hold the keys, so there is nothing here to
+     steal. */
   const ready =
-    handle.trim().length >= 2 && validOwnAddress && (useOwnWallet || validEmail);
+    handle.trim().length >= 2 && validOwnAddress && (useOwnWallet || !!idToken);
+
+  useEffect(() => {
+    if (useOwnWallet || !googleButtonRef.current) return;
+    void renderGoogleButton(
+      googleButtonRef.current,
+      (token) => {
+        setIdToken(token);
+        // Read only to show who signed in. The daemon does not trust this.
+        try {
+          const claims = JSON.parse(atob(token.split(".")[1] ?? "")) as {
+            email?: string;
+          };
+          setSignedInAs(claims.email ?? null);
+        } catch {
+          setSignedInAs(null);
+        }
+      },
+      (message) =>
+        toast({ variant: "destructive", title: "Google sign-in", description: message }),
+    );
+  }, [useOwnWallet, toast]);
 
   async function submit() {
     setBusy(true);
     try {
       if (returning) {
-        const existing = await recover(email.trim());
+        const existing = await recover(idToken ?? "");
         toast({
           title: `Welcome back, ${existing.handle}`,
           description: "Same account, same wallet.",
@@ -55,7 +85,7 @@ export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
 
       const worker = await join({
         handle: handle.trim(),
-        email: useOwnWallet ? undefined : email.trim(),
+        idToken: useOwnWallet ? undefined : (idToken ?? undefined),
         skills: skills.trim() || undefined,
         ownAddress: useOwnWallet ? ownAddress.trim() : undefined,
       });
@@ -108,24 +138,23 @@ export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
 
         {!useOwnWallet && (
           <div>
-            <Label htmlFor="email">Your email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="mt-1.5"
-              autoComplete="email"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              This is how you get back to the same wallet later. Use a different
-              email and you get a different wallet — with different money in it.
+            <Label>Sign in to hold your wallet</Label>
+            <p className="text-xs text-muted-foreground mt-1.5 mb-3 leading-relaxed">
+              Your Google account is what gets you back to the same wallet later
+              — and what stops anyone else reaching it by knowing your email.
             </p>
-            {email.trim().length > 3 && !validEmail && (
-              <p className="text-xs text-destructive mt-1">
-                That does not look like an email address.
+            {/* Google's own rendered button. Their branding rules require it,
+                and a hand-rolled one posting to their endpoint is exactly what a
+                phishing page looks like. */}
+            <div ref={googleButtonRef} className="min-h-[44px]" />
+            {!GOOGLE_SIGNIN_AVAILABLE && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Google sign-in is not configured for this deployment — set
+                <code className="mx-1 font-mono">VITE_GOOGLE_CLIENT_ID</code>.
               </p>
+            )}
+            {signedInAs && (
+              <p className="text-xs actor-text mt-2">Signed in as {signedInAs}</p>
             )}
           </div>
         )}
