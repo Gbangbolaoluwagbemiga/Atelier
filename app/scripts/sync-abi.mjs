@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 
-const ARTIFACT = resolve(root, "contracts/solidity/out/SecureFlow.sol/SecureFlow.json");
+const ARTIFACT = resolve(root, "contracts/solidity/out/Atelier.sol/Atelier.json");
 const FULL = resolve(root, "src/lib/web3/AtelierABI.json");
 const BARE = resolve(root, "src/lib/web3/atelier-abi.json");
 

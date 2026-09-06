@@ -48,7 +48,7 @@ import "./yield/IYieldAdapter.sol";
  *      hashed offsets). Adding one to a struct held in an ARRAY is NOT.
  *   4. Bump `version()` in the same commit as any storage change, so a
  *      deployed proxy can be identified from chain state alone.
- *   5. Run the upgrade tests in test/SecureFlowUpgrade.t.sol before shipping.
+ *   5. Run the upgrade tests in test/AtelierUpgrade.t.sol before shipping.
  */
 /*
  * ─────────────────────────────────────────────────────────────────────────────

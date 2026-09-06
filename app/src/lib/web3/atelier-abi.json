@@ -336,6 +336,25 @@
   },
   {
     "type": "function",
+    "name": "deployedAssets",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "disputeMilestone",
     "inputs": [
       {
@@ -415,6 +434,25 @@
   },
   {
     "type": "function",
+    "name": "escrowDeployed",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "escrowedAmount",
     "inputs": [
       {
@@ -476,7 +514,7 @@
       {
         "name": "status",
         "type": "uint8",
-        "internalType": "enum SecureFlow.EscrowStatus"
+        "internalType": "enum Atelier.EscrowStatus"
       },
       {
         "name": "workStarted",
@@ -612,7 +650,7 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct SecureFlow.Escrow",
+        "internalType": "struct Atelier.Escrow",
         "components": [
           {
             "name": "depositor",
@@ -647,7 +685,7 @@
           {
             "name": "status",
             "type": "uint8",
-            "internalType": "enum SecureFlow.EscrowStatus"
+            "internalType": "enum Atelier.EscrowStatus"
           },
           {
             "name": "workStarted",
@@ -741,7 +779,7 @@
       {
         "name": "",
         "type": "tuple[]",
-        "internalType": "struct SecureFlow.Milestone[]",
+        "internalType": "struct Atelier.Milestone[]",
         "components": [
           {
             "name": "amount",
@@ -761,7 +799,7 @@
           {
             "name": "status",
             "type": "uint8",
-            "internalType": "enum SecureFlow.MilestoneStatus"
+            "internalType": "enum Atelier.MilestoneStatus"
           },
           {
             "name": "submittedAt",
@@ -852,7 +890,7 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct SecureFlow.Rating",
+        "internalType": "struct Atelier.Rating",
         "components": [
           {
             "name": "rater",
@@ -898,7 +936,7 @@
       {
         "name": "",
         "type": "tuple[]",
-        "internalType": "struct SecureFlow.Rating[]",
+        "internalType": "struct Atelier.Rating[]",
         "components": [
           {
             "name": "rater",
@@ -990,6 +1028,57 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "investIdle",
+    "inputs": [
+      {
+        "name": "escrowId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "investableAmount",
+    "inputs": [
+      {
+        "name": "escrowId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "investableCeiling",
+    "inputs": [
+      {
+        "name": "escrowId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1380,6 +1469,55 @@
   },
   {
     "type": "function",
+    "name": "setYieldAdapter",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "adapter",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setYieldBuffer",
+    "inputs": [
+      {
+        "name": "bp",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setYieldOptIn",
+    "inputs": [
+      {
+        "name": "escrowId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "optedIn",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "startWork",
     "inputs": [
       {
@@ -1616,6 +1754,76 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "yieldAdapter",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IYieldAdapter"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "yieldBufferBP",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "yieldEarned",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "yieldOptIn",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "event",
@@ -1892,7 +2100,7 @@
         "name": "status",
         "type": "uint8",
         "indexed": false,
-        "internalType": "enum SecureFlow.EscrowStatus"
+        "internalType": "enum Atelier.EscrowStatus"
       },
       {
         "name": "timestamp",
@@ -2562,6 +2770,107 @@
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "YieldAdapterSet",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "adapter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "YieldCircuitBreakerTripped",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "shortfall",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "YieldDeployed",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "YieldOptInChanged",
+    "inputs": [
+      {
+        "name": "escrowId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "optedIn",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "YieldUnwound",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "requested",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "recovered",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "AddressEmptyCode",
     "inputs": [
@@ -2580,6 +2889,11 @@
   {
     "type": "error",
     "name": "AlreadyRated",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BufferTooLow",
     "inputs": []
   },
   {
@@ -2825,6 +3139,11 @@
   {
     "type": "error",
     "name": "WorkAlreadyStarted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "YieldNotEnabled",
     "inputs": []
   }
 ]

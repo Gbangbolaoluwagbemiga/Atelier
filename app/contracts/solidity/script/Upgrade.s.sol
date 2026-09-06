@@ -12,7 +12,7 @@ import "../src/Atelier.sol";
  *
  * BEFORE RUNNING THIS:
  *
- *   1. `forge test --match-path test/SecureFlowUpgrade.t.sol` must pass. Those
+ *   1. `forge test --match-path test/AtelierUpgrade.t.sol` must pass. Those
  *      tests upgrade a proxy holding a live, mid-flight escrow and assert that
  *      every field survives — which is the failure this script can cause and
  *      cannot undo.
