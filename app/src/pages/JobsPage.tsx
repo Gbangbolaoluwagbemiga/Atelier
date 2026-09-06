@@ -22,6 +22,7 @@ import { JobCard } from "@/components/jobs/job-card";
 import { ApplicationDialog } from "@/components/jobs/application-dialog";
 import { JobsLoading } from "@/components/jobs/jobs-loading";
 import { currentWorkerId, apply as workerApply } from "@/lib/atelier/worker";
+import { useManagedEscrows } from "@/hooks/use-managed-escrows";
 import { toastError } from "@/lib/atelier/errors";
 import {
   Select,
@@ -36,6 +37,8 @@ import { AlertCircle } from "lucide-react";
 
 export default function JobsPage() {
   const { wallet } = useWeb3();
+  /* Which jobs the agent is running, for the Autopilot badge on each card. */
+  const { managed: managedEscrows } = useManagedEscrows();
   const { writeContractAsync } = useWriteContract();
   const { toast } = useToast();
   const { addNotification } = useNotifications();
@@ -768,6 +771,7 @@ export default function JobsPage() {
                     key={job.id}
                     job={job}
                     index={index}
+                    isAutopilot={managedEscrows.has(String(job.id))}
                     hasApplied={jobHasApplied}
                     isContractPaused={isContractPaused}
                     ongoingProjectsCount={ongoingProjectsCount}

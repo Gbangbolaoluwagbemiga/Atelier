@@ -8,16 +8,24 @@ import {
 } from "@/lib/atelier/actor";
 
 /**
- * The tests that matter here are not "does teal map to teal". They are about
- * the one rule the type system cannot enforce on its own:
+ * These tests used to guard the opposite rule.
  *
- *   A FREELANCER MUST NOT BE ABLE TO TELL WHETHER THEIR CLIENT IS A PERSON
- *   OR AN AGENT.
+ * The original design concealed client mode from freelancers, so that a worker
+ * could not learn to prefer one queue and split the marketplace into two tiers.
+ * The tests here enforced that, including the subtle part — that concealment by
+ * omission is not concealment, since hiding only the agent jobs makes them
+ * identifiable by elimination.
  *
- * That rule protects a single mixed marketplace. Break it and workers learn
- * which queue to prefer, which re-tiers the market — a product failure that
- * would show up as a slow drift in application counts rather than as a bug, so
- * it has to be caught here.
+ * That decision was reversed on 2026-09-06, and the tests are reversed with it
+ * rather than deleted. An agent is going to read this person's work and decide
+ * whether they get paid; withholding that is not neutrality, it is keeping a
+ * material fact from the party with the least power in the deal. A freelancer
+ * who would rather not work for an automated reviewer is making an informed
+ * choice, not a mistake to design around.
+ *
+ * What is still tested is that the answer is CONSISTENT. Whatever we tell one
+ * viewer we tell all of them — a rule that leaked for some roles and not others
+ * would be the worst of both designs.
  */
 
 const CLIENT: Viewer = { role: "client" };
@@ -25,7 +33,7 @@ const FREELANCER: Viewer = { role: "freelancer" };
 const ARBITER: Viewer = { role: "arbiter" };
 const PUBLIC: Viewer = { role: "public" };
 
-describe("clientModeFor — who may know how a job is managed", () => {
+describe("clientModeFor — everyone sees how a job is managed", () => {
   it("tells the client their own mode", () => {
     expect(clientModeFor("autopilot", CLIENT)).toBe("autopilot");
     expect(clientModeFor("manual", CLIENT)).toBe("manual");
@@ -35,62 +43,53 @@ describe("clientModeFor — who may know how a job is managed", () => {
     expect(clientModeFor("autopilot", ARBITER)).toBe("autopilot");
   });
 
-  it("tells a freelancer nothing, for either mode", () => {
-    expect(clientModeFor("autopilot", FREELANCER)).toBeNull();
-    expect(clientModeFor("manual", FREELANCER)).toBeNull();
+  /**
+   * The reversal, asserted directly: a freelancer is told that an agent will
+   * review their work, before they spend two days on it.
+   */
+  it("tells a freelancer, so they can decide before they work", () => {
+    expect(clientModeFor("autopilot", FREELANCER)).toBe("autopilot");
+    expect(clientModeFor("manual", FREELANCER)).toBe("manual");
   });
 
-  it("tells the public nothing, for either mode", () => {
-    expect(clientModeFor("autopilot", PUBLIC)).toBeNull();
-    expect(clientModeFor("manual", PUBLIC)).toBeNull();
+  it("tells the public, so a job card can carry the badge", () => {
+    expect(clientModeFor("autopilot", PUBLIC)).toBe("autopilot");
   });
 
   /**
-   * The case the design did NOT set out to handle, and the one that actually
-   * leaks: hiding only the autopilot jobs.
-   *
-   * If `manual` were returned to a freelancer while `autopilot` returned null,
-   * every job would still be perfectly classifiable — the null ones are the
-   * agent ones. Concealment by omission is not concealment. So the assertion is
-   * that both modes return the SAME thing to a worker, not merely that autopilot
-   * is hidden.
+   * Consistency is what is left to protect. A rule that disclosed to some roles
+   * and not others would give a worker a false read of the market depending on
+   * where they happened to be looking from.
    */
-  it("is indistinguishable across modes — no leak by elimination", () => {
-    for (const viewer of [FREELANCER, PUBLIC]) {
-      expect(clientModeFor("manual", viewer)).toEqual(
-        clientModeFor("autopilot", viewer),
+  it("gives every viewer the same answer", () => {
+    for (const mode of ["manual", "autopilot"] as const) {
+      const answers = [CLIENT, FREELANCER, ARBITER, PUBLIC].map((v) =>
+        clientModeFor(mode, v),
       );
+      expect(new Set(answers).size).toBe(1);
+      expect(answers[0]).toBe(mode);
     }
   });
 });
 
 describe("jobActorFor — the colour a job's chrome takes", () => {
-  it("paints an Autopilot job amber for its own client", () => {
+  it("paints an Autopilot job amber", () => {
     expect(jobActorFor("autopilot", CLIENT)).toBe("agent");
+    expect(jobActorFor("autopilot", FREELANCER)).toBe("agent");
   });
 
-  it("paints a manual job teal for its own client", () => {
+  it("paints a manual job teal", () => {
     expect(jobActorFor("manual", CLIENT)).toBe("human");
+    expect(jobActorFor("manual", FREELANCER)).toBe("human");
   });
 
-  /**
-   * The visual half of the same rule. Two jobs that differ only in mode must
-   * render identically to a worker — one amber card in Browse Jobs would undo
-   * everything clientModeFor protects.
-   */
-  it("paints both modes identically for a freelancer", () => {
-    expect(jobActorFor("autopilot", FREELANCER)).toBe(
-      jobActorFor("manual", FREELANCER),
-    );
-    expect(jobActorFor("autopilot", FREELANCER)).toBe("human");
-  });
-
-  it("paints both modes identically on public pages", () => {
-    expect(jobActorFor("autopilot", PUBLIC)).toBe(jobActorFor("manual", PUBLIC));
-  });
-
-  it("shows an arbiter who was really in charge", () => {
-    expect(jobActorFor("autopilot", ARBITER)).toBe("agent");
+  it("paints the same colour for every viewer", () => {
+    for (const mode of ["manual", "autopilot"] as const) {
+      const colours = [CLIENT, FREELANCER, ARBITER, PUBLIC].map((v) =>
+        jobActorFor(mode, v),
+      );
+      expect(new Set(colours).size).toBe(1);
+    }
   });
 });
 

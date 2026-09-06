@@ -3,6 +3,7 @@ import { encodeJobId } from "@/lib/id-codec";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AutopilotBadge } from "@/components/atelier/autopilot-badge";
 import { motion } from "framer-motion";
 import { Clock, AlertCircle, Star } from "lucide-react";
 import type { Escrow } from "@/lib/web3/types";
@@ -13,6 +14,8 @@ import { formatEth, formatTokenAmount } from "@/lib/utils";
 interface JobCardProps {
   job: Escrow;
   index: number;
+  /** True when the agent is running this job end to end. */
+  isAutopilot?: boolean;
   hasApplied: boolean;
   isContractPaused: boolean;
   ongoingProjectsCount: number;
@@ -22,6 +25,7 @@ interface JobCardProps {
 export function JobCard({
   job,
   index,
+  isAutopilot = false,
   hasApplied,
   isContractPaused,
   ongoingProjectsCount,
@@ -72,6 +76,10 @@ export function JobCard({
                 {job.duration > 0 ? Math.max(1, Math.round(job.duration / 86400)) : 0} days
               </Badge>
               <Badge className={getStatusColor(job.status)}>{job.status}</Badge>
+              {/* Says what changes for the freelancer — criteria-based review
+                  inside a known window — rather than labelling the client a
+                  machine. See autopilot-badge.tsx. */}
+              {isAutopilot && <AutopilotBadge />}
             </div>
 
             <p className="text-muted-foreground mb-4 break-words overflow-hidden">

@@ -73,34 +73,41 @@ export type Viewer =
   | { role: "public" };
 
 /**
- * The only supported way to ask "is this job on Autopilot?".
+ * Whether this job is on Autopilot, for a given viewer.
  *
- * Returns null when the viewer is not entitled to know, and callers must render
- * the neutral case for null rather than falling back to "manual" — falling back
- * would leak the answer by omission, since a leaked "manual" on every human job
- * makes the amber ones identifiable by elimination.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THIS RULE WAS REVERSED DELIBERATELY, 2026-09-06.
+ *
+ * It used to return null for freelancers and the public, on the reasoning that
+ * a worker who can tell an agent-run job from a human-run one will learn to
+ * prefer one queue, and the single marketplace quietly becomes two tiers.
+ *
+ * The counter-argument won, and it is the stronger one: an agent is going to
+ * read this person's work and decide whether they get paid. Concealing that is
+ * not neutrality, it is withholding a material fact from the party with the
+ * least power in the transaction. A freelancer choosing not to work for an
+ * automated reviewer is making an informed choice, not a mistake to be designed
+ * around.
+ *
+ * The tiering risk is real and is now handled honestly instead: the badge says
+ * what the freelancer actually gains — review against fixed, published
+ * criteria, within a known window — rather than "a machine owns you".
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 export function clientModeFor(
   mode: ClientMode,
-  viewer: Viewer,
+  _viewer: Viewer,
 ): ClientMode | null {
-  switch (viewer.role) {
-    case "client":
-    case "arbiter":
-      return mode;
-    case "freelancer":
-    case "public":
-      return null;
-  }
+  return mode;
 }
 
 /**
- * The actor to paint a job's chrome with, for a given viewer.
+ * The actor to paint a job's chrome with.
  *
- * Falls back to "human" when the viewer may not know the mode. That default is
- * deliberate and is the safe direction: teal is the platform's ordinary state,
- * so an Autopilot job rendered for a freelancer looks exactly like every other
- * job — which is the requirement.
+ * Now the same for every viewer, since mode is no longer concealed. The null
+ * branch is kept because clientModeFor still returns an optional — a job whose
+ * mode is genuinely unknown paints teal, which is the platform's ordinary
+ * state.
  */
 export function jobActorFor(mode: ClientMode, viewer: Viewer): Actor {
   const visible = clientModeFor(mode, viewer);

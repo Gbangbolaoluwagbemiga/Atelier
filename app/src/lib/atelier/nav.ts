@@ -6,8 +6,9 @@
  * written down once, here, rather than spread across duplicated <Link> blocks
  * in a desktop nav and a mobile nav that drift apart.
  *
- *   Browse Jobs   one list. Agent-posted and human-posted, mixed and
- *                 indistinguishable. Not two tabs, not a filter.
+ *   Browse Jobs   one list. Agent-run and human-run jobs sit together, but an
+ *                 agent-run one carries a badge — a freelancer deciding whether
+ *                 to spend two days on a job should know who reviews it.
  *   My Work       the freelancer side: applications, active jobs, earnings.
  *   Post a Job    where the client chooses Manual or Autopilot.
  *   My Jobs       the client side. Manual jobs get the milestone review UI;
