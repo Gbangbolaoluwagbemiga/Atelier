@@ -154,3 +154,31 @@ Named now rather than discovered later, because the honesty is worth more than t
    decommission has already broken this once. Patron does it correctly in `daemon/src/config.ts`.
 4. **Patron holds signing keys server-side.** Deliberate — the daemon must run unattended — but
    it is a real custody surface, not a solved problem.
+
+---
+
+## Addendum, 2026-09-06 — one name, one workspace
+
+The workspace was reorganised and the product name unified. This changes where
+files live and what they are called; it does not change what counts as
+pre-existing work, and `git diff pre-ethonline..HEAD` still answers that
+question exactly.
+
+| Was | Is |
+|---|---|
+| `secureflow/` | `app/` |
+| `patron/` | `agent/` |
+| `SecureFlow.sol` | `Atelier.sol` |
+| "SecureFlow" in the UI, docs, package names | "Atelier" |
+
+**Why:** two brand names in one product asked a first-time visitor — and a
+judge with four minutes — to hold both in their head before understanding
+either. Atelier is the product; the protocol underneath does not need its own
+name to be explained.
+
+Moves were made with `git mv`, so history follows the files. The baseline
+commits above are unaffected: everything they contain still predates the event,
+whatever it is now called. SecureFlow and Patron remain the names of the two
+**source products**, and this file continues to describe them that way, because
+rewriting history to match a rename would be the one thing a baseline must never
+do.

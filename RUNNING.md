@@ -6,7 +6,7 @@ others are missing rather than erroring.
 | Service | Port | What it is | Needed for |
 |---|---|---|---|
 | **Frontend** | `5173`/`5174` | Atelier — React + Vite | everything |
-| **SecureFlow backend** | `8787` | Express — AI writers, gasless relay, uploads, messages | cover letters, file upload, chat |
+| **Atelier backend** | `8787` | Express — AI writers, gasless relay, uploads, messages | cover letters, file upload, chat |
 | **Patron daemon** | `8080` | Autopilot's brain — runs 24/7, holds keys | decision log, Autopilot mode |
 
 ## First time
@@ -14,38 +14,38 @@ others are missing rather than erroring.
 Secrets are not in this repo. Copy them from the source projects:
 
 ```bash
-cp ../../Arc/Secureflow/SecureFlow-scaffold/.env          secureflow/.env
-cp ../../Arc/Secureflow/SecureFlow-scaffold/backend/.env  secureflow/backend/.env
-cp ../../Arc/Patron/daemon/.env                           patron/daemon/.env
+cp ../../Arc/Secureflow/Atelier-scaffold/.env          app/.env
+cp ../../Arc/Secureflow/Atelier-scaffold/backend/.env  app/backend/.env
+cp ../../Arc/Patron/daemon/.env                           agent/daemon/.env
 ```
 
 Then two edits, because both backends default to port 8787:
 
 ```bash
-# patron/daemon/.env
+# agent/daemon/.env
 PORT=8080
 
-# secureflow/.env — point Atelier at the daemon
+# app/.env — point Atelier at the daemon
 VITE_PATRON_API_URL=http://localhost:8080
 ```
 
 Install:
 
 ```bash
-(cd secureflow && npm install)
-(cd secureflow/backend && npm install)
-(cd patron/daemon && npm install)
+(cd app && npm install)
+(cd app/backend && npm install)
+(cd agent/daemon && npm install)
 ```
 
 Contracts need OpenZeppelin fetched — see
-[`contracts/solidity/README.md`](secureflow/contracts/solidity/README.md).
+[`contracts/solidity/README.md`](app/contracts/solidity/README.md).
 
 ## Start
 
 ```bash
-(cd secureflow/backend && npm run dev)   # :8787
-(cd patron/daemon     && npm start)      # :8080
-(cd secureflow        && npm run dev)    # :5173 or :5174
+(cd app/backend && npm run dev)   # :8787
+(cd agent/daemon     && npm start)      # :8080
+(cd app        && npm run dev)    # :5173 or :5174
 ```
 
 Check all three:
@@ -72,13 +72,13 @@ does not exist in production builds.
 
 Every seeded reasoning is prefixed `[LOCAL DEMO]`. It is for looking at the UI,
 **not** for screenshots, videos, or anything a judge sees. Undo with
-`rm -rf patron/daemon/data`.
+`rm -rf agent/daemon/data`.
 
 ## What you can click right now
 
 | Works | Where |
 |---|---|
-| The whole existing SecureFlow app | everywhere — nothing was removed |
+| The whole existing Atelier app | everywhere — nothing was removed |
 | Post a Job → mode chooser | `/post` |
 | Autopilot compose, with validation | `/post/autopilot` |
 | Decision log, live from the daemon | `/dev`, or inside your own job on `/my-jobs` |
@@ -92,10 +92,10 @@ the UUPS proxy is deployed. See
 ## Tests
 
 ```bash
-(cd secureflow && npm test)                       # 63 unit/component
-(cd secureflow/backend && npx vitest run)         # 32 backend routes
-(cd secureflow/contracts/solidity && forge test)  # 47 contract, incl. fuzz + upgrade
-(cd secureflow && npm run e2e)                    # 33 full-stack, needs all 3 running
+(cd app && npm test)                       # 63 unit/component
+(cd app/backend && npx vitest run)         # 32 backend routes
+(cd app/contracts/solidity && forge test)  # 47 contract, incl. fuzz + upgrade
+(cd app && npm run e2e)                    # 33 full-stack, needs all 3 running
 ```
 
 The E2E suite drives a real browser against the real services. It is the only

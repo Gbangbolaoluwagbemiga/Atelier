@@ -14,9 +14,9 @@ coverage/
 # work that is actually being judged. Setup:
 #   git clone --depth 1 --branch v5.1.0 \
 #     https://github.com/OpenZeppelin/openzeppelin-contracts \
-#     secureflow/contracts/solidity/lib/openzeppelin-contracts
-secureflow/contracts/solidity/lib/openzeppelin-contracts/
-secureflow/contracts/solidity/lib/openzeppelin-contracts-upgradeable/
+#     app/contracts/solidity/lib/openzeppelin-contracts
+app/contracts/solidity/lib/openzeppelin-contracts/
+app/contracts/solidity/lib/openzeppelin-contracts-upgradeable/
 
 # Playwright
 test-results/
@@ -25,4 +25,4 @@ blob-report/
 .playwright/
 
 # Patron daemon's local SQLite — machine-local demo state, never shared
-patron/daemon/data/
+agent/daemon/data/

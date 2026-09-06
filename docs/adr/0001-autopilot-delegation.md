@@ -63,7 +63,7 @@ shared treasury, and `createEscrow` is then called with Patron's own Circle
 Agent Wallet as the signer:
 
 ```ts
-// patron/daemon/src/web3/secureflow.ts
+// agent/daemon/src/web3/secureflow.ts
 account: signer.address,   // Patron's wallet — not the human's
 ```
 

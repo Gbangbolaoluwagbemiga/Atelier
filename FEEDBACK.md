@@ -13,10 +13,10 @@ paying a freelancer.
 
 | | |
 |---|---|
-| Adapter interface | [`src/yield/IYieldAdapter.sol`](secureflow/contracts/solidity/src/yield/IYieldAdapter.sol) |
-| Uniswap v4 adapter | [`src/yield/UniswapV4StableAdapter.sol`](secureflow/contracts/solidity/src/yield/UniswapV4StableAdapter.sol) |
-| Escrow-side policy | [`src/SecureFlow.sol`](secureflow/contracts/solidity/src/SecureFlow.sol) — `investableCeiling`, `investIdle`, `_rebalanceYield`, `_ensureLiquid` |
-| Tests | [`test/ProductiveEscrow.t.sol`](secureflow/contracts/solidity/test/ProductiveEscrow.t.sol), [`test/ProductiveEscrowInvariant.t.sol`](secureflow/contracts/solidity/test/ProductiveEscrowInvariant.t.sol) |
+| Adapter interface | [`src/yield/IYieldAdapter.sol`](app/contracts/solidity/src/yield/IYieldAdapter.sol) |
+| Uniswap v4 adapter | [`src/yield/UniswapV4StableAdapter.sol`](app/contracts/solidity/src/yield/UniswapV4StableAdapter.sol) |
+| Escrow-side policy | [`src/SecureFlow.sol`](app/contracts/solidity/src/SecureFlow.sol) — `investableCeiling`, `investIdle`, `_rebalanceYield`, `_ensureLiquid` |
+| Tests | [`test/ProductiveEscrow.t.sol`](app/contracts/solidity/test/ProductiveEscrow.t.sol), [`test/ProductiveEscrowInvariant.t.sol`](app/contracts/solidity/test/ProductiveEscrowInvariant.t.sol) |
 
 ---
 

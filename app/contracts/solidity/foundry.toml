@@ -1,0 +1,26 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+via_ir = true
+optimizer = true
+# Tuned for SIZE, not gas. Adding productive escrow pushed the runtime past
+# EIP-170's 24,576-byte limit by ~2.2KB, and a contract that cannot be deployed
+# costs infinitely more gas than one that is slightly more expensive to call.
+# Raise this again only if the runtime margin allows it — `forge build --sizes`.
+optimizer_runs = 1
+# OpenZeppelin 5.1's ERC1967Utils requires ^0.8.21, so 0.8.20 can no longer
+# build the UUPS proxy path.
+solc_version = "0.8.28"
+
+# Pinned, not defaulted. solc 0.8.28 defaults to "cancun", which emits MCOPY and
+# TSTORE — opcodes Arc EVM is not guaranteed to have. The original 0.8.20 build
+# defaulted to "shanghai" and deploys fine on Arc, so that is the target we keep.
+# Raise this only after confirming Arc supports the newer opcodes.
+evm_version = "shanghai"
+
+[rpc_endpoints]
+arc_testnet = "${ARC_RPC_URL}"
+
+[etherscan]
+arc_testnet = { key = "${ETHERSCAN_API_KEY}", url = "https://testnet.arcscan.app/api" }

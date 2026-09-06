@@ -1,0 +1,94 @@
+import { Routes, Route, Outlet, Navigate } from "react-router-dom";
+import { Navbar } from "./components/navbar";
+import { Toaster } from "./components/ui/toaster";
+import { NewMessageWatcher } from "./components/new-message-watcher";
+import { EscrowPoller } from "./components/escrow-poller";
+import HomePage from "./pages/HomePage";
+import JobsPage from "./pages/JobsPage";
+import CreatePage from "./pages/CreatePage";
+import AdminPage from "./pages/AdminPage";
+import DisputesPage from "./pages/DisputesPage";
+import ApprovalsPage from "./pages/ApprovalsPage";
+import FreelancersPage from "./pages/FreelancersPage";
+import MessagesPage from "./pages/MessagesPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import PostJobPage from "./pages/PostJobPage";
+import MyJobsPage from "./pages/MyJobsPage";
+import AutopilotComposePage from "./pages/AutopilotComposePage";
+import DevPreviewPage from "./pages/DevPreviewPage";
+
+const AppLayout = () => (
+  <>
+    <Navbar />
+    <div className="pt-16">
+      <Outlet />
+    </div>
+    <NewMessageWatcher />
+    <EscrowPoller />
+    <Toaster />
+  </>
+);
+
+/**
+ * Atelier's routes.
+ *
+ * The IA is in `lib/atelier/nav.ts`; this table implements it. Two things worth
+ * knowing before editing:
+ *
+ * 1. The original app's paths still resolve. /create, /dashboard and
+ *    /freelancer redirect rather than 404, because the deployed app, the README
+ *    and real users' bookmarks all point at them. A tidier table is not worth a
+ *    regression on a product already in use.
+ *
+ * 2. /create is still a live route, not only a redirect target — it is the
+ *    manual escrow wizard, which "Post a Job → Manual" leads into. The redirect
+ *    is on the *bare* /create path only; deep links with query params (the
+ *    wizard uses ?edit=) keep working.
+ */
+function App() {
+  return (
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<HomePage />} />
+
+        {/* ── One list. Agent-posted and human-posted, indistinguishable. ── */}
+        <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/freelancers" element={<FreelancersPage />} />
+
+        {/* ── Client area — the only part of the app that has modes. ── */}
+        <Route path="/post" element={<PostJobPage />} />
+        <Route path="/post/autopilot" element={<AutopilotComposePage />} />
+        <Route path="/create" element={<CreatePage />} />
+        {/* Both sides of the table, one destination. Tabs appear only for
+            someone who actually has both roles. */}
+        <Route path="/my-jobs" element={<MyJobsPage />} />
+        <Route path="/approvals" element={<ApprovalsPage />} />
+
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/messages" element={<MessagesPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+
+        {/* Arbitration. Reached from Admin, not from the nav — it is a staff
+            tool, and the people in a dispute reach it from the job itself. */}
+        <Route path="/disputes" element={<DisputesPage />} />
+
+        {/*
+          Dev-only surface preview. Gated on the build flag rather than hidden,
+          so the route does not exist in production and the component is dropped
+          from the bundle — this page would otherwise show one client's decision
+          log to anyone who guessed the URL.
+        */}
+        {import.meta.env.DEV && (
+          <Route path="/dev" element={<DevPreviewPage />} />
+        )}
+
+        {/* ── The original app's paths, kept alive. ── */}
+        <Route path="/dashboard" element={<Navigate to="/my-jobs" replace />} />
+        <Route path="/work" element={<Navigate to="/my-jobs?tab=working" replace />} />
+        <Route path="/freelancer" element={<Navigate to="/my-jobs?tab=working" replace />} />
+      </Route>
+    </Routes>
+  );
+}
+
+export default App;

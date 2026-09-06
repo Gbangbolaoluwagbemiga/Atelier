@@ -17,7 +17,7 @@
  * number in the submission has to be readable off-chain or off the subgraph.
  * Reasonings below are written to be obviously synthetic if one ever leaks.
  *
- * Undo with:  rm patron/daemon/data/patron.db   (then restart the daemon)
+ * Undo with:  rm agent/daemon/data/patron.db   (then restart the daemon)
  */
 
 import { DatabaseSync } from "node:sqlite";
@@ -27,7 +27,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const DB = resolve(here, "../patron/daemon/data/patron.db");
+const DB = resolve(here, "../agent/daemon/data/patron.db");
 
 if (!existsSync(DB)) {
   console.error(
@@ -107,4 +107,4 @@ escrowIds.forEach((escrowId, i) => {
 
 console.log(`\nSeeded ${escrowIds.length} demo jobs, ${decisionCount} decisions.`);
 console.log("Restart is not needed — the daemon reads SQLite per request.");
-console.log("Undo: rm patron/daemon/data/patron.db");
+console.log("Undo: rm agent/daemon/data/patron.db");

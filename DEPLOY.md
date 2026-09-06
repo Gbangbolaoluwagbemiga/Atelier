@@ -15,7 +15,7 @@ proxy** — and the owner can replace the implementation over live escrows.
 
 That is a different risk class from a testnet balance. Generate a fresh key,
 fund it from the faucet, and put that one in
-`secureflow/contracts/solidity/.env` before deploying.
+`app/contracts/solidity/.env` before deploying.
 
 ```bash
 cast wallet new                      # gives you an address + private key
@@ -25,7 +25,7 @@ cast wallet new                      # gives you an address + private key
 **Also fixed already:** the source repo's `contracts/.env` had
 `ARC_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc` — Arbitrum Sepolia, not
 Arc. Copying that in and deploying would have put the contract on the wrong
-chain. `secureflow/contracts/solidity/.env` now points at Arc and is verified
+chain. `app/contracts/solidity/.env` now points at Arc and is verified
 against `cast chain-id` → `5042002`.
 
 ---
@@ -35,7 +35,7 @@ against `cast chain-id` → `5042002`.
 This is what makes "Hand to Autopilot" stop reverting.
 
 ```bash
-cd secureflow/contracts/solidity
+cd app/contracts/solidity
 set -a && . ./.env && set +a
 
 forge test                                            # 47 must pass first
@@ -66,19 +66,19 @@ cast send <PROXY> "authorizeArbiter(address)" <YOUR_ADDRESS> \
   --rpc-url "$ARC_RPC_URL" --private-key "$PRIVATE_KEY"
 ```
 
-3. **Point the app at it** — `secureflow/.env`:
+3. **Point the app at it** — `app/.env`:
 
 ```env
 VITE_SECUREFLOW_CONTRACT_ADDRESS=<PROXY>
 ```
 
-   and `secureflow/backend/.env` (`CONTRACT_ADDRESS`), and
-   `patron/daemon/.env` (`SECUREFLOW_CONTRACT_ADDRESS`).
+   and `app/backend/.env` (`CONTRACT_ADDRESS`), and
+   `agent/daemon/.env` (`SECUREFLOW_CONTRACT_ADDRESS`).
 
 4. **Sync the ABI** so the frontend can encode the new functions:
 
 ```bash
-cd secureflow && npm run sync-abi
+cd app && npm run sync-abi
 ```
 
 5. **Delete the honesty markers**, which are now out of date — and only now:
@@ -116,7 +116,7 @@ This is the $5,000 Graph track. Goldsky does not qualify; the track asks for
 3. Copy the **deploy key** it shows you.
 
 Then update the manifest to the new contract — this is why the contract goes
-first. In `secureflow/subgraph/subgraph.yaml`:
+first. In `app/subgraph/subgraph.yaml`:
 
 ```yaml
 source:
@@ -134,7 +134,7 @@ Using the right `startBlock` matters: too low and indexing crawls millions of
 empty blocks, too high and you silently miss escrows.
 
 ```bash
-cd secureflow/subgraph
+cd app/subgraph
 npm run auth -- <DEPLOY_KEY>
 npm run codegen
 npm run build
@@ -145,8 +145,8 @@ Studio then shows a **query URL** with an API key in it.
 
 ### After it's synced
 
-1. Put the query URL in `secureflow/.env` (`VITE_GRAPH_URL`) and
-   `patron/daemon/.env` (`GRAPH_URL`).
+1. Put the query URL in `app/.env` (`VITE_GRAPH_URL`) and
+   `agent/daemon/.env` (`GRAPH_URL`).
 
 2. **Use a rate-limited key.** `VITE_GRAPH_URL` ships inside the browser
    bundle — anyone can read it out of your JS. Studio lets you cap a key by
@@ -172,7 +172,7 @@ curl -s <QUERY_URL> -H 'Content-Type: application/json' \
   -d '{"query":"{ escrows(first:3){ id jobManager } }"}'
 
 # app
-cd secureflow && npm run e2e
+cd app && npm run e2e
 ```
 
 Then in the app: post a job, expand it in **My Jobs**, and press **Hand to
