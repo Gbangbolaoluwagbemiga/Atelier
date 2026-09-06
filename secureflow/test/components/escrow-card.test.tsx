@@ -28,6 +28,11 @@ vi.mock("@/components/milestone-negotiation", () => ({ MilestoneNegotiation: () 
 vi.mock("@/components/evidence-submission-button", () => ({ EvidenceSubmissionButton: () => null }));
 vi.mock("@/components/view-evidence-button", () => ({ ViewEvidenceButton: () => null }));
 vi.mock("@/components/rating/rating-dialog", () => ({ RatingDialog: () => null }));
+// Same reason as the stubs above, plus one of its own: AutopilotControl reads
+// the job manager through wagmi's useWriteContract, so mounting it for real
+// would make this file require a WagmiProvider to test milestone prop mapping.
+// Its own behaviour is covered in test/atelier/autopilot-control.test.tsx.
+vi.mock("@/components/atelier/autopilot-control", () => ({ AutopilotControl: () => null }));
 vi.mock("@/components/chat/chat-dialog", () => ({
   ChatDialog: ({ otherAddress }: { otherAddress: string }) => (
     <div data-testid="chat-dialog" data-other={otherAddress} />

@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isApiConfigured } from "@/lib/api";
 import type { Escrow } from "@/lib/web3/types";
 import { encodeJobId } from "@/lib/id-codec";
+import { AutopilotControl } from "@/components/atelier/autopilot-control";
 
 
 interface EscrowCardProps {
@@ -393,6 +394,32 @@ export function EscrowCard({
 
             {expandedEscrow === escrow.id && (
               <div className="space-y-4 pt-4 border-t">
+                {/*
+                  Who is running this job, and the one click that changes it.
+
+                  First thing in the expanded card, above the milestones,
+                  because it is the frame everything below is read through — a
+                  client scanning approvals needs to know whether those
+                  decisions are theirs to make or an agent's to explain.
+
+                  Client-only, and the component enforces that again itself. A
+                  freelancer must not be able to tell whether their client is a
+                  person or an agent, and this panel announces it in amber.
+
+                  Live jobs only. On a finished escrow the buttons do nothing
+                  and the panel is just noise; the decision log is where the
+                  history of who did what belongs.
+                */}
+                {escrow.isClient &&
+                  (escrow.status === "pending" ||
+                    escrow.status === "active" ||
+                    escrow.status === "disputed") && (
+                    <AutopilotControl
+                      escrowId={Number(escrow.id)}
+                      isClient={escrow.isClient === true}
+                    />
+                  )}
+
                 <div className="space-y-2">
                   <h4 className="font-medium">Milestones:</h4>
                   {escrow.milestones.map((milestone, idx) => (
