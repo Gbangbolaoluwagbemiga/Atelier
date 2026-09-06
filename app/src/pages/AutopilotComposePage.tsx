@@ -1,25 +1,24 @@
 /**
- * AUTOPILOT — say what you want, then check what the agent proposes.
+ * AUTOPILOT — say what you want, check what the agent proposes, fund it.
  *
- * Two steps, and the second one is the point.
+ * Two steps, and neither of them is a wizard.
  *
  * The promise is that commissioning work costs a sentence rather than an
- * afternoon, so the first input is one textarea and nothing else: no milestone
- * table, no budget field, no acceptance criteria. Asking a client to fill those
- * in would be asking them to do the exact labour they came here to delegate.
+ * afternoon, so step one is one textarea: no milestone table, no budget field,
+ * no acceptance criteria. Asking a client to fill those in would be asking them
+ * to do the exact labour they came here to delegate.
  *
- * But "the agent writes your brief" is only reassuring if you can SEE the brief
- * before your money is involved. So step two shows what Autopilot actually
- * proposes — title, duration, acceptance criteria, and the milestone split with
- * amounts — and lets the client change any of it. The daemon's own /api/instruct
- * cannot serve this: it writes the brief and opens a funded escrow in the same
- * call, so the only way to see the proposal was to have already paid for it.
- * /api/brief/preview exists for exactly this screen.
+ * Step two shows what Autopilot actually proposes and funds it IN PLACE. It used
+ * to hand off to the three-step escrow wizard with the fields prefilled, which
+ * meant a client who had just read and approved a complete brief was then made
+ * to click Next past three screens of it. That is not a review, it is a toll
+ * booth. The escrow is opened from this page, from the balance already in their
+ * wallet, in one transaction.
  *
- * Funding then hands off to the manual escrow wizard with everything prefilled.
- * That is not a fallback — it is the honest arrangement until the job-manager
- * delegation is deployed: the CLIENT funds and owns the escrow, and appoints
- * Autopilot to manage it. Which is the whole product.
+ * The layout is two columns because the content is two things: terms you might
+ * adjust on the left, and the work itself on the right. A single column left
+ * half the width empty and pushed the criteria — the part that decides whether
+ * a delivery is accepted — below the fold.
  */
 
 import { useState } from "react";
@@ -31,10 +30,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useWeb3 } from "@/contexts/web3-context";
+import { useCreateEscrow } from "@/hooks/use-escrows";
 import { toastError } from "@/lib/atelier/errors";
 import {
   AUTOPILOT_CONFIGURED,
-  AUTOPILOT_BRIEF_KEY,
   previewBrief,
   type AutopilotBrief,
 } from "@/lib/atelier/agent-api";
@@ -48,10 +48,16 @@ const EXAMPLES = [
 export default function AutopilotComposePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { wallet } = useWeb3();
+  const createEscrow = useCreateEscrow();
 
   const [instruction, setInstruction] = useState("");
   const [brief, setBrief] = useState<AutopilotBrief | null>(null);
   const [thinking, setThinking] = useState(false);
+  const [funding, setFunding] = useState(false);
+  /* Minutes applications stay open before the agent judges them together.
+     Three is the daemon's default; the UI offers longer for real jobs. */
+  const [reviewWindow, setReviewWindow] = useState(5);
 
   const trimmed = instruction.trim();
   /* The daemon rejects an instruction with no budget, with a message the client
@@ -86,25 +92,70 @@ export default function AutopilotComposePage() {
     setBrief({ ...brief, milestones });
   }
 
-  function handleFund() {
-    if (!brief) return;
-    /*
-     * Handed over in sessionStorage rather than the URL. A brief with several
-     * milestones and a paragraph of criteria makes a URL long enough to be
-     * truncated by something in the middle, and the failure would be a silently
-     * half-filled form rather than an error.
-     */
-    sessionStorage.setItem(
-      AUTOPILOT_BRIEF_KEY,
-      JSON.stringify({ ...brief, budget: total, instruction: trimmed }),
-    );
-    navigate("/create?from=autopilot");
+  /**
+   * Open the escrow from here, in one transaction.
+   *
+   * This used to stash the brief in sessionStorage and send the client to the
+   * three-step wizard with the fields prefilled — so somebody who had just read
+   * and approved a complete brief was made to click Next past three screens of
+   * the same thing. That is not a review step, it is a toll booth.
+   *
+   * The job is posted OPEN, with no beneficiary, because the entire point of
+   * Autopilot is that it reads the applications and picks someone. Naming a
+   * freelancer here would leave it nothing to do.
+   */
+  async function handleFund() {
+    if (!brief || !wallet.address) return;
+    setFunding(true);
+    try {
+      const description = [
+        trimmed,
+        brief.deliverableFormat ? `Deliverable: ${brief.deliverableFormat}` : "",
+        brief.criteria.length
+          ? `Acceptance criteria:\n${brief.criteria.map((c) => `• ${c}`).join("\n")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      await createEscrow.mutateAsync({
+        depositor: wallet.address,
+        arbiters: [],
+        required_confirmations: 1,
+        // Amounts are USDC with 6 decimals on Arc. Rounded rather than floored
+        // so a milestone of 12.005 does not quietly lose its last cent and take
+        // the sum out of agreement with the total.
+        milestones: brief.milestones.map(
+          (m) =>
+            [
+              String(Math.round(m.amount * 1e6)),
+              m.description,
+            ] as [string, string],
+        ),
+        total_amount: String(Math.round(total * 1e6)),
+        duration: Math.max(1, brief.durationDays) * 86400,
+        project_title: brief.title,
+        project_description: description,
+      });
+
+      toast({
+        title: "Posted and funded",
+        description:
+          "Autopilot is collecting applications. Watch it work from My Jobs.",
+      });
+      navigate("/my-jobs");
+    } catch (e) {
+      toast(toastError("Could not fund this job", e));
+    } finally {
+      setFunding(false);
+    }
   }
 
   /* ─────────────── Step 2: the agent's proposal ─────────────── */
   if (brief) {
+    const incomplete = brief.milestones.some((m) => !m.description.trim());
     return (
-      <div className="container mx-auto px-4 py-8 sm:py-12 max-w-2xl">
+      <div className="container mx-auto px-4 py-8 sm:py-12 max-w-6xl">
         <button
           type="button"
           onClick={() => setBrief(null)}
@@ -128,160 +179,224 @@ export default function AutopilotComposePage() {
           <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mt-4 break-words">
             {brief.title}
           </h1>
-          <p className="text-muted-foreground mt-3 leading-relaxed">
+          <p className="text-muted-foreground mt-3 leading-relaxed max-w-2xl">
             Change anything you disagree with. Autopilot hires and reviews
             against this brief, so it is worth reading properly.
           </p>
 
-          {/* ── Terms ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-7">
-            <Field label="Total">
-              <span className="actor-figure figure-md">${total.toFixed(2)}</span>
-            </Field>
-            <Field label="Days">
-              <Input
-                type="number"
-                min={1}
-                value={brief.durationDays}
-                onChange={(e) =>
-                  setBrief({ ...brief, durationDays: Math.max(1, Number(e.target.value) || 1) })
-                }
-                className="h-9"
-              />
-            </Field>
-            <Field label="Revisions">
-              <Input
-                type="number"
-                min={0}
-                value={brief.revisionRounds}
-                onChange={(e) =>
-                  setBrief({ ...brief, revisionRounds: Math.max(0, Number(e.target.value) || 0) })
-                }
-                className="h-9"
-              />
-            </Field>
+          {/* Terms on the left, the work on the right. */}
+          <div className="grid lg:grid-cols-[22rem_minmax(0,1fr)] gap-6 lg:gap-8 mt-8 items-start">
+            {/* ── Left: what you might adjust ── */}
+            <div className="space-y-4">
+              <div className="rounded-xl actor-panel p-4">
+                <div className="text-xs text-muted-foreground">Total</div>
+                <div className="actor-figure figure-lg mt-1">
+                  ${total.toFixed(2)}
+                  <span className="text-sm font-sans font-medium text-muted-foreground ml-2">
+                    USDC
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Adds up from the milestones — the contract requires them to
+                  match exactly.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Days to deliver">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={brief.durationDays}
+                    onChange={(e) =>
+                      setBrief({ ...brief, durationDays: Math.max(1, Number(e.target.value) || 1) })
+                    }
+                    className="h-9"
+                  />
+                </Field>
+                <Field label="Revision rounds">
+                  <Input
+                    type="number"
+                    min={3}
+                    value={Math.max(3, brief.revisionRounds)}
+                    onChange={(e) =>
+                      setBrief({ ...brief, revisionRounds: Math.max(3, Number(e.target.value) || 3) })
+                    }
+                    className="h-9"
+                  />
+                </Field>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">
+                How many times a freelancer may fix and resubmit before a human
+                arbiter takes over. Three is the floor — fewer escalates people
+                who were visibly getting closer.
+              </p>
+
+              {/* The review window — how long applications stay open. */}
+              <div className="rounded-xl actor-panel p-4">
+                <Label htmlFor="window" className="text-xs">
+                  Review applications after
+                </Label>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <Input
+                    id="window"
+                    type="number"
+                    min={1}
+                    value={reviewWindow}
+                    onChange={(e) => setReviewWindow(Math.max(1, Number(e.target.value) || 1))}
+                    className="h-9 w-24 tabular-nums"
+                  />
+                  <span className="text-sm text-muted-foreground">minutes</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                  Autopilot waits this long, then scores every applicant together
+                  and picks one. Longer windows get more applicants; shorter ones
+                  get someone started sooner.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {[
+                    ["5 min", 5],
+                    ["1 hour", 60],
+                    ["1 day", 1440],
+                  ].map(([label, mins]) => (
+                    <button
+                      key={label as string}
+                      type="button"
+                      onClick={() => setReviewWindow(mins as number)}
+                      className="text-xs px-2.5 py-1 rounded-full border border-border/60 text-muted-foreground hover:actor-text hover:border-[var(--actor-border)] transition-colors"
+                    >
+                      {label as string}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Right: the work ── */}
+            <div className="space-y-8 min-w-0">
+              <section>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <h2 className="font-display text-xl font-semibold">Milestones</h2>
+                  <span className="text-xs text-muted-foreground">
+                    Paid one at a time, as each is approved
+                  </span>
+                </div>
+
+                <div className="space-y-3 mt-4">
+                  {brief.milestones.map((m, i) => (
+                    <div key={i} className="rounded-xl actor-panel p-3 sm:p-4">
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="flex-1 min-w-0">
+                          <Label className="text-xs text-muted-foreground">
+                            Milestone {i + 1}
+                          </Label>
+                          <Textarea
+                            rows={2}
+                            value={m.description}
+                            onChange={(e) => patchMilestone(i, { description: e.target.value })}
+                            className="mt-1.5 resize-none text-sm"
+                          />
+                        </div>
+                        <div className="sm:w-28 shrink-0">
+                          <Label className="text-xs text-muted-foreground">USDC</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={m.amount}
+                            onChange={(e) => patchMilestone(i, { amount: Number(e.target.value) || 0 })}
+                            className="mt-1.5 h-9 tabular-nums"
+                          />
+                        </div>
+                      </div>
+
+                      {brief.milestones.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setBrief({
+                              ...brief,
+                              milestones: brief.milestones.filter((_, idx) => idx !== i),
+                            })
+                          }
+                          className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="h-3 w-3" aria-hidden="true" />
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() =>
+                    setBrief({
+                      ...brief,
+                      milestones: [...brief.milestones, { description: "", amount: 0 }],
+                    })
+                  }
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                  Add a milestone
+                </Button>
+              </section>
+
+              {brief.criteria.length > 0 && (
+                <section>
+                  <h2 className="font-display text-xl font-semibold">
+                    What counts as done
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Autopilot approves or rejects delivered work against these.
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {brief.criteria.map((c, i) => (
+                      <li key={i} className="flex gap-2.5 text-sm">
+                        <span className="actor-dot mt-1.5" aria-hidden="true" />
+                        <span className="min-w-0 break-words">{c}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
           </div>
 
-          {/* ── Milestones ── */}
-          <section className="mt-8">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <h2 className="font-display text-xl font-semibold">Milestones</h2>
-              <span className="text-xs text-muted-foreground">
-                Paid out one at a time, as each is approved
-              </span>
-            </div>
-
-            <div className="space-y-3 mt-4">
-              {brief.milestones.map((m, i) => (
-                <div key={i} className="rounded-xl actor-panel p-3 sm:p-4">
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="flex-1 min-w-0">
-                      <Label className="text-xs text-muted-foreground">
-                        Milestone {i + 1}
-                      </Label>
-                      <Textarea
-                        rows={2}
-                        value={m.description}
-                        onChange={(e) => patchMilestone(i, { description: e.target.value })}
-                        className="mt-1.5 resize-none text-sm"
-                      />
-                    </div>
-                    <div className="sm:w-32 shrink-0">
-                      <Label className="text-xs text-muted-foreground">USDC</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={m.amount}
-                        onChange={(e) => patchMilestone(i, { amount: Number(e.target.value) || 0 })}
-                        className="mt-1.5 h-9 tabular-nums"
-                      />
-                    </div>
-                  </div>
-
-                  {brief.milestones.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setBrief({
-                          ...brief,
-                          milestones: brief.milestones.filter((_, idx) => idx !== i),
-                        })
-                      }
-                      className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <Trash2 className="h-3 w-3" aria-hidden="true" />
-                      Remove
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              onClick={() =>
-                setBrief({
-                  ...brief,
-                  milestones: [...brief.milestones, { description: "", amount: 0 }],
-                })
-              }
-            >
-              <Plus className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
-              Add a milestone
-            </Button>
-          </section>
-
-          {/* ── Acceptance criteria ── */}
-          {brief.criteria.length > 0 && (
-            <section className="mt-8">
-              <h2 className="font-display text-xl font-semibold">
-                What counts as done
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                Autopilot approves or rejects delivered work against these.
-              </p>
-              <ul className="mt-3 space-y-2">
-                {brief.criteria.map((c, i) => (
-                  <li key={i} className="flex gap-2.5 text-sm">
-                    <span className="actor-dot mt-1.5" aria-hidden="true" />
-                    <span className="min-w-0 break-words">{c}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {/* ── The honest bit ── */}
+          {/* ── Fund it, here ── */}
           <div className="mt-8 rounded-xl border border-border/60 p-4 flex gap-3">
             <Info className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div className="text-sm text-muted-foreground leading-relaxed">
-              <strong className="text-foreground font-medium">You fund this, not Autopilot.</strong>{" "}
-              The next step opens the escrow from your own wallet with this brief
-              filled in, so the money and the dispute rights stay yours. Once it
-              is funded, hand day-to-day management to Autopilot from the job in
-              My Jobs — it can hire, review and pay the freelancer, and it can
-              never pay itself or settle a dispute. You can take control back at
-              any moment.
+              <strong className="text-foreground font-medium">
+                You fund this, not Autopilot.
+              </strong>{" "}
+              One transaction from your own wallet opens the escrow, so the money
+              and the dispute rights stay yours. Autopilot then hires, reviews
+              and pays the freelancer — it can never pay itself or settle a
+              dispute, and you can take control back at any moment.
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <Button
               size="lg"
-              onClick={handleFund}
-              disabled={total <= 0 || brief.milestones.some((m) => !m.description.trim())}
+              onClick={() => void handleFund()}
+              disabled={total <= 0 || incomplete || funding || !wallet.isConnected}
               className="flex-1 bg-[var(--actor)] text-[var(--actor-fg)] hover:bg-[var(--actor)] hover:opacity-90"
             >
-              Fund this escrow — ${total.toFixed(2)}
+              {funding && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
+              {wallet.isConnected
+                ? `Fund and post — $${total.toFixed(2)}`
+                : "Connect a wallet to fund this"}
             </Button>
             <Button
               size="lg"
               variant="outline"
               onClick={() => void handleWriteBrief()}
-              disabled={thinking}
+              disabled={thinking || funding}
               className="shrink-0"
             >
               {thinking ? (
@@ -293,7 +408,7 @@ export default function AutopilotComposePage() {
             </Button>
           </div>
 
-          {brief.milestones.some((m) => !m.description.trim()) && (
+          {incomplete && (
             <p className="text-xs text-muted-foreground mt-3">
               Every milestone needs a description — it is what the freelancer
               delivers against.
