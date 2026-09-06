@@ -11,6 +11,23 @@ const MILESTONE_FIELDS = `
   proposedDescription
 `;
 
+/*
+ * NOT SELECTED YET: `jobManager`.
+ *
+ * The redeployed subgraph indexes the Autopilot manager on every escrow (see
+ * subgraph/schema.graphql), and selecting it here would save an RPC round trip
+ * per job when rendering a list.
+ *
+ * It is deliberately absent until that subgraph is live, because GraphQL errors
+ * on an unknown field rather than ignoring it — adding it now would break EVERY
+ * escrow query against the Goldsky endpoint currently in production, not just
+ * the manager lookup. Add the line in the same change that switches
+ * VITE_GRAPH_URL to the Studio endpoint, not before.
+ *
+ * Until then `contractService.getJobManager` reads it from the contract, which
+ * is authoritative anyway — the subgraph is the optimisation, not the source of
+ * truth.
+ */
 const ESCROW_CORE = `
   id
   escrowId

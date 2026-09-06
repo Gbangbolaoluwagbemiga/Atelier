@@ -5,7 +5,10 @@
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy:goldsky": "goldsky subgraph deploy secureflow/v1 --path ."
+    "auth": "graph auth",
+    "deploy": "graph deploy atelier-secureflow --node https://subgraphs.thegraph.com/deploy --ipfs https://ipfs.thegraph.com",
+    "deploy:studio": "graph deploy atelier-secureflow",
+    "deploy:goldsky": "goldsky subgraph deploy secureflow/v2 --path ."
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "^0.81.0",

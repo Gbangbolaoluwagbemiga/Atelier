@@ -13,8 +13,10 @@ import {
   ApplicationSubmitted,
   FreelancerAccepted,
   RatingSubmitted,
+  JobManagerSet,
+  JobManagerRevoked,
 } from "../generated/SecureFlow/SecureFlow"
-import { Escrow, Milestone, Evidence, Application, Rating } from "../generated/schema"
+import { Escrow, Milestone, Evidence, Application, Rating, ManagerEvent } from "../generated/schema"
 
 export function handleEscrowCreated(event: EscrowCreated): void {
   let entity = new Escrow(event.params.escrowId.toString())
@@ -198,4 +200,78 @@ export function handleRatingSubmitted(event: RatingSubmitted): void {
   entity.score = event.params.score
   entity.timestamp = event.block.timestamp
   entity.save()
+}
+
+
+/* ═══════════════════ AUTOPILOT DELEGATION ═══════════════════ */
+
+/**
+ * Record an appointment or a revocation, and move the escrow's pointer.
+ *
+ * Both handlers write a ManagerEvent as well as updating Escrow.jobManager,
+ * because the pointer alone loses the history. An arbiter resolving a dispute
+ * needs to know who was managing the job when the contested milestone was
+ * approved — and by then the client may well have revoked, leaving a pointer
+ * that says "nobody" over a decision an agent actually made.
+ */
+function recordManagerEvent(
+  escrowId: BigInt,
+  manager: Bytes,
+  action: string,
+  txHash: Bytes,
+  logIndex: BigInt,
+  timestamp: BigInt,
+  blockNumber: BigInt,
+): void {
+  let id = txHash.toHexString() + "-" + logIndex.toString()
+  let e = new ManagerEvent(id)
+  e.escrow = escrowId.toString()
+  e.escrowId = escrowId
+  e.manager = manager
+  e.action = action
+  e.timestamp = timestamp
+  e.blockNumber = blockNumber
+  e.txHash = txHash
+  e.save()
+}
+
+export function handleJobManagerSet(event: JobManagerSet): void {
+  let escrow = Escrow.load(event.params.escrowId.toString())
+  if (escrow != null) {
+    escrow.jobManager = event.params.manager
+    escrow.updatedAt = event.block.timestamp
+    escrow.save()
+  }
+
+  recordManagerEvent(
+    event.params.escrowId,
+    event.params.manager,
+    "set",
+    event.transaction.hash,
+    event.logIndex,
+    event.block.timestamp,
+    event.block.number,
+  )
+}
+
+export function handleJobManagerRevoked(event: JobManagerRevoked): void {
+  let escrow = Escrow.load(event.params.escrowId.toString())
+  if (escrow != null) {
+    // Cleared, not left pointing at the old agent. A stale pointer here would
+    // make a revoked manager look authorised to anything reading the subgraph,
+    // which includes the daemon deciding whether to keep working the job.
+    escrow.jobManager = null
+    escrow.updatedAt = event.block.timestamp
+    escrow.save()
+  }
+
+  recordManagerEvent(
+    event.params.escrowId,
+    event.params.manager,
+    "revoked",
+    event.transaction.hash,
+    event.logIndex,
+    event.block.timestamp,
+    event.block.number,
+  )
 }

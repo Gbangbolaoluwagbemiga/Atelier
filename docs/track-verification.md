@@ -44,6 +44,23 @@ single task on the board — it is the difference between $5,000 addressable and
 $0, and it also unlocks a second $5,000 track if we compose a second Graph
 product.
 
+### Update, 2026-09-06 — migration prepared
+
+The docs page lists only mainnets, which briefly looked like it meant Arc testnet
+was unsupported and the Graph track depended on the Arc mainnet deploy. It does
+not. The Graph's own networks registry is definitive:
+
+```
+id: arc          | Arc Mainnet | eip155:5042    | services: ['subgraphs']
+id: arc-testnet  | Arc Testnet | eip155:5042002 | services: ['subgraphs']
+```
+
+`arc-testnet` matches our chain exactly, so the manifest's existing
+`network: arc-testnet` is already correct and this is a redeploy rather than a
+chain move. Subgraph builds clean against Studio, now also indexing the Autopilot
+delegation. **Remaining: a Studio account and deploy key** — see
+`secureflow/subgraph/README.md`.
+
 ---
 
 ## 2. World — is there a Selfie Check track, and what does it need?

@@ -15,6 +15,23 @@ type Escrow @entity {
   projectDescription: String!
   arbiters: [Bytes!]!
   requiredConfirmations: BigInt!
+
+  # AUTOPILOT DELEGATION
+  #
+  # The agent currently permitted to hire, approve and reject on this escrow —
+  # null when the client manages it themselves. This is the on-chain answer to
+  # "is this job on Autopilot", and it is the only trustworthy one: the Patron
+  # daemon's own task table records what the agent believes it manages, which
+  # can be stale by exactly the interval between a client revoking and the
+  # daemon next polling.
+  #
+  # Note this is NOT exposed to freelancers anywhere in the UI. A worker must
+  # not be able to tell whether their client is a person or an agent, and the
+  # subgraph is public — the field being queryable is a deliberate transparency
+  # choice for clients, arbiters and anyone auditing the protocol, not a signal
+  # to surface on a job card.
+  jobManager: Bytes
+  managerEvents: [ManagerEvent!]! @derivedFrom(field: "escrow")
   milestones: [Milestone!]! @derivedFrom(field: "escrow")
   applications: [Application!]! @derivedFrom(field: "escrow")
   ratings: [Rating!]! @derivedFrom(field: "escrow")
@@ -66,4 +83,21 @@ type Rating @entity {
   rated: Bytes!
   score: Int!
   timestamp: BigInt!
+}
+
+# Every appointment and revocation, kept rather than overwritten.
+#
+# `Escrow.jobManager` answers "who manages this now". This answers "who managed
+# it when that milestone was approved", which is the question that actually
+# matters in a dispute — an arbiter needs to know whether a human or an agent
+# made the call being argued about, and the current pointer cannot tell them.
+type ManagerEvent @entity {
+  id: ID!                         # txHash-logIndex
+  escrow: Escrow!
+  escrowId: BigInt!
+  manager: Bytes!
+  action: String!                 # "set" | "revoked"
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
 }

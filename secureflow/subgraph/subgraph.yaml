@@ -19,6 +19,7 @@ dataSources:
         - Evidence
         - Application
         - Rating
+        - ManagerEvent
       abis:
         - name: SecureFlow
           file: ../contracts/solidity/out/SecureFlow.sol/SecureFlow.json
@@ -50,4 +51,9 @@ dataSources:
           handler: handleFreelancerAccepted
         - event: RatingSubmitted(indexed uint256,indexed address,indexed address,uint8)
           handler: handleRatingSubmitted
+        # Autopilot delegation — see schema.graphql for why this is indexed.
+        - event: JobManagerSet(indexed uint256,indexed address)
+          handler: handleJobManagerSet
+        - event: JobManagerRevoked(indexed uint256,indexed address)
+          handler: handleJobManagerRevoked
       file: ./src/mapping.ts
