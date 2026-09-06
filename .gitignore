@@ -16,3 +16,4 @@ coverage/
 #     https://github.com/OpenZeppelin/openzeppelin-contracts \
 #     secureflow/contracts/solidity/lib/openzeppelin-contracts
 secureflow/contracts/solidity/lib/openzeppelin-contracts/
+secureflow/contracts/solidity/lib/openzeppelin-contracts-upgradeable/
