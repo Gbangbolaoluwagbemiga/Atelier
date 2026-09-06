@@ -27,6 +27,10 @@ import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useFreelancerStatus } from "@/hooks/use-freelancer-status";
 import { useJobCreatorStatus } from "@/hooks/use-job-creator-status";
+import {
+  PageActionsProvider,
+  PageActionsSlot,
+} from "@/components/atelier/page-actions";
 import DashboardPage from "@/pages/DashboardPage";
 import FreelancerPage from "@/pages/FreelancerPage";
 
@@ -97,21 +101,27 @@ export default function MyJobsPage() {
   /* One role: give them that page, with nothing to switch between. */
   if (!both) {
     return (
-      <div className="min-h-screen py-8 sm:py-12">
-        <div className="container mx-auto px-4 mb-6 sm:mb-8">
-          <h1 className="font-display text-3xl sm:text-4xl font-bold">My Jobs</h1>
-          <p className="text-muted-foreground mt-1.5">
-            {isJobCreator
-              ? "The jobs you have posted and are paying for."
-              : "The jobs you have been hired for, and what you have earned."}
-          </p>
+      <PageActionsProvider>
+        <div className="min-h-screen py-8 sm:py-12">
+          <div className="container mx-auto px-4 mb-6 sm:mb-8 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="font-display text-3xl sm:text-4xl font-bold">My Jobs</h1>
+              <p className="text-muted-foreground mt-1.5">
+                {isJobCreator
+                  ? "The jobs you have posted and are paying for."
+                  : "The jobs you have been hired for, and what you have earned."}
+              </p>
+            </div>
+            <PageActionsSlot className="shrink-0" />
+          </div>
+          {isJobCreator ? <DashboardPage embedded /> : <FreelancerPage embedded />}
         </div>
-        {isJobCreator ? <DashboardPage embedded /> : <FreelancerPage embedded />}
-      </div>
+      </PageActionsProvider>
     );
   }
 
   return (
+    <PageActionsProvider>
     <div className="min-h-screen py-8 sm:py-12">
       <div className="container mx-auto px-4">
         <h1 className="font-display text-3xl sm:text-4xl font-bold">My Jobs</h1>
@@ -124,18 +134,24 @@ export default function MyJobsPage() {
           onValueChange={(v) => setParams({ tab: v }, { replace: true })}
           className="mt-6"
         >
-          {/* Scrolls rather than wrapping on a narrow screen — a tab bar that
-              reflows onto two lines pushes the content down and looks broken. */}
-          <TabsList className="w-full sm:w-auto overflow-x-auto justify-start">
-            <TabsTrigger value="hiring" className="gap-2 shrink-0">
-              <Briefcase className="h-4 w-4" aria-hidden="true" />
-              Hiring
-            </TabsTrigger>
-            <TabsTrigger value="working" className="gap-2 shrink-0">
-              <Hammer className="h-4 w-4" aria-hidden="true" />
-              Working
-            </TabsTrigger>
-          </TabsList>
+          {/* Tabs on the left, the active page's own actions on the right, one
+              row. The buttons are portalled in from whichever dashboard is
+              mounted — see components/atelier/page-actions.tsx. */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Scrolls rather than wrapping on a narrow screen — a tab bar that
+                reflows onto two lines pushes the content down and looks broken. */}
+            <TabsList className="overflow-x-auto justify-start max-w-full">
+              <TabsTrigger value="hiring" className="gap-2 shrink-0">
+                <Briefcase className="h-4 w-4" aria-hidden="true" />
+                Hiring
+              </TabsTrigger>
+              <TabsTrigger value="working" className="gap-2 shrink-0">
+                <Hammer className="h-4 w-4" aria-hidden="true" />
+                Working
+              </TabsTrigger>
+            </TabsList>
+            <PageActionsSlot />
+          </div>
 
           {/* Both stay mounted. Switching tabs should not re-fetch a dashboard
               that was already loaded — on a slow RPC that reads as the app
@@ -149,6 +165,7 @@ export default function MyJobsPage() {
         </Tabs>
       </div>
     </div>
+    </PageActionsProvider>
   );
 }
 

@@ -30,6 +30,7 @@ import {
   FileText,
 } from "lucide-react";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { PageActions } from "@/components/atelier/page-actions";
 import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 import { EscrowCard } from "@/components/dashboard/escrow-card";
 import { DashboardLoading } from "@/components/dashboard/dashboard-loading";
@@ -1109,7 +1110,11 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
         </div>
       )}
       <div className="container mx-auto px-4">
-        <div className={`mb-8 flex items-start gap-4 ${embedded ? "justify-end" : "justify-between"}`}>
+        {/* Embedded, this whole row collapses and Refresh is portalled up into
+            My Jobs' tab row — otherwise it leaves a band of empty space with a
+            button floating in it, between the tabs and the content, belonging
+            to neither. */}
+        <div className={embedded ? "" : "mb-8 flex items-start gap-4 justify-between"}>
           {!embedded && (
             <div>
               <h1 className="text-4xl md:text-5xl font-bold mb-2">Dashboard</h1>
@@ -1118,19 +1123,20 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
               </p>
             </div>
           )}
-          {/* Refresh Button */}
-          <Button
-            variant="outline"
-            size="default"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
+          <PageActions enabled={embedded}>
+            <Button
+              variant="outline"
+              size="default"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+          </PageActions>
         </div>
 
         <DashboardStats escrows={escrows} />

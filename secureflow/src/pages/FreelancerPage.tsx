@@ -36,6 +36,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageActions } from "@/components/atelier/page-actions";
 import { Textarea } from "@/components/ui/textarea";
 // import { Input } from "@/components/ui/input"; // Unused
 // import { Label } from "@/components/ui/label"; // Unused
@@ -1393,7 +1394,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
       case "pending":
-        return "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200";
+        return "bg-muted text-muted-foreground";
       case "submitted":
         return "bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200";
       case "approved":
@@ -1405,7 +1406,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
       case "resolved":
         return "bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200";
       default:
-        return "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -1428,9 +1429,9 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
       case "disputed":
         return "bg-red-100 text-red-800";
       case "terminated":
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -1495,7 +1496,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
        ignored the theme tokens every other surface uses. */
     <div className={embedded ? "" : "min-h-screen"}>
       <div className={`container mx-auto px-4 ${embedded ? "" : "py-8"}`}>
-        <div className={`mb-8 flex items-start gap-4 ${embedded ? "justify-end" : "justify-between"}`}>
+        <div className={embedded ? "flex items-center gap-2" : "mb-8 flex items-start gap-4 justify-between"}>
           {!embedded && (
             <div>
               <h1 className="text-3xl font-bold mb-2">Freelancer Dashboard</h1>
@@ -1504,12 +1505,12 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
               </p>
             </div>
           )}
-          {/* Header actions */}
-          <div className="flex items-center gap-2">
+          {/* See DashboardPage — same reason, same portal. */}
+          <PageActions enabled={embedded}>
             <Link to="/messages">
               <Button variant="outline" size="default" className="flex items-center gap-2">
                 <MessageCircleFreelancer className="h-4 w-4" />
-                Messages
+                <span className="hidden sm:inline">Messages</span>
               </Button>
             </Link>
             <Button
@@ -1522,23 +1523,23 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
               <RefreshCw
                 className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
               />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
-          </div>
+          </PageActions>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : escrows.length === 0 ? (
-          <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+          <Card className="bg-card border-border">
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <FileText className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">
                 No assigned projects
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 text-center">
+              <p className="text-muted-foreground text-center">
                 You don't have any assigned projects yet. Check the jobs page to
                 find open opportunities.
               </p>
@@ -1646,11 +1647,11 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                    <Card className="bg-card border-border">
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <div>
-                            <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                            <CardTitle className="flex items-center gap-2 text-foreground">
                               <User className="h-5 w-5" />
                               {escrow.projectTitle ||
                                 (escrow.projectDescription
@@ -1662,7 +1663,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                     : escrow.projectDescription
                                   : `Project #${escrow.id}`)}
                             </CardTitle>
-                            <CardDescription className="mt-1 text-gray-600 dark:text-gray-400">
+                            <CardDescription className="mt-1 text-muted-foreground">
                               {escrow.projectDescription &&
                               (!escrow.projectTitle ||
                                 escrow.projectDescription.length > 50)
@@ -1728,7 +1729,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                           <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
                             <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                             <div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                              <p className="text-sm text-muted-foreground">
                                 Total Value
                               </p>
                               <p className="font-semibold text-green-700 dark:text-green-400">
@@ -1739,7 +1740,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                           <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                             <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                             <div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                              <p className="text-sm text-muted-foreground">
                                 Released
                               </p>
                               <p className="font-semibold text-blue-700 dark:text-blue-400">
@@ -1750,7 +1751,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                           <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                             <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                             <div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                              <p className="text-sm text-muted-foreground">
                                 Created
                               </p>
                               <p className="font-semibold text-purple-700 dark:text-purple-400">
@@ -1761,7 +1762,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                           <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
                             <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400" />
                             <div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                              <p className="text-sm text-muted-foreground">
                                 Milestones
                               </p>
                               <p className="font-semibold text-orange-700 dark:text-orange-400">
@@ -1784,7 +1785,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                           >
                             <Clock className="h-5 w-5 text-red-600 dark:text-red-400" />
                             <div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                              <p className="text-sm text-muted-foreground">
                                 Days Left
                               </p>
                               <p
@@ -1814,7 +1815,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                               <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
                                 <Star className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
                                 <div>
-                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  <p className="text-sm text-muted-foreground">
                                     Client Rating
                                   </p>
                                   <p className="font-semibold text-yellow-700 dark:text-yellow-400 flex items-center gap-1">
@@ -1824,7 +1825,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                         className={`h-4 w-4 ${
                                           i < escrowRatings[escrow.id].rating
                                             ? "fill-yellow-400 text-yellow-400"
-                                            : "text-gray-300"
+                                            : "text-muted-foreground/40"
                                         }`}
                                       />
                                     ))}
@@ -1872,7 +1873,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                         {/* Milestones - Compact Design */}
                         {expandedEscrow === escrow.id && (
                           <div className="mb-6">
-                            <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                            <h4 className="font-semibold text-foreground mb-3">
                               Milestones (
                               {escrow.milestoneCount ||
                                 escrow.milestones.length}{" "}
@@ -1965,11 +1966,11 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                             ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
                                             : isBlocked
                                               ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                                              : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"
+                                              : "bg-muted/40 border-border"
                                     }`}
                                   >
                                     <div className="flex items-center justify-between mb-2">
-                                      <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                                      <span className="font-medium text-sm text-foreground">
                                         Milestone {index + 1}
                                       </span>
                                       <div className="flex gap-1">
@@ -2008,7 +2009,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                         return null;
                                       }
                                       return (
-                                        <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                                        <div className="text-xs text-muted-foreground mb-2">
                                           <span className="font-medium">
                                             Requirements:
                                           </span>
@@ -2306,8 +2307,8 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
 
                               if (currentMilestoneIndex === -1) {
                                 return (
-                                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
-                                    <p className="text-gray-600 dark:text-gray-400">
+                                  <div className="p-4 bg-muted/40 rounded-lg text-center">
+                                    <p className="text-muted-foreground">
                                       All milestones completed or in progress
                                     </p>
                                   </div>
@@ -2377,7 +2378,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                     ) &&
                                     currentMilestone.description !==
                                       `Milestone ${currentMilestoneIndex + 1}` && (
-                                      <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                                      <div className="mb-3 p-3 bg-card rounded border border-border">
                                         <div className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
                                           Client Requirements:
                                         </div>
@@ -2391,7 +2392,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                   {!isSubmitted && (
                                     <div className="space-y-3">
                                       <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        <label className="block text-sm font-medium text-foreground mb-2">
                                           Your Work Description
                                         </label>
                                         <Textarea
@@ -2408,7 +2409,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                               })
                                             )
                                           }
-                                          className="text-sm bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+                                          className="text-sm bg-card border-input text-foreground"
                                           rows={3}
                                           placeholder="Describe what you've completed for this milestone..."
                                         />
@@ -2417,9 +2418,9 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                       {/* File attachment */}
                                       {isApiConfigured() && (
                                         <div>
-                                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                          <label className="block text-sm font-medium text-foreground mb-1.5">
                                             Attach File{" "}
-                                            <span className="font-normal text-gray-400 dark:text-gray-500">
+                                            <span className="font-normal text-muted-foreground">
                                               (optional · PDF, images, docs · max 10 MB)
                                             </span>
                                           </label>
@@ -2431,7 +2432,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                               </span>
                                               <button
                                                 type="button"
-                                                className="ml-auto text-gray-400 hover:text-red-500 text-xs shrink-0"
+                                                className="ml-auto text-muted-foreground hover:text-destructive text-xs shrink-0"
                                                 onClick={() =>
                                                   setMilestoneAttachments(
                                                     (prev) => ({
@@ -2452,7 +2453,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                               </span>
                                               <button
                                                 type="button"
-                                                className="ml-auto text-gray-400 hover:text-red-500 text-xs shrink-0"
+                                                className="ml-auto text-muted-foreground hover:text-destructive text-xs shrink-0"
                                                 onClick={() =>
                                                   setMilestoneFiles((prev) => ({
                                                     ...prev,
@@ -2464,7 +2465,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                               </button>
                                             </div>
                                           ) : (
-                                            <label className="flex items-center justify-center gap-2 p-2.5 rounded border-2 border-dashed border-gray-200 dark:border-gray-600 cursor-pointer hover:border-primary/50 transition-colors text-sm text-gray-500 dark:text-gray-400">
+                                            <label className="flex items-center justify-center gap-2 p-2.5 rounded border-2 border-dashed border-input cursor-pointer hover:border-primary/50 transition-colors text-sm text-muted-foreground">
                                               <input
                                                 type="file"
                                                 className="sr-only"
@@ -2739,7 +2740,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                       className="w-full p-2.5 border rounded-lg resize-none text-sm"
                       rows={3}
                     />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       This message will be sent to the client along with your
                       resubmission.
                     </p>
@@ -2749,7 +2750,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                     <div>
                       <label className="block text-sm font-medium mb-1.5">
                         Attachment{" "}
-                        <span className="font-normal text-gray-500 dark:text-gray-400">
+                        <span className="font-normal text-muted-foreground">
                           (optional)
                         </span>
                       </label>
@@ -2760,14 +2761,14 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                           </span>
                           <button
                             type="button"
-                            className="text-gray-400 hover:text-red-500 px-2"
+                            className="text-muted-foreground hover:text-destructive px-2"
                             onClick={() => setResubmitFile(null)}
                           >
                             Remove
                           </button>
                         </div>
                       ) : (
-                        <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-primary/40 text-sm text-gray-500 dark:text-gray-400">
+                        <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 border-dashed border-input cursor-pointer hover:border-primary/40 text-sm text-muted-foreground">
                           <input
                             type="file"
                             className="sr-only"
