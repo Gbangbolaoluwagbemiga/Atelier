@@ -263,10 +263,11 @@ export default function AutopilotComposePage() {
             <div className="text-sm text-muted-foreground leading-relaxed">
               <strong className="text-foreground font-medium">You fund this, not Autopilot.</strong>{" "}
               The next step opens the escrow from your own wallet with this brief
-              filled in, so the money and the dispute rights stay yours. Handing
-              day-to-day management to Autopilot needs the delegation that is
-              built and tested but not yet deployed — until then, run the job
-              yourself or wait for the redeploy.
+              filled in, so the money and the dispute rights stay yours. Once it
+              is funded, hand day-to-day management to Autopilot from the job in
+              My Jobs — it can hire, review and pay the freelancer, and it can
+              never pay itself or settle a dispute. You can take control back at
+              any moment.
             </div>
           </div>
 

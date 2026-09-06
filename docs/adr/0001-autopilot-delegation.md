@@ -1,17 +1,25 @@
 # ADR 0001 — Autopilot needs a scoped job manager on-chain
 
-**Status:** implemented and tested; **not yet deployed**
-**Date:** 2026-09-05 · implemented 2026-09-06
+**Status:** implemented, tested, **deployed**
+**Date:** 2026-09-05 · implemented 2026-09-06 · deployed 2026-09-06
 
-> **Where this stands.** The contract change and its tests are in the repo:
-> `setJobManager` / `revokeJobManager`, the permission boundary, and the
-> one-way key as a fuzzed invariant (25 tests, from a baseline of zero). What
-> is NOT done: the deployed contract at `0x6142…ab59` predates all of it, and
-> Atelier's UI does not yet call `setJobManager`. Until both land, Autopilot in
-> production is still the custodial arrangement described below, and the
-> product must keep saying so.
-
----
+> **Live on Arc testnet.**
+>
+> | | |
+> |---|---|
+> | Proxy (this is the contract) | `0x370e1517Fe56fF3ebCFc3D7ed08563fB88910C11` |
+> | Implementation | `0x1Eda695152Ad4c14432Aa7941D21494cF24C0D1C` |
+> | `version()` | `2.0.0-autopilot` |
+> | Deploy block | `60794918` |
+>
+> The pre-existing `0x6142…ab59` is superseded and keeps its own escrows; it is
+> not upgradeable and has no job manager.
+>
+> The in-source markers in `PostJobPage.tsx` and `AutopilotComposePage.tsx` have
+> been resolved, because the mechanism they were hedging now exists on-chain.
+> What has NOT changed is the trust story: the contract cannot take a client's
+> money, and the proxy owner can replace the implementation. Both clauses belong
+> in the submission.
 
 ## The claim we want to make
 

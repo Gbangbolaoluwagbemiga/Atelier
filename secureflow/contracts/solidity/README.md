@@ -91,7 +91,7 @@ layout and carries on, with wrong numbers and real money behind them.
 
 | Network | Address | Notes |
 |---|---|---|
-| Arc EVM Testnet (`5042002`) | `0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59` | **Pre-ETHOnline.** Not upgradeable, no job manager. Superseded. |
-| Arc EVM Testnet | _pending_ | UUPS proxy with the job manager. Blocks Autopilot's on-chain claim. |
+| Arc EVM Testnet (`5042002`) | `0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59` | **Pre-ETHOnline.** Not upgradeable, no job manager. Superseded; keeps its own escrows. |
+| Arc EVM Testnet (`5042002`) | **`0x370e1517Fe56fF3ebCFc3D7ed08563fB88910C11`** | **Current.** UUPS proxy, `2.0.0-autopilot`, deployed in block `60794918`. Implementation `0x1Eda695152Ad4c14432Aa7941D21494cF24C0D1C`. |
 
 See `docs/adr/0001-autopilot-delegation.md`.

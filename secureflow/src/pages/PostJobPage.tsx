@@ -192,21 +192,17 @@ export default function PostJobPage() {
         contract, with the same rights — and that is what makes the amber column
         safe to choose rather than a leap of faith.
 
-        ┌─ TRUE IN THE REPO, NOT YET ON-CHAIN ─────────────────────────────────┐
-        │ The mechanism now exists: SecureFlow.sol carries a scoped job manager │
-        │ that may hire, approve and reject and nothing else, with the one-way  │
-        │ key enforced at two points and proved by a fuzzed invariant over      │
-        │ 128,000 calls. See docs/adr/0001-autopilot-delegation.md.             │
-        │                                                                       │
-        │ What is still missing is deployment. The live contract at             │
-        │ 0x6142…ab59 predates the change, and Atelier does not yet call        │
-        │ setJobManager when it creates an Autopilot job. Until BOTH land, this │
-        │ paragraph describes the contract in this repo rather than the one a   │
-        │ client's money would actually sit in — so it must not ship.           │
-        │                                                                       │
-        │ Delete this marker when the redeploy and the wiring are done, not     │
-        │ when the tests go green.                                              │
-        └───────────────────────────────────────────────────────────────────────┘
+        This paragraph is now backed by a deployed contract, not a promise.
+        SecureFlow at 0x370e1517Fe56fF3ebCFc3D7ed08563fB88910C11 carries a scoped
+        job manager that may hire, approve and reject and nothing else — no
+        dispute, no cancel, no withdrawal, and it can never become the
+        beneficiary. The one-way key is enforced at two points and proved by a
+        fuzzed invariant over 128,000 calls. See
+        docs/adr/0001-autopilot-delegation.md.
+
+        What it still does NOT say, and must not: that the arrangement is
+        trustless. The contract cannot take a client's money; the proxy owner can
+        replace the implementation. Both clauses, always.
       */}
       <motion.section
         initial={{ opacity: 0 }}
