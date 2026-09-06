@@ -11,8 +11,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
  * job was. The join has to happen before the latch.
  */
 
-vi.mock("@/lib/atelier/patron", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/atelier/patron")>();
+vi.mock("@/lib/atelier/agent-api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/atelier/agent-api")>();
   return actual;
 });
 
@@ -65,7 +65,7 @@ afterEach(() => {
 
 describe("fetchDecisionsForEscrow", () => {
   it("returns only the decisions belonging to that escrow's task", async () => {
-    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/patron");
+    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/agent-api");
     const log = await fetchDecisionsForEscrow(7);
 
     expect(log.map((d) => d.id)).toEqual(["a1", "a2", "a3"]);
@@ -76,33 +76,33 @@ describe("fetchDecisionsForEscrow", () => {
    * though B escalated earlier in wall-clock time.
    */
   it("does not leak another job's escalation into this one", async () => {
-    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/patron");
+    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/agent-api");
     const log = await fetchDecisionsForEscrow(7);
 
     expect(log.every((d) => d.by === "agent")).toBe(true);
   });
 
   it("still latches escalation within the job that actually escalated", async () => {
-    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/patron");
+    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/agent-api");
     const log = await fetchDecisionsForEscrow(9);
 
     expect(log.map((d) => d.by)).toEqual(["agent", "human"]);
   });
 
   it("returns an empty log for an escrow the daemon never saw", async () => {
-    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/patron");
+    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/agent-api");
     expect(await fetchDecisionsForEscrow(4242)).toEqual([]);
   });
 
   it("matches escrow ids across number and string forms", async () => {
-    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/patron");
+    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/agent-api");
     const byNumber = await fetchDecisionsForEscrow(7);
     const byString = await fetchDecisionsForEscrow("7");
     expect(byString.map((d) => d.id)).toEqual(byNumber.map((d) => d.id));
   });
 
   it("orders the log oldest first, because it is read downward", async () => {
-    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/patron");
+    const { fetchDecisionsForEscrow } = await import("@/lib/atelier/agent-api");
     const log = await fetchDecisionsForEscrow(7);
     const times = log.map((d) => d.at);
     expect(times).toEqual([...times].sort((a, b) => a - b));

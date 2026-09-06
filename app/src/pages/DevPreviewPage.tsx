@@ -19,7 +19,7 @@ import { useState } from "react";
 import { DecisionLog } from "@/components/atelier/decision-log";
 import { JobDecisionLog } from "@/components/atelier/job-decision-log";
 import { useDecisions } from "@/hooks/use-decisions";
-import { AUTOPILOT_CONFIGURED } from "@/lib/atelier/patron";
+import { AUTOPILOT_CONFIGURED } from "@/lib/atelier/agent-api";
 import type { Decision } from "@/lib/atelier/actor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

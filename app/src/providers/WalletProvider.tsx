@@ -42,7 +42,7 @@ createAppKit({
   metadata: {
     name: "Atelier",
     description: "Milestone-based freelancer escrow on Arc EVM",
-    url: typeof window !== "undefined" ? window.location.origin : "https://secureflow.app",
+    url: typeof window !== "undefined" ? window.location.origin : "https://atelier.app",
     icons: ["/favicon.ico"],
   },
   features: {

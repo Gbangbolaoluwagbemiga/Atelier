@@ -6,7 +6,7 @@
 // instead of a week, and what lets us change our minds about surfaces later.
 //
 // The architectural property that makes all of this cheap: Patron's poller reads
-// the SecureFlow subgraph, not a list of applicants it maintains. It has no idea
+// the Atelier subgraph, not a list of applicants it maintains. It has no idea
 // who produced an application. So a worker applying through this service flows
 // into reviewApplications → acceptFreelancer → reviewMilestone → approveMilestone
 // with zero changes to the scorer, the reviewer, the agent, the store, the SSE
@@ -15,7 +15,7 @@
 
 import crypto from "node:crypto";
 import * as store from "../store.js";
-import * as secureflow from "../web3/atelier.js";
+import * as atelier from "../web3/atelier.js";
 import { createSignerFor } from "../circle/circleSigner.js";
 import { config } from "../config.js";
 import { dripGas, provisionWorkerWallet, workerBalance, withdrawTo } from "./wallets.js";
@@ -145,7 +145,7 @@ export async function openQuestsFor(workerId: string): Promise<Quest[]> {
   return Promise.all(
     quests.map(async (q) => {
       try {
-        return { ...q, alreadyApplied: await secureflow.hasApplied(BigInt(q.escrowId), address) };
+        return { ...q, alreadyApplied: await atelier.hasApplied(BigInt(q.escrowId), address) };
       } catch {
         return q; // a chain hiccup must not empty someone's job board
       }
@@ -187,7 +187,7 @@ const MIN_GAS_USDC = Number(process.env.WORKER_MIN_GAS_USDC ?? 0.01);
 function signerFor(worker: store.WorkerRow) {
   if (worker.mode === "own") {
     throw new UserFacingError(
-      "You signed up with your own wallet, so Patron can't sign for you — apply from SecureFlow with your wallet and Patron will still see it.",
+      "You signed up with your own wallet, so Patron can't sign for you — apply from Atelier with your wallet and Patron will still see it.",
     );
   }
   if (!worker.walletAddress) throw new UserFacingError("No wallet on this account yet.");
@@ -197,7 +197,7 @@ function signerFor(worker: store.WorkerRow) {
 /**
  * Apply to a commission.
  *
- * The freelancer's OWN wallet signs this, not Patron's — SecureFlow authorises
+ * The freelancer's OWN wallet signs this, not Patron's — Atelier authorises
  * applyToJob on msg.sender, so an application signed by Patron would record
  * Patron as the applicant. Their tap is the instruction; Patron is the broker
  * executing it in their name.
@@ -263,7 +263,7 @@ export async function apply(
   // twice, and the scorer ranking someone against themselves.
   const signer = signerFor(worker);
   await ensureGas(worker);
-  if (await secureflow.hasApplied(BigInt(escrowId), signer.address)) {
+  if (await atelier.hasApplied(BigInt(escrowId), signer.address)) {
     throw new UserFacingError(
       "You've already applied to this one — the guild master has your application and will come back to you either way.",
     );
@@ -271,18 +271,18 @@ export async function apply(
 
   // Labelled rather than concatenated, so the scorer can tell the applicant's
   // own words from a link they provided, and so the link survives as something
-  // readable on-chain and on SecureFlow's own interface.
+  // readable on-chain and on Atelier's own interface.
   const full = portfolio ? `${letter}\n\nPast work: ${portfolio}` : letter;
 
   const timeline = proposedTimelineDays ?? (await defaultTimelineFor(escrowId));
-  const txHash = await secureflow.applyToJob(BigInt(escrowId), full, BigInt(timeline), signer);
+  const txHash = await atelier.applyToJob(BigInt(escrowId), full, BigInt(timeline), signer);
   return { txHash };
 }
 
 /**
  * Submit finished work for a milestone.
  *
- * `startWork` is called first and its failure swallowed on purpose: SecureFlow
+ * `startWork` is called first and its failure swallowed on purpose: Atelier
  * requires the lifecycle step, but it reverts if the job is already in progress,
  * and a worker submitting their second milestone should not be shown a contract
  * error about a state transition that already happened.
@@ -302,7 +302,7 @@ export async function submit(
   /**
    * Are you actually the person hired for this job?
    *
-   * SecureFlow answers this with Unauthorized(), which is correct and useless:
+   * Atelier answers this with Unauthorized(), which is correct and useless:
    * a freelancer typed /submit 61 for a job still open for applications that
    * they had never applied to, and got a raw viem stack trace — calldata,
    * gas estimation error, a link to the viem docs — after their gas had already
@@ -313,7 +313,7 @@ export async function submit(
    */
   const wallet = worker.walletAddress?.toLowerCase();
   try {
-    const escrow = (await secureflow.getEscrow(BigInt(escrowId))) as { beneficiary?: string };
+    const escrow = (await atelier.getEscrow(BigInt(escrowId))) as { beneficiary?: string };
     const hired = (escrow?.beneficiary ?? "").toLowerCase();
     const nobodyHired = !hired || /^0x0{40}$/.test(hired);
     if (nobodyHired) {
@@ -339,11 +339,11 @@ export async function submit(
   const signer = signerFor(worker);
   await ensureGas(worker);
   try {
-    await secureflow.startWork(BigInt(escrowId), signer);
+    await atelier.startWork(BigInt(escrowId), signer);
   } catch {
     // already started — expected on every milestone after the first
   }
-  const txHash = await secureflow.submitMilestone(BigInt(escrowId), BigInt(index), text, signer);
+  const txHash = await atelier.submitMilestone(BigInt(escrowId), BigInt(index), text, signer);
   return { txHash };
 }
 
@@ -429,7 +429,7 @@ export async function myWork(
     candidates.map(async (t) => {
       if (hiredFor.has(t.escrowId as string)) return { hired: true, applied: true };
       try {
-        return { hired: false, applied: await secureflow.hasApplied(BigInt(t.escrowId as string), worker.walletAddress as `0x${string}`) };
+        return { hired: false, applied: await atelier.hasApplied(BigInt(t.escrowId as string), worker.walletAddress as `0x${string}`) };
       } catch {
         return { hired: false, applied: false }; // a chain hiccup hides a row, never breaks the list
       }

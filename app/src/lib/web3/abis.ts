@@ -51,6 +51,6 @@ export const erc20Abi = [
   },
 ] as const;
 
-// Export the SecureFlow ABI
+// Export the Atelier ABI
 export { atelierAbi };
 export default atelierAbi;

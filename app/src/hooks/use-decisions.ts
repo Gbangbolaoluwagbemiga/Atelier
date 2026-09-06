@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AUTOPILOT_CONFIGURED,
   fetchDecisionsForEscrow,
-} from "@/lib/atelier/patron";
+} from "@/lib/atelier/agent-api";
 import type { Decision } from "@/lib/atelier/actor";
 
 const POLL_MS = 8000;

@@ -32,7 +32,7 @@ const LINK_TIMEOUT_MS = 8_000;
 
 export interface ApplicantEvidence {
   address: string;
-  /** On-chain, written to SecureFlow when a job completes. Verifiable by anyone. */
+  /** On-chain, written to Atelier when a job completes. Verifiable by anyone. */
   rating: { average: number; count: number } | null;
   completedJobs: number;
   disputedJobs: number;

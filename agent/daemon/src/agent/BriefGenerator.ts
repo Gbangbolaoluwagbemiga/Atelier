@@ -1,7 +1,7 @@
 // BriefGenerator — turns a raw instruction (from an AI agent via x402, or a human
 // via the UI) into an enforceable acceptance brief: explicit criteria, a milestone
 // split, and a keccak256 hash of the criteria that gets posted on-chain in
-// SecureFlow's `projectDescription` so the brief can't be silently altered later.
+// Atelier's `projectDescription` so the brief can't be silently altered later.
 //
 // Structured outputs (zod schema validated on the way back out) replace the v1
 // regex `/\{[\s\S]*\}/` extraction — a malformed or truncated response now surfaces
@@ -168,7 +168,7 @@ export async function generateBrief(instruction: string): Promise<BriefGeneratio
     throw new Error(`Brief budget must be positive, got $${parsed.budget}`);
   }
 
-  // Hash the criteria for on-chain posting — embedded in SecureFlow's projectDescription
+  // Hash the criteria for on-chain posting — embedded in Atelier's projectDescription
   // so the brief Patron reviews against can't be silently altered after the escrow is live.
   const criteriaJson = JSON.stringify(parsed.criteria);
   const briefHash = keccak256(toBytes(criteriaJson));

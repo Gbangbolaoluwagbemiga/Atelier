@@ -33,7 +33,7 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
-vi.mock("@/lib/atelier/patron", () => ({
+vi.mock("@/lib/atelier/agent-api", () => ({
   AUTOPILOT_CONFIGURED: true,
 }));
 

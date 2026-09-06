@@ -38,7 +38,7 @@ export default function HomePage() {
 
       // platformFeeBP is needed to back out the ORIGINAL work value from
       // escrow.platformFee, since the contract decrements escrow.totalAmount
-      // when a client gets refunded in a dispute (SecureFlow.sol:451).
+      // when a client gets refunded in a dispute (Atelier.sol:451).
       const platformFeeBP = await contractService.getPlatformFeeBP();
 
       let activeEscrows = 0;

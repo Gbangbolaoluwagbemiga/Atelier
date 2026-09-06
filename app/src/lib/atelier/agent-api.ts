@@ -6,10 +6,10 @@
  * applicants and release payment — surfaced inside Atelier. This module is the
  * seam.
  *
- * The daemon is NOT being rewritten into SecureFlow's Express backend. It works,
+ * The daemon is NOT being rewritten into Atelier's Express backend. It works,
  * it runs unattended, and a rewrite would be a lot of new code that produces
  * exactly the behaviour we already have. So Atelier talks to two backends: the
- * Express API for SecureFlow's own concerns, and this one for agent activity.
+ * Express API for Atelier's own concerns, and this one for agent activity.
  *
  * Shapes here mirror `patron/daemon/src/store.ts` and `patron/web/src/types.ts`.
  * They are duplicated rather than imported because the daemon is a separate
@@ -27,7 +27,7 @@ const BASE = (
   .trim()
   .replace(/\/$/, "");
 
-/** Whether Autopilot is reachable at all. False in a SecureFlow-only deploy. */
+/** Whether Autopilot is reachable at all. False in a Atelier-only deploy. */
 export const AUTOPILOT_CONFIGURED = BASE.length > 0;
 
 /* ── Daemon wire shapes ──────────────────────────────────────────────────── */
@@ -65,7 +65,7 @@ export interface TaskRow {
  * client can see when they are deciding whether to trust the arrangement.
  *
  * `escalated_to_human` is the daemon's own name for hitting its revision limit
- * and calling in SecureFlow's dispute system. Everything downstream of it is a
+ * and calling in Atelier's dispute system. Everything downstream of it is a
  * person's judgement, so it must not be painted as the agent's.
  */
 const HUMAN_DECISION_TYPES: ReadonlySet<string> = new Set([

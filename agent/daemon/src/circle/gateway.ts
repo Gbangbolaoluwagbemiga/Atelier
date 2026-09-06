@@ -27,7 +27,7 @@ export interface PatronGateway {
   getTransferById(id: string): Promise<TransferResponse>;
   deposit(amount: string): Promise<{ formattedAmount: string }>;
   withdraw(amount: string): Promise<{ formattedAmount: string }>;
-  /** MPC-signed plain-USDC transfer from the treasury wallet to any address (e.g. funding SecureFlow escrow). */
+  /** MPC-signed plain-USDC transfer from the treasury wallet to any address (e.g. funding Atelier escrow). */
   transferUsdc(to: string, amount: string): Promise<{ hash: string; formattedAmount: string }>;
 }
 
@@ -281,7 +281,7 @@ export function createPatronGateway(): PatronGateway {
     return { formattedAmount: amount };
   }
 
-  // Plain USDC out of the treasury wallet — how Patron funds a SecureFlow escrow
+  // Plain USDC out of the treasury wallet — how Patron funds a Atelier escrow
   // deposit from its own balance. MPC-signed, so no raw key ever touches it.
   async function transferUsdc(to: string, amount: string): Promise<{ hash: string; formattedAmount: string }> {
     const value = parseUnits(amount, 6);

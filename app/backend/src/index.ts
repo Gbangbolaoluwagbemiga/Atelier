@@ -18,9 +18,9 @@ const apiSecret = process.env.API_SECRET;
 
 // Build a CORS origin matcher that supports:
 //  - FRONTEND_URL: comma-separated list of exact origins, e.g.
-//      https://secureflow-arc.vercel.app,https://my-preview.vercel.app
+//      https://atelier-arc.vercel.app,https://my-preview.vercel.app
 //  - FRONTEND_URL_PATTERN: a regex string to allow preview deployments, e.g.
-//      https://secureflow.*\.vercel\.app
+//      https://atelier.*\.vercel\.app
 //  - If neither is set, allow all origins (open for local dev).
 const rawOrigins = (process.env.FRONTEND_URL ?? "")
   .split(",")
@@ -95,10 +95,10 @@ app.use("/v1/analytics", auth, analyticsRouter);
 app.use("/v1/applications", auth, applicationsRouter);
 
 app.listen(port, () => {
-  console.log(`secureflow-api listening on :${port}`);
+  console.log(`atelier-api listening on :${port}`);
   if (!apiSecret) {
     console.warn(
-      "[secureflow-api] API_SECRET is unset; /v1 routes are open (set API_SECRET for production)",
+      "[atelier-api] API_SECRET is unset; /v1 routes are open (set API_SECRET for production)",
     );
   }
 });

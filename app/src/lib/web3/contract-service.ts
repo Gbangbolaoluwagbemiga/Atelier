@@ -170,7 +170,7 @@ export class ContractService {
     );
     const log = (msg: string, extra?: unknown) =>
       // eslint-disable-next-line no-console
-      console.warn(`[secureflow:milestone-recovery] esc=${escrowId} ${msg}`, extra ?? "");
+      console.warn(`[atelier:milestone-recovery] esc=${escrowId} ${msg}`, extra ?? "");
     try {
       // The public drpc RPC caps eth_getLogs ranges aggressively (sometimes
       // as little as 1k blocks). Walk backwards in small chunks and fall back
@@ -550,7 +550,7 @@ export class ContractService {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      return { ok: false, jobCreationPaused: true, userMessage: `Cannot reach the SecureFlow contract: ${msg}` };
+      return { ok: false, jobCreationPaused: true, userMessage: `Cannot reach the Atelier contract: ${msg}` };
     }
   }
 

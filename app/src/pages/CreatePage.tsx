@@ -14,7 +14,7 @@ import { useCreateEscrow } from "@/hooks/use-escrows";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { parseEther, parseUnits } from "viem";
-import { AUTOPILOT_BRIEF_KEY } from "@/lib/atelier/patron";
+import { AUTOPILOT_BRIEF_KEY } from "@/lib/atelier/agent-api";
 
 const USDC_ADDRESS = (
   (import.meta.env.VITE_USDC_TOKEN_CONTRACT as string | undefined) ?? ""

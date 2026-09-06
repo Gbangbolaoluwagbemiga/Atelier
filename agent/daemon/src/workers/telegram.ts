@@ -12,7 +12,7 @@
 
 import * as store from "../store.js";
 import * as workers from "./service.js";
-import * as secureflow from "../web3/atelier.js";
+import * as atelier from "../web3/atelier.js";
 import { config } from "../config.js";
 import { llmPaused, llmPauseRemaining } from "../llm-status.js";
 
@@ -492,7 +492,7 @@ async function handleText(msg: TgMessage) {
       let rating = "no ratings yet";
       try {
         if (worker.walletAddress) {
-          const r = await secureflow.getAverageRating(worker.walletAddress as `0x${string}`);
+          const r = await atelier.getAverageRating(worker.walletAddress as `0x${string}`);
           if (r.count > 0) rating = `${"★".repeat(Math.round(r.average))} ${r.average.toFixed(1)}/5 from ${r.count} job(s)`;
         }
       } catch {
@@ -800,7 +800,7 @@ async function handleText(msg: TgMessage) {
  * link to the viem docs. It told them nothing they could act on and looked
  * like the product had broken.
  *
- * SecureFlow's custom errors are the useful part, so they are translated. The
+ * Atelier's custom errors are the useful part, so they are translated. The
  * hex selectors are matched directly because the revert reaches us as a raw
  * `execution reverted: 0x…` string rather than a decoded error.
  */

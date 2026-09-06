@@ -4,7 +4,7 @@
 // gasless EIP-3009 authorization, settled sub-cent via Gateway batching.
 //
 // This is the commission fee that OPENS the order — not the job budget. The job
-// budget is a separate amount locked in SecureFlow escrow once the brief is
+// budget is a separate amount locked in Atelier escrow once the brief is
 // generated (see index.ts /api/hire handler). Fee = pay-per-call; escrow = the vault.
 
 import type { IncomingMessage, ServerResponse } from "node:http";

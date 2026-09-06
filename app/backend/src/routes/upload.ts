@@ -84,7 +84,7 @@ export function buildUploadAuthMessage(
   timestamp: string,
 ): string {
   return [
-    "SecureFlow file upload authorization",
+    "Atelier file upload authorization",
     `Escrow: ${escrowId}`,
     `Milestone: ${milestoneIndex}`,
     `Wallet: ${walletAddress.toLowerCase()}`,

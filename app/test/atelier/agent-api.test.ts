@@ -5,7 +5,7 @@ import {
   applyEscalationLatch,
   toDecision,
   type DecisionRow,
-} from "@/lib/atelier/patron";
+} from "@/lib/atelier/agent-api";
 import type { Decision } from "@/lib/atelier/actor";
 
 const d = (id: string, by: Decision["by"], at: number): Decision => ({

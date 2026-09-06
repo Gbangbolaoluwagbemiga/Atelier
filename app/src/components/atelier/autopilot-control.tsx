@@ -18,7 +18,7 @@ import { Bot, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useJobManager } from "@/hooks/use-job-manager";
-import { AUTOPILOT_CONFIGURED } from "@/lib/atelier/patron";
+import { AUTOPILOT_CONFIGURED } from "@/lib/atelier/agent-api";
 import { toastError } from "@/lib/atelier/errors";
 
 function shortAddress(a: string): string {

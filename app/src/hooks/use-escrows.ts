@@ -284,7 +284,7 @@ export function useCreateEscrow() {
           }
         } catch (e) {
           // Non-fatal — escrow is already created, just log
-          console.warn("[secureflow] Failed to notify directly assigned freelancer:", e);
+          console.warn("[atelier] Failed to notify directly assigned freelancer:", e);
         }
       }
     },

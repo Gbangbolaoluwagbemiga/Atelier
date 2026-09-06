@@ -15,7 +15,7 @@ import { humanizeError } from "@/lib/atelier/errors";
 import {
   AUTOPILOT_CONFIGURED,
   fetchAutopilotAddress,
-} from "@/lib/atelier/patron";
+} from "@/lib/atelier/agent-api";
 
 export interface JobManagerState {
   /** The managing agent's address, or null when the client runs the job. */

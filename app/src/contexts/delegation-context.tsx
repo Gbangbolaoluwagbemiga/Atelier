@@ -76,7 +76,18 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
     try {
       // In a real implementation, this would load from the blockchain
       // For now, we'll use localStorage for demo purposes
-      const stored = localStorage.getItem("secureflow_delegations");
+      /* Renamed from "secureflow_delegations". Read the old key once and carry
+         it over — a rename that silently orphans someone's stored delegations
+         is a data loss dressed up as a branding change. */
+      let stored = localStorage.getItem("atelier_delegations");
+      if (!stored) {
+        const legacy = localStorage.getItem("secureflow_delegations");
+        if (legacy) {
+          localStorage.setItem("atelier_delegations", legacy);
+          localStorage.removeItem("secureflow_delegations");
+          stored = legacy;
+        }
+      }
       if (stored) {
         setDelegations(JSON.parse(stored));
       }
@@ -87,7 +98,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
   const saveDelegations = (newDelegations: Delegation[]) => {
     setDelegations(newDelegations);
     localStorage.setItem(
-      "secureflow_delegations",
+      "atelier_delegations",
       JSON.stringify(newDelegations),
     );
   };

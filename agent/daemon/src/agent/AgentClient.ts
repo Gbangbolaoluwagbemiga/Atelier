@@ -19,7 +19,7 @@ import { reviewWork, buildRevisionRequest, shouldEscalateToHuman, type WorkRevie
 import type { AcceptanceBrief, AgentDecision, Application } from "../web3/types.js";
 import { graphQuery, isGraphConfigured } from "../graph/client.js";
 import { GET_JOB_APPLICATIONS, type GQLApplication } from "../graph/queries.js";
-import * as secureflow from "../web3/atelier.js";
+import * as atelier from "../web3/atelier.js";
 import type { PatronGateway } from "../circle/gateway.js";
 import { config } from "../config.js";
 import * as store from "../store.js";
@@ -91,15 +91,15 @@ export class AgentClient {
       `Brief generated: "${brief.title}" — ${brief.criteria.length} acceptance criteria, ${brief.milestones.length} milestone(s)`,
     );
 
-    this.emit("job_posted", "Posting job to SecureFlow escrow on Arc...");
-    const { escrowId, txHash } = await secureflow.createEscrow({
+    this.emit("job_posted", "Posting job to Atelier escrow on Arc...");
+    const { escrowId, txHash } = await atelier.createEscrow({
       totalAmount: parseUnits(brief.budget.toString(), 6),
       durationDays: BigInt(brief.durationDays),
       milestoneAmounts: brief.milestones.map((m) => parseUnits(m.amount.toString(), 6)),
       milestoneDescriptions: brief.milestones.map((m) => m.description),
       projectTitle: brief.title,
       // briefHash appended so the brief can't be silently altered after the escrow
-      // is live, but as plain readable text — SecureFlow's own UI renders this field
+      // is live, but as plain readable text — Atelier's own UI renders this field
       // raw for freelancers, and nothing downstream ever parses it back as JSON, so
       // JSON.stringify()-ing it just showed up as gibberish on a real, live-facing surface.
       projectDescription: `${instruction}\n\nCriteria hash (verifies the brief hasn't changed): ${brief.briefHash}`,
@@ -108,7 +108,7 @@ export class AgentClient {
       escrowId: escrowId.toString(),
       amountUsdc: brief.budget.toString(),
       txHash,
-      counterparty: "SecureFlow escrow",
+      counterparty: "Atelier escrow",
       title: brief.title,
     });
 
@@ -203,7 +203,7 @@ export class AgentClient {
       }
     }
 
-    const txHash = await secureflow.acceptFreelancer(escrowId, winner.freelancerAddress as `0x${string}`);
+    const txHash = await atelier.acceptFreelancer(escrowId, winner.freelancerAddress as `0x${string}`);
     const winnerDecision: AgentDecision = {
       id: crypto.randomUUID(),
       taskId: escrowId.toString(),
@@ -257,7 +257,7 @@ export class AgentClient {
         escrowId: escrowId.toString(),
       });
 
-      const txHash = await secureflow.approveMilestone(escrowId, milestoneIndex);
+      const txHash = await atelier.approveMilestone(escrowId, milestoneIndex);
       const milestoneAmount = brief.milestones[Number(milestoneIndex)]?.amount;
       this.emit("payment_released", "Payment released. Milestone complete.", {
         escrowId: escrowId.toString(),
@@ -299,7 +299,7 @@ export class AgentClient {
         taskId: escrowId.toString(),
         type: "escalated",
         reasoning: [
-          `After ${maxRounds} revision round(s), the work still does not meet the brief. Escalating to a human arbiter via SecureFlow's dispute system.`,
+          `After ${maxRounds} revision round(s), the work still does not meet the brief. Escalating to a human arbiter via Atelier's dispute system.`,
           "",
           `Final submission scored ${review.score}/100.`,
           review.feedback ? `What was still missing: ${review.feedback}` : "",
@@ -313,10 +313,10 @@ export class AgentClient {
         timestamp: Date.now(),
       };
       this.decisions.push(decision);
-      const txHash = await secureflow.disputeMilestone(
+      const txHash = await atelier.disputeMilestone(
         escrowId,
         milestoneIndex,
-        // This string is what the human arbiter sees on SecureFlow. "Revision
+        // This string is what the human arbiter sees on Atelier. "Revision
         // rounds exhausted" tells them nothing they can rule on.
         `Patron AI: ${history.length} revision round(s) exhausted. Final submission scored ${review.score}/100. ${
           review.feedback || "See the decision log for the full reasoning."
@@ -371,7 +371,7 @@ export class AgentClient {
       timestamp: Date.now(),
     };
     this.decisions.push(decision);
-    const txHash = await secureflow.rejectMilestone(escrowId, milestoneIndex, feedback);
+    const txHash = await atelier.rejectMilestone(escrowId, milestoneIndex, feedback);
     this.emit(
       "revision_requested",
       `Work scored ${review.score}/100. Revision requested (${revisionsRemaining} round(s) left).`,

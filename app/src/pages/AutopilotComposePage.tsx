@@ -37,7 +37,7 @@ import {
   AUTOPILOT_BRIEF_KEY,
   previewBrief,
   type AutopilotBrief,
-} from "@/lib/atelier/patron";
+} from "@/lib/atelier/agent-api";
 
 const EXAMPLES = [
   "A logo for a coffee roastery. Budget $50, 3 days.",

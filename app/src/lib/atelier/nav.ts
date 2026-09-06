@@ -15,7 +15,7 @@
  *   Analytics     platform and personal figures.
  *   Disputes      arbitration, for the people who do it.
  *
- * SecureFlow's original routes still resolve — see the redirects in App.tsx —
+ * Atelier's original routes still resolve — see the redirects in App.tsx —
  * because there are live users with bookmarks and a deployed app that links
  * into /create and /dashboard.
  */
@@ -103,7 +103,7 @@ export function isCurrent(pathname: string, to: string): boolean {
 }
 
 /**
- * SecureFlow's original paths, kept alive.
+ * Atelier's original paths, kept alive.
  *
  * These are not dead weight: the deployed app, the README, the subgraph docs
  * and at least one live user's bookmarks all point at them. Breaking them to

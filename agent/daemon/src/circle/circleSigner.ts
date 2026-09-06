@@ -23,11 +23,11 @@ const { createEIP1193Provider } = nodeRequire(
  *   • sign x402 payment authorizations (EIP-712 `signTypedData`) — this is exactly
  *     the `BatchEvmSigner` shape the Gateway batching rail needs, so payments run
  *     under MPC, and
- *   • send arbitrary contract-write transactions on Arc — including SecureFlow's
+ *   • send arbitrary contract-write transactions on Arc — including Atelier's
  *     `createEscrow` / `acceptFreelancer` / `approveMilestone` — via `writeContract`,
  *     which works for any ABI (arrays, strings, structs) since it's just ABI-encoded
  *     calldata under the hood. This is what de-risks Phase 0 Spike A: a Circle
- *     Programmable Wallet CAN execute SecureFlow's complex writes, no hybrid
+ *     Programmable Wallet CAN execute Atelier's complex writes, no hybrid
  *     viem-hot-wallet fallback needed.
  *
  * Shape matches `BatchEvmSigner` from @circle-fin/x402-batching: `{ address, signTypedData }`.
@@ -40,7 +40,7 @@ export interface CircleSigner {
     primaryType: string;
     message: Record<string, unknown>;
   }) => Promise<`0x${string}`>;
-  /** viem client bound to the MPC wallet — for on-chain txs (SecureFlow writes, Gateway deposit/withdraw). */
+  /** viem client bound to the MPC wallet — for on-chain txs (Atelier writes, Gateway deposit/withdraw). */
   readonly walletClient: WalletClient;
 }
 
