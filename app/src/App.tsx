@@ -14,6 +14,7 @@ import MessagesPage from "./pages/MessagesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import PostJobPage from "./pages/PostJobPage";
 import MyJobsPage from "./pages/MyJobsPage";
+import WorkerPage from "./pages/WorkerPage";
 import AutopilotComposePage from "./pages/AutopilotComposePage";
 import DevPreviewPage from "./pages/DevPreviewPage";
 
@@ -63,6 +64,11 @@ function App() {
             someone who actually has both roles. */}
         <Route path="/my-jobs" element={<MyJobsPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
+
+        {/* The no-wallet door. Reachable WITHOUT connecting anything — that is
+            the entire point of it, so it must never sit behind the wallet gate
+            that protects the client area. */}
+        <Route path="/get-hired" element={<WorkerPage />} />
 
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/messages" element={<MessagesPage />} />
