@@ -33,6 +33,7 @@ vi.mock("@/components/rating/rating-dialog", () => ({ RatingDialog: () => null }
 // would make this file require a WagmiProvider to test milestone prop mapping.
 // Its own behaviour is covered in test/atelier/autopilot-control.test.tsx.
 vi.mock("@/components/atelier/autopilot-control", () => ({ AutopilotControl: () => null }));
+vi.mock("@/components/atelier/job-decision-log", () => ({ JobDecisionLog: () => null }));
 vi.mock("@/components/chat/chat-dialog", () => ({
   ChatDialog: ({ otherAddress }: { otherAddress: string }) => (
     <div data-testid="chat-dialog" data-other={otherAddress} />

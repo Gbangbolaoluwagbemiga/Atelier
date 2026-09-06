@@ -23,6 +23,7 @@ import { isApiConfigured } from "@/lib/api";
 import type { Escrow } from "@/lib/web3/types";
 import { encodeJobId } from "@/lib/id-codec";
 import { AutopilotControl } from "@/components/atelier/autopilot-control";
+import { JobDecisionLog } from "@/components/atelier/job-decision-log";
 
 
 interface EscrowCardProps {
@@ -419,6 +420,20 @@ export function EscrowCard({
                       isClient={escrow.isClient === true}
                     />
                   )}
+
+                {/*
+                  What the agent actually did, in its own words. Renders nothing
+                  when the daemon has no record of this escrow, so a manual job
+                  costs a fetch and shows no chrome. Unlike the control above it
+                  stays available on settled jobs — that is exactly when a
+                  client is most likely to want to read back the reasoning.
+                */}
+                {escrow.isClient && (
+                  <JobDecisionLog
+                    escrowId={escrow.id}
+                    isClient={escrow.isClient === true}
+                  />
+                )}
 
                 <div className="space-y-2">
                   <h4 className="font-medium">Milestones:</h4>

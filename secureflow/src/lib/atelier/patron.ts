@@ -163,18 +163,47 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
 /**
  * The decision log, newest first from the daemon, returned oldest-first here
  * because a log is read downward and the escalation latch runs forward in time.
+ *
+ * Pass `taskId` to scope it to one job. The daemon keys decisions by task, not
+ * by escrow, so callers who have an escrow id should use
+ * `fetchDecisionsForEscrow` rather than filtering this themselves.
  */
 export async function fetchDecisions(
-  opts: { limit?: number; signal?: AbortSignal } = {},
+  opts: { limit?: number; taskId?: string; signal?: AbortSignal } = {},
 ): Promise<Decision[]> {
   const limit = opts.limit ?? 100;
   const raw = await get<unknown>(`/api/decisions?limit=${limit}`, opts.signal);
   if (!Array.isArray(raw)) return [];
-  const decisions = raw
-    .filter(isDecisionRow)
-    .map(toDecision)
-    .sort((a, b) => a.at - b.at);
+  const rows = raw.filter(isDecisionRow);
+  const scoped =
+    opts.taskId === undefined
+      ? rows
+      : rows.filter((r) => r.task_id === opts.taskId);
+  const decisions = scoped.map(toDecision).sort((a, b) => a.at - b.at);
   return applyEscalationLatch(decisions);
+}
+
+/**
+ * One job's decision log, by escrow id.
+ *
+ * Two hops, because the daemon's two tables are keyed differently: tasks carry
+ * the escrow id, decisions carry the task id. Doing the join here rather than at
+ * each call site keeps the escalation latch correct — the latch must run over a
+ * single job's decisions in time order, and a caller who filtered a
+ * globally-latched list would inherit an escalation from somebody else's job.
+ *
+ * An escrow the daemon has never heard of returns an empty log, not an error:
+ * that is the ordinary case for a manually-managed job.
+ */
+export async function fetchDecisionsForEscrow(
+  escrowId: number | string,
+  signal?: AbortSignal,
+): Promise<Decision[]> {
+  const wanted = String(escrowId);
+  const tasks = await fetchTasks(signal);
+  const task = tasks.find((t) => String(t.escrowId) === wanted);
+  if (!task) return [];
+  return fetchDecisions({ taskId: task.id, limit: 200, signal });
 }
 
 /** Every job the daemon is managing. Used to tell Autopilot jobs from manual. */
