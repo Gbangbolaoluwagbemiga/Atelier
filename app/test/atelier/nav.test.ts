@@ -17,6 +17,7 @@ describe("visibleNav", () => {
   it("shows a first-time visitor only the unconditional entries", () => {
     expect(visibleNav(NOBODY).map((i) => i.to)).toEqual([
       "/jobs",
+      "/get-hired",
       "/post",
       "/analytics",
     ]);
@@ -39,6 +40,9 @@ describe("visibleNav", () => {
       const paths = visibleNav(roles).map((i) => i.to);
       expect(paths).toContain("/jobs");
       expect(paths).toContain("/post");
+      // The no-wallet door must survive every role combination — hiding it
+      // from anyone hides it from the people it exists for.
+      expect(paths).toContain("/get-hired");
     }
   });
 

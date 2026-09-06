@@ -22,7 +22,7 @@ export default defineConfig({
   testDir: "./e2e",
   // The screenshot harness is not a test — it exists to capture the LLM-backed
   // screens for review, and it costs a generation round trip every run.
-  testIgnore: "**/shots/**",
+  testIgnore: ["**/shots/**", "**/capture/**"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

@@ -39,6 +39,14 @@ export interface NavItem {
  */
 export const PRIMARY_NAV: readonly NavItem[] = [
   { to: "/jobs", label: "Browse Jobs", visibility: "always" },
+  /*
+   * The no-wallet door, and it is "always" on purpose.
+   *
+   * Someone who has never held a private key is exactly who this is for, so
+   * gating it on a connected wallet — or on already being a freelancer — would
+   * hide it from every single person it was built for.
+   */
+  { to: "/get-hired", label: "Get Hired", visibility: "always" },
   { to: "/post", label: "Post a Job", visibility: "always" },
   /*
    * One destination for both sides of the table.

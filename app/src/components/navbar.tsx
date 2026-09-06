@@ -45,7 +45,10 @@ function NavLink({
       to={item.to}
       onClick={onNavigate}
       aria-current={current ? "page" : undefined}
-      className={`relative text-sm font-medium transition-colors rounded-md ${
+      /* whitespace-nowrap because adding a sixth entry made "Browse Jobs" and
+         "Post a Job" wrap onto two lines on a narrow laptop, which pushed the
+         whole bar taller and read as broken. */
+      className={`relative whitespace-nowrap text-sm font-medium transition-colors rounded-md ${
         current
           ? "text-primary bg-primary/10 px-3 py-2"
           : "hover:text-primary px-3 py-2"
