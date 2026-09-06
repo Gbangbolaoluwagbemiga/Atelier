@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable2Step.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -16,8 +17,44 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  *   Client deposits totalAmount + platformFee upfront.
  *   Fee is separated immediately at creation.
  *   Milestones sum to totalAmount so the release check is exact.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * UPGRADEABILITY (UUPS) — read this before deploying or upgrading
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * This contract sits behind an ERC1967 proxy so that new features can ship
+ * without migrating live escrows. Deploy the implementation, deploy the proxy
+ * pointing at it, and call `initialize` through the proxy. Never call
+ * `initialize` on the implementation itself — the constructor disables it.
+ *
+ * WHAT THAT COSTS, STATED PLAINLY. SecureFlow's promise is that neither party
+ * can unilaterally move money once an escrow is live. Upgradeability puts one
+ * asterisk on it: the owner can replace the implementation, and a malicious
+ * replacement could do anything to funds already locked. That is true of every
+ * upgradeable escrow, it is not hidden here, and it is the reason
+ * `_authorizeUpgrade` is owner-only and `Ownable2Step` is used — a fat-fingered
+ * ownership transfer cannot silently hand over the upgrade key.
+ *
+ * The honest framing for a client: the CONTRACT cannot take your money, and the
+ * OWNER can change the contract. Do not describe this deployment as trustless
+ * without that second clause.
+ *
+ * RULES FOR FUTURE UPGRADES — storage layout is append-only:
+ *   1. Never reorder, retype, or delete an existing state variable.
+ *   2. Add new variables ONLY at the end, immediately before `__gap`, and
+ *      reduce `__gap`'s length by the number of slots you added.
+ *   3. Adding a field to a struct held in a MAPPING is safe (values live at
+ *      hashed offsets). Adding one to a struct held in an ARRAY is NOT.
+ *   4. Bump `version()` in the same commit as any storage change, so a
+ *      deployed proxy can be identified from chain state alone.
+ *   5. Run the upgrade tests in test/SecureFlowUpgrade.t.sol before shipping.
  */
-contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
+contract SecureFlow is
+    Ownable2StepUpgradeable,
+    ReentrancyGuardUpgradeable,
+    PausableUpgradeable,
+    UUPSUpgradeable
+{
     using SafeERC20 for IERC20;
 
     /* ===================== ERRORS ===================== */
@@ -111,7 +148,13 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     uint256 public constant MIN_EXTENSION_DAYS = 1;
     address public constant NATIVE_TOKEN = address(0);
 
-    uint256 public nextEscrowId = 1;
+    /**
+     * @dev Set in `initialize`, NOT here. A declaration-site initialiser runs in
+     *      the implementation's constructor, which a proxy never executes — so
+     *      this would have silently started at 0 behind the proxy and made
+     *      escrow id 0 both "the first escrow" and "does not exist".
+     */
+    uint256 public nextEscrowId;
     mapping(uint256 => Escrow) public escrows;
     mapping(uint256 => Milestone[]) private escrowMilestones;
 
@@ -241,12 +284,45 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         revert Unauthorized();
     }
 
-    /* ===================== CONSTRUCTOR ===================== */
-    constructor(address _feeCollector, uint256 _platformFeeBP) Ownable(msg.sender) {
+    /* ===================== INITIALISATION ===================== */
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        // Locks the implementation so nobody can initialise it directly and
+        // take ownership of a contract the proxy is delegating into.
+        _disableInitializers();
+    }
+
+    /**
+     * @notice Initialise the proxy. Replaces the constructor.
+     * @dev Call this through the proxy, once, immediately after deployment.
+     */
+    function initialize(address _feeCollector, uint256 _platformFeeBP) external initializer {
         if (_feeCollector == address(0)) revert InvalidAddress();
         if (_platformFeeBP > MAX_PLATFORM_FEE_BP) revert InvalidConfig();
+
+        __Ownable_init(msg.sender);
+        __Ownable2Step_init();
+        __ReentrancyGuard_init();
+        __Pausable_init();
+        __UUPSUpgradeable_init();
+
         feeCollector = _feeCollector;
         platformFeeBP = _platformFeeBP;
+        nextEscrowId = 1;
+    }
+
+    /**
+     * @notice Identifies the deployed implementation from chain state alone.
+     * @dev Bump this in the same commit as any storage-layout change.
+     */
+    function version() external pure virtual returns (string memory) {
+        return "2.0.0-autopilot";
+    }
+
+    /// @dev Only the owner may ship a new implementation. See the note above.
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
+        if (newImplementation == address(0)) revert InvalidAddress();
     }
 
     /* ===================== CORE ESCROW LOGIC ===================== */
@@ -1118,4 +1194,17 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     receive() external payable {}
+
+    /**
+     * @dev Reserved storage so future versions can add state without shifting
+     *      anything that already exists.
+     *
+     *      When you add a variable, put it directly ABOVE this gap and subtract
+     *      the slots you used from the array length — one slot per variable,
+     *      except for variables that pack together in a single slot. Get this
+     *      wrong and an upgrade silently reinterprets live escrow data as
+     *      whatever the new layout says it is; there is no revert, only wrong
+     *      numbers.
+     */
+    uint256[50] private __gap;
 }

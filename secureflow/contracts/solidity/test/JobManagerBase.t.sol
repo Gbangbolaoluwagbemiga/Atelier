@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/SecureFlow.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 /// @dev Minimal ERC20. SecureFlow only needs transfer/transferFrom/approve.
 contract MockUSDC {
@@ -70,8 +71,24 @@ contract JobManagerBase is Test {
     uint256 internal constant M1 = 300e6;
     uint256 internal constant M2 = 600e6;
 
+    /// The implementation behind the proxy. Kept so upgrade tests can compare.
+    SecureFlow internal implementation;
+    ERC1967Proxy internal proxy;
+
     function setUp() public virtual {
-        sf = new SecureFlow(feeCollector, 250); // 2.5%
+        /*
+         * Deployed exactly as production will be: implementation, then proxy,
+         * then initialize THROUGH the proxy. Tests that construct the logic
+         * contract directly would pass while a real deployment reverted, since
+         * the constructor disables initialisers on the implementation.
+         */
+        implementation = new SecureFlow();
+        proxy = new ERC1967Proxy(
+            address(implementation),
+            abi.encodeCall(SecureFlow.initialize, (feeCollector, 250)) // 2.5%
+        );
+        sf = SecureFlow(payable(address(proxy)));
+
         usdc = new MockUSDC();
         sf.whitelistToken(address(usdc));
         sf.authorizeArbiter(arbiter);
