@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint .",
-    "format": "prettier . --write"
+    "format": "prettier . --write",
+    "sync-abi": "node scripts/sync-abi.mjs"
   },
   "workspaces": [
     "packages/*"

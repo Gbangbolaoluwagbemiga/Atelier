@@ -201,3 +201,37 @@ export async function fetchManagedEscrowIds(
       .filter((id): id is string => typeof id === "string" && id.length > 0),
   );
 }
+
+/* ── The agent's own address ─────────────────────────────────────────────── */
+
+export interface AutopilotWallet {
+  address: `0x${string}`;
+  balance: string;
+  explorerUrl: string;
+}
+
+/**
+ * The Circle wallet the daemon signs with — and therefore the address a client
+ * must appoint as job manager for Autopilot to be able to do anything.
+ *
+ * Fetched rather than configured. A hardcoded VITE_ variable would be one
+ * redeploy away from pointing at a wallet the daemon no longer uses, and the
+ * failure mode is nasty: setJobManager would succeed, the client would see
+ * "managed by Autopilot", and the agent would silently never be able to act —
+ * a job that looks delegated and is actually abandoned.
+ *
+ * Asking the daemon means the answer is always the key it currently holds.
+ */
+export async function fetchAutopilotAddress(
+  signal?: AbortSignal,
+): Promise<AutopilotWallet> {
+  const w = await get<Partial<AutopilotWallet>>("/api/wallet", signal);
+  if (!w.address || !/^0x[a-fA-F0-9]{40}$/.test(w.address)) {
+    throw new Error("Autopilot did not report a usable wallet address.");
+  }
+  return {
+    address: w.address as `0x${string}`,
+    balance: w.balance ?? "0",
+    explorerUrl: w.explorerUrl ?? "",
+  };
+}

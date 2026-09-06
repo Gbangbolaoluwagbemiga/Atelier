@@ -255,6 +255,27 @@ export class ContractService {
     try { return await this.contract.read.authorizedArbiters([addr as Address]); } catch { return false; }
   }
 
+  /**
+   * The agent currently managing this job, or null if the client runs it
+   * themselves.
+   *
+   * This is the on-chain answer to "is this job on Autopilot", and it is the
+   * one that counts: the Patron daemon's task table says what the agent BELIEVES
+   * it manages, while this says what the contract will actually let it do. When
+   * the two disagree — a client revoked the manager and the daemon has not
+   * noticed yet — this is right and the daemon is stale.
+   *
+   * Returns null rather than the zero address so callers cannot accidentally
+   * treat "nobody" as an address and render a manager chip for 0x000…000.
+   */
+  async getJobManager(escrowId: number): Promise<string | null> {
+    try {
+      const mgr = await this.contract.read.jobManager([BigInt(escrowId)]);
+      const addr = String(mgr);
+      return /^0x0{40}$/i.test(addr) ? null : addr;
+    } catch { return null; }
+  }
+
   async getUserEscrows(addr: string): Promise<number[]> {
     try {
       const ids = await this.contract.read.getUserEscrows([addr as Address]);
@@ -614,6 +635,48 @@ export class ContractService {
       abi: SecureFlowABI.abi,
       functionName: "acceptFreelancer",
       args: [BigInt(params.escrow_id), params.freelancer as `0x${string}`],
+    });
+  }
+
+  /**
+   * Hand management of a funded job to an agent.
+   *
+   * The client stays the depositor throughout — this delegates the LABOUR of
+   * managing (hiring, approving, rejecting) and nothing else. The contract
+   * enforces the rest: a manager can never dispute, cancel, move funds, or
+   * become the beneficiary, so it can pay the freelancer and never itself.
+   *
+   * Reverts with ManagerCannotBeBeneficiary if the address is already the hired
+   * freelancer, which is the guard that keeps that last sentence true.
+   */
+  async setJobManager(
+    params: { escrow_id: number; manager: string },
+    write: WagmiWrite
+  ): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: SecureFlowABI.abi,
+      functionName: "setJobManager",
+      args: [BigInt(params.escrow_id), params.manager as `0x${string}`],
+    });
+  }
+
+  /**
+   * Take management back. Effective immediately — the agent's very next call
+   * reverts.
+   *
+   * This is the client's escape hatch, so it must never be gated behind the
+   * agent's cooperation, a timelock, or the daemon being reachable.
+   */
+  async revokeJobManager(
+    escrowId: number,
+    write: WagmiWrite
+  ): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: SecureFlowABI.abi,
+      functionName: "revokeJobManager",
+      args: [BigInt(escrowId)],
     });
   }
 
