@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
@@ -49,6 +50,11 @@ export default function JobsPage() {
     "all" | "pending" | "active" | "completed" | "disputed"
   >("all");
   const [selectedJob, setSelectedJob] = useState<Escrow | null>(null);
+  /* /jobs/:jobId opens that job's dialog directly. The agent notifies people
+     off-site (Telegram today), and a link that lands them on an unfiltered
+     board makes them hunt for the job they were just told about. */
+  const { jobId: deepLinkedJobId } = useParams<{ jobId: string }>();
+  const [deepLinkConsumed, setDeepLinkConsumed] = useState(false);
   // const [coverLetter, setCoverLetter] = useState(""); // Unused - handled in dialog
   // const [proposedTimeline, setProposedTimeline] = useState(""); // Unused - handled in dialog
   const [applying, setApplying] = useState(false);
@@ -766,7 +772,14 @@ export default function JobsPage() {
               </div>
               {filteredJobs.map((job, index) => {
                 const jobHasApplied = hasApplied[job.id] || false;
-                return (
+                useEffect(() => {
+    if (deepLinkConsumed || !deepLinkedJobId || jobs.length === 0) return;
+    const match = jobs.find((j) => j.id === deepLinkedJobId);
+    setDeepLinkConsumed(true);
+    if (match) setSelectedJob(match);
+  }, [deepLinkedJobId, jobs, deepLinkConsumed]);
+
+  return (
                   <JobCard
                     key={job.id}
                     job={job}

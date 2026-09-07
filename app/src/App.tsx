@@ -54,6 +54,8 @@ function App() {
 
         {/* ── One list. Agent-posted and human-posted, indistinguishable. ── */}
         <Route path="/jobs" element={<JobsPage />} />
+        {/* Deep link from a notification (Telegram, email) straight to one job. */}
+        <Route path="/jobs/:jobId" element={<JobsPage />} />
         <Route path="/freelancers" element={<FreelancersPage />} />
 
         {/* ── Client area — the only part of the app that has modes. ── */}
