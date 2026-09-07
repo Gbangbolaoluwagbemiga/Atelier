@@ -6,11 +6,11 @@ import { rpcUrl } from "../config.js";
 import { createCircleSigner } from "./circleSigner.js";
 
 /**
- * The subset of the Gateway surface Patron actually uses — both the seller side
- * (via createGatewayMiddleware in x402-seller.ts) and the buyer side (Patron paying
+ * The subset of the Gateway surface Atelier actually uses — both the seller side
+ * (via createGatewayMiddleware in x402-seller.ts) and the buyer side (Atelier paying
  * marketplace services mid-decision) settle through this treasury.
  */
-export interface PatronGateway {
+export interface AtelierGateway {
   readonly address: string;
   /** Buyer side: pay a paywalled x402 endpoint (e.g. a marketplace search service). */
   pay<T = unknown>(
@@ -94,10 +94,10 @@ const GATEWAY_API_TESTNET = "https://gateway-api-testnet.circle.com/v1";
 const X402_TIMEOUT_MS = 20_000;
 
 /**
- * The Patron Agent Wallet treasury as a Circle Programmable Wallet (MPC) on Arc.
+ * The Atelier Agent Wallet treasury as a Circle Programmable Wallet (MPC) on Arc.
  *
- * Circle holds the key shares — no raw private key ever touches Patron. Every
- * commission payment Patron makes to marketplace services (EIP-3009 authorization
+ * Circle holds the key shares — no raw private key ever touches Atelier. Every
+ * commission payment Atelier makes to marketplace services (EIP-3009 authorization
  * for Gateway batching) is signed by Circle MPC via `BatchEvmScheme(circleSigner)`,
  * and Gateway deposit/withdraw are on-chain txs sent through the MPC wallet.
  *
@@ -105,7 +105,7 @@ const X402_TIMEOUT_MS = 20_000;
  * those take an explicit address and never sign, so the ephemeral key is never
  * funded and never used to authorize anything.
  */
-export function createPatronGateway(): PatronGateway {
+export function createAtelierGateway(): AtelierGateway {
   const signer = createCircleSigner();
   const scheme = new BatchEvmScheme(signer);
   const chainConfig = CHAIN_CONFIGS.arcTestnet;
@@ -127,7 +127,7 @@ export function createPatronGateway(): PatronGateway {
         : undefined;
 
     // Every leg of the x402 buy flow is bounded. Without this a marketplace
-    // service that accepts the connection and never answers hangs Patron
+    // service that accepts the connection and never answers hangs Atelier
     // forever *mid-hire*: the job never advances, nothing errors, and there is
     // nothing on screen to explain it. Verified against a deliberately hanging
     // server — an un-timeouted fetch here simply never returns.
@@ -281,7 +281,7 @@ export function createPatronGateway(): PatronGateway {
     return { formattedAmount: amount };
   }
 
-  // Plain USDC out of the treasury wallet — how Patron funds a Atelier escrow
+  // Plain USDC out of the treasury wallet — how Atelier funds a Atelier escrow
   // deposit from its own balance. MPC-signed, so no raw key ever touches it.
   async function transferUsdc(to: string, amount: string): Promise<{ hash: string; formattedAmount: string }> {
     const value = parseUnits(amount, 6);

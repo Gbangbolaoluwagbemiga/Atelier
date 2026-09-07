@@ -1,4 +1,4 @@
-// AgentClient — the guild master. Runs the full hire loop headlessly on the
+// AgentClient — the agent. Runs the full hire loop headlessly on the
 // server: brief → escrow → applications → hire → review → pay. No browser
 // involved; the React app only ever watches this over SSE.
 //
@@ -20,7 +20,7 @@ import type { AcceptanceBrief, AgentDecision, Application } from "../web3/types.
 import { graphQuery, isGraphConfigured } from "../graph/client.js";
 import { GET_JOB_APPLICATIONS, type GQLApplication } from "../graph/queries.js";
 import * as atelier from "../web3/atelier.js";
-import type { PatronGateway } from "../circle/gateway.js";
+import type { AtelierGateway } from "../circle/gateway.js";
 import { config } from "../config.js";
 import * as store from "../store.js";
 import { parseUnits } from "viem";
@@ -50,7 +50,7 @@ export interface AgentEvent {
   txHash?: string;
   /** USDC amount tied to this event (job budget on post, milestone amount on release) — surfaced in the payment feed. */
   amountUsdc?: string;
-  /** Who Patron paid/was paid by — only set on payment-bearing events. */
+  /** Who Atelier paid/was paid by — only set on payment-bearing events. */
   counterparty?: string;
   /**
    * The job's title, carried on job_posted.
@@ -71,9 +71,9 @@ export class AgentClient {
   private onEvent: AgentEventCallback;
   private decisions: AgentDecision[] = [];
   /** Lazily resolved — the daemon still boots without Circle configured; only this buy-side call needs it. */
-  private getGateway?: () => PatronGateway;
+  private getGateway?: () => AtelierGateway;
 
-  constructor(onEvent: AgentEventCallback, getGateway?: () => PatronGateway) {
+  constructor(onEvent: AgentEventCallback, getGateway?: () => AtelierGateway) {
     this.onEvent = onEvent;
     this.getGateway = getGateway;
   }
@@ -145,7 +145,7 @@ export class AgentClient {
     if (!winner) {
       // Recorded as a DECISION, not just an event. It was emitted without one,
       // so nothing reached the decision log — the ledger showed a row of low
-      // scores and then silence, with no statement of what the guild master
+      // scores and then silence, with no statement of what the agent
       // concluded or why the job had stalled. Deciding that nobody is good
       // enough is a decision, and the whole promise of this project is that
       // every decision is written down and readable.
@@ -318,7 +318,7 @@ export class AgentClient {
         milestoneIndex,
         // This string is what the human arbiter sees on Atelier. "Revision
         // rounds exhausted" tells them nothing they can rule on.
-        `Patron AI: ${history.length} revision round(s) exhausted. Final submission scored ${review.score}/100. ${
+        `Atelier AI: ${history.length} revision round(s) exhausted. Final submission scored ${review.score}/100. ${
           review.feedback || "See the decision log for the full reasoning."
         }`.slice(0, 500),
       );

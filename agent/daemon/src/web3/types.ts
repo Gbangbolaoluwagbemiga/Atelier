@@ -1,4 +1,4 @@
-// Reused from Atelier — Patron reads/writes these on the same contract
+// Reused from Atelier — Atelier reads/writes these on the same contract
 
 export interface Milestone {
   description: string;
@@ -11,7 +11,7 @@ export interface Milestone {
 
 export interface Escrow {
   id: string;
-  payer: string; // Patron's Agent Wallet address
+  payer: string; // Atelier's Agent Wallet address
   beneficiary: string; // hired freelancer
   token: string;
   totalAmount: string;
@@ -36,9 +36,9 @@ export interface Application {
   status: "pending" | "accepted" | "rejected";
 }
 
-// Patron-specific types
+// Atelier-specific types
 
-export interface PatronTask {
+export interface AtelierTask {
   id: string;
   instruction: string; // raw client input — from an AI agent (x402) or a human (UI)
   clientType: "agent" | "human";
@@ -68,7 +68,7 @@ export interface AcceptanceBrief {
 
 export interface AgentDecision {
   id: string;
-  /** The on-chain Atelier escrowId (as a string) — not PatronTask.id. Every
+  /** The on-chain Atelier escrowId (as a string) — not AtelierTask.id. Every
    *  decision after brief generation is scoped to an escrow, so this is what
    *  actually correlates decisions/payments to a task via task.escrowId. */
   taskId: string;

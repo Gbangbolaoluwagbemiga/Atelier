@@ -1,9 +1,9 @@
-// index.ts — Patron's daemon entrypoint. Raw node:http (not a framework) so the
+// index.ts — Atelier's daemon entrypoint. Raw node:http (not a framework) so the
 // x402 seller middleware — which expects Express-style (req, res, next) — mounts
 // with zero adapter code, matching the proven pattern from the reference x402
 // seller implementation this was built against. Serves:
 //
-//   POST /api/hire            x402-gated — AI agents commission Patron here
+//   POST /api/hire            x402-gated — AI agents commission Atelier here
 //   POST /api/instruct        unguarded — the human front door (same pipeline)
 //   GET  /api/tasks           REST for the command-center UI
 //   GET  /api/decisions       decision log
@@ -15,8 +15,8 @@ import { randomUUID } from "node:crypto";
 import { createPublicClient, http as viemHttp, formatEther, verifyMessage } from "viem";
 import { config, arcTestnet, rpcUrl } from "./config.js";
 import { AgentClient, type AgentEvent } from "./agent/AgentClient.js";
-import { createPatronGateway } from "./circle/gateway.js";
-import { createPatronPaywall, ORDER_FEE_USDC } from "./circle/x402-seller.js";
+import { createAtelierGateway } from "./circle/gateway.js";
+import { createAtelierPaywall, ORDER_FEE_USDC } from "./circle/x402-seller.js";
 import * as atelier from "./web3/atelier.js";
 import { graphQuery, isGraphConfigured } from "./graph/client.js";
 import { GET_JOB_APPLICATIONS, GET_JOB_BY_ID, type GQLEscrow } from "./graph/queries.js";
@@ -30,7 +30,7 @@ import { verifyGoogleIdToken } from "./workers/google-auth.js";
 const PORT = config.port;
 
 /**
- * Held back from every withdrawal so Patron can still sign.
+ * Held back from every withdrawal so Atelier can still sign.
  *
  * A treasury drained to exactly zero cannot pay the gas to do anything at all —
  * including paying the next freelancer whose work was already approved.
@@ -44,17 +44,17 @@ const TREASURY_GAS_FLOOR = Number(process.env.TREASURY_GAS_FLOOR_USDC ?? 0.5);
  * withdrawal cannot be replayed to authorise a bigger one.
  */
 function withdrawalMessage(address: string, amountUsdc: string): string {
-  return `Patron treasury withdrawal\nAddress: ${address.toLowerCase()}\nAmount: ${amountUsdc} USDC`;
+  return `Atelier treasury withdrawal\nAddress: ${address.toLowerCase()}\nAmount: ${amountUsdc} USDC`;
 }
 
 /** The sentence a client signs to cancel their own unfilled commission. */
 function cancelMessage(address: string, escrowId: string): string {
-  return `Patron cancel commission\nAddress: ${address.toLowerCase()}\nEscrow: ${escrowId}`;
+  return `Atelier cancel commission\nAddress: ${address.toLowerCase()}\nEscrow: ${escrowId}`;
 }
 
 /** The sentence a depositor signs to spend their own deposit on a commission. */
 function commissionMessage(address: string, amountUsdc: string): string {
-  return `Patron commission\nAddress: ${address.toLowerCase()}\nBudget: ${amountUsdc} USDC`;
+  return `Atelier commission\nAddress: ${address.toLowerCase()}\nBudget: ${amountUsdc} USDC`;
 }
 
 // ── SSE broadcast ──────────────────────────────────────────────────────────
@@ -64,12 +64,12 @@ function broadcast(event: AgentEvent) {
   for (const res of sseClients) res.write(payload);
 }
 
-// Patron's Gateway-backed treasury (MPC). Lazily created so the daemon still boots
+// Atelier's Gateway-backed treasury (MPC). Lazily created so the daemon still boots
 // (and /api/tasks etc. still work) if Circle env vars aren't set yet — only x402
 // routes need it.
-let gatewayInstance: ReturnType<typeof createPatronGateway> | null = null;
+let gatewayInstance: ReturnType<typeof createAtelierGateway> | null = null;
 function getGateway() {
-  if (!gatewayInstance) gatewayInstance = createPatronGateway();
+  if (!gatewayInstance) gatewayInstance = createAtelierGateway();
   return gatewayInstance;
 }
 
@@ -112,7 +112,7 @@ const agent = new AgentClient((event) => {
   // keep a tab open to learn the same facts about their own money.
   if (event.escrowId) {
     const id = event.escrowId;
-    const jobLink = `https://patron-guild.vercel.app/jobs/${id}`;
+    const jobLink = `${config.publicAppUrl}/jobs/${id}`;
 
     if (event.type === "applicant_accepted" && event.decision?.target) {
       const who = event.decision.target;
@@ -208,7 +208,7 @@ const agent = new AgentClient((event) => {
     if (event.type === "escalated_to_human") {
       void telegram.notifyClientForEscrow(
         id,
-        `⚖️ <b>Your commission has gone to a human arbiter.</b>\n\nThe guild master couldn't settle it after the revision rounds, so a person decides now. Your money is untouched.\n\n${jobLink}`,
+        `⚖️ <b>Your commission has gone to a human arbiter.</b>\n\nThe agent couldn't settle it after the revision rounds, so a person decides now. Your money is untouched.\n\n${jobLink}`,
       );
     }
   }
@@ -316,7 +316,7 @@ async function notifyUnsuccessfulApplicants(escrowId: string, winner: string | n
             ? ""
             : "The commission is still open and the money is still locked — new applicants are scored as they arrive.",
           "Every score and the reasoning behind it is public, so you can see exactly how the decision was made:",
-          `https://patron-guild.vercel.app/jobs/${escrowId}`,
+          `${config.publicAppUrl}/jobs/${escrowId}`,
           "",
           "/jobs to see what else is open — being turned down here counts against nothing.",
         ]
@@ -345,14 +345,14 @@ function clientError(err: unknown): string {
   if (err instanceof workers.UserFacingError) return raw;
 
   if (/insufficient|exceeds balance/i.test(raw)) {
-    return "Patron's treasury doesn't hold enough USDC to fund this commission. Fund the treasury or lower the budget.";
+    return "Atelier's treasury doesn't hold enough USDC to fund this commission. Fund the treasury or lower the budget.";
   }
   if (/exceeds the maximum single-commission cap/i.test(raw)) return raw; // ours, already phrased for a human
   if (/budget must be positive/i.test(raw)) return raw;
   if (/401|invalid api key|unauthorized/i.test(raw)) {
-    return "The guild master's language model rejected the request (credentials). This is a server-side configuration problem, not a problem with your instruction.";
+    return "The agent's language model rejected the request (credentials). This is a server-side configuration problem, not a problem with your instruction.";
   }
-  if (/429|rate.?limit/i.test(raw)) return "The guild master's language model is rate-limited right now. Try again shortly.";
+  if (/429|rate.?limit/i.test(raw)) return "The agent's language model is rate-limited right now. Try again shortly.";
   if (/timeout|timed out|aborted/i.test(raw)) return "That took too long and was cancelled. Nothing was charged and no escrow was opened.";
   if (/inconsistent brief|do not sum/i.test(raw)) {
     return "Could not produce a coherent brief from that instruction. Try stating the deliverable, budget, and deadline explicitly.";
@@ -459,15 +459,15 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ── x402-gated: AI agents commission Patron ──
+  // ── x402-gated: AI agents commission Atelier ──
   if (req.method === "POST" && url.pathname === "/api/hire") {
     try {
       const gateway = getGateway();
-      const applyPaywall = createPatronPaywall(gateway.address as `0x${string}`, ORDER_FEE_USDC);
+      const applyPaywall = createAtelierPaywall(gateway.address as `0x${string}`, ORDER_FEE_USDC);
       const proceed = await applyPaywall(req, res);
       if (!proceed) return; // paywall already wrote 402 or an error
 
-      // The x402 commission fee that just cleared — "Payment 1: robot → Patron" in
+      // The x402 commission fee that just cleared — "Payment 1: robot → Atelier" in
       // the demo script. The middleware verifies+settles before we get here but
       // never persists anything; this is the only place that payment is recorded.
       const payment = (req as unknown as { payment?: { payer?: string; transaction?: string } }).payment;
@@ -613,7 +613,7 @@ const server = http.createServer(async (req, res) => {
 
       const result = await runHireFlow(body.instruction, "human", payer ?? undefined, body.title);
 
-      // Debit the real brief amount, not the stated one — the guild master
+      // Debit the real brief amount, not the stated one — the agent
       // rescales a budget that doesn't add up, and the ledger has to record
       // what was actually locked in escrow.
       if (payer) {
@@ -707,7 +707,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Treasury address + live balance — read-only, no key material involved. The
-  // command center shows this so a user knows what Patron can actually afford
+  // command center shows this so a user knows what Atelier can actually afford
   // before posting a job, and where to send funds to top it up.
   if (req.method === "GET" && url.pathname === "/api/wallet") {
     try {
@@ -727,8 +727,8 @@ const server = http.createServer(async (req, res) => {
    * A depositor's own position in the pooled treasury.
    *
    * `withdrawable` is deliberately NOT just what they put in. The treasury is a
-   * single pooled wallet that Patron spends from to fund escrows, and money in
-   * an escrow has genuinely left it — so if someone deposits $5 and Patron
+   * single pooled wallet that Atelier spends from to fund escrows, and money in
+   * an escrow has genuinely left it — so if someone deposits $5 and Atelier
    * commissions $5 of work, there is nothing to give back until that work
    * settles. Paying the first person to ask, out of a pot that is backing other
    * people's live commissions, is a bank run with extra steps.
@@ -741,7 +741,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const account = store.treasuryAccount(address);
       const onHand = await treasuryBalance();
-      // Keep a little back so Patron can still sign; a treasury that cannot pay
+      // Keep a little back so Atelier can still sign; a treasury that cannot pay
       // gas cannot pay anyone.
       const spendable = Math.max(0, onHand - TREASURY_GAS_FLOOR);
       return json(res, 200, {
@@ -781,7 +781,7 @@ const server = http.createServer(async (req, res) => {
       if (!receipt || receipt.status !== "success") return json(res, 400, { error: "That transaction has not succeeded." });
 
       const treasury = config.circleWalletAddress.toLowerCase();
-      if ((tx.to ?? "").toLowerCase() !== treasury) return json(res, 400, { error: "That transaction did not pay Patron's treasury." });
+      if ((tx.to ?? "").toLowerCase() !== treasury) return json(res, 400, { error: "That transaction did not pay Atelier's treasury." });
       if (tx.from.toLowerCase() !== b.from.toLowerCase()) return json(res, 400, { error: "That transaction was not sent from this address." });
       if (tx.value <= 0n) return json(res, 400, { error: "That transaction moved no funds." });
 
@@ -804,7 +804,7 @@ const server = http.createServer(async (req, res) => {
    * Withdraw a deposit.
    *
    * Authorised by a SIGNATURE from the depositing address, not by asking. The
-   * treasury is Patron's wallet, so an endpoint that pays out to whatever
+   * treasury is Atelier's wallet, so an endpoint that pays out to whatever
    * address the caller names would let anyone drain everyone else's deposits by
    * typing their address — the signature is what proves the caller controls it.
    */
@@ -1078,7 +1078,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 400, {
           error:
             task.status === "active"
-              ? "Someone is already working on this — their claim on the escrow is exactly what makes Patron trustworthy, so it can't be cancelled now."
+              ? "Someone is already working on this — their claim on the escrow is exactly what makes Atelier trustworthy, so it can't be cancelled now."
               : `This commission is ${task.status}; only an unfilled one can be cancelled.`,
         });
       }
@@ -1095,10 +1095,10 @@ const server = http.createServer(async (req, res) => {
 
       // Pass it back to whoever commissioned the work.
       //
-      // Patron has to be the escrow depositor — Atelier only lets the
+      // Atelier has to be the escrow depositor — Atelier only lets the
       // depositor approve milestones, and a machine approving them is the entire
-      // product — so the contract refunds Patron, not the client. Forwarding it
-      // is therefore a POLICY Patron keeps, not something the contract enforces,
+      // product — so the contract refunds Atelier, not the client. Forwarding it
+      // is therefore a POLICY Atelier keeps, not something the contract enforces,
       // and it is described that way everywhere rather than implied to be a
       // guarantee.
       let refund: { to: string; amountUsdc: string; txHash: string } | null = null;
@@ -1143,7 +1143,7 @@ const server = http.createServer(async (req, res) => {
    * The delivered work, for the person who paid for it.
    *
    * The loop was open at the most important point: a client commissioned a job,
-   * watched the guild master hire, review and pay — and had nowhere to COLLECT
+   * watched the agent hire, review and pay — and had nowhere to COLLECT
    * what they bought. The freelancer's submission goes on-chain, is read by the
    * poller, handed to the reviewer, and then dropped. Nothing stored it and
    * nothing served it, so the buyer could see that their logo had been approved
@@ -1247,7 +1247,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, jobs.sort((a, b) => b.createdAt - a.createdAt));
   }
 
-  /** Humans who have joined the guild — the answer to "has anyone actually signed up". */
+  /** Humans who have signed up — the answer to "has anyone actually signed up". */
   if (req.method === "GET" && url.pathname === "/api/workers") {
     return json(
       res,
@@ -1363,7 +1363,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n  🏰 Patron daemon listening on http://localhost:${PORT}`);
+  console.log(`\n  🎨 Atelier daemon listening on http://localhost:${PORT}`);
   console.log(`     POST /api/hire       (x402-gated — AI agents)`);
   console.log(`     POST /api/instruct   (human front door)`);
   console.log(`     GET  /events         (SSE — command center)\n`);
@@ -1386,7 +1386,7 @@ const ESCROW_DISPUTED = 4;
  * mistake already fixed for application scoring below, still live on the path
  * that decides whether someone gets paid. A review that threw (a rate limit, a
  * timeout) had its key recorded anyway, so the submission was never looked at
- * again: the freelancer delivered real work, the guild master hit a 429 once,
+ * again: the freelancer delivered real work, the agent hit a 429 once,
  * and the job sat "active" forever with the money locked. On a tight token
  * budget that is not an edge case, it is the expected path.
  *
@@ -1398,7 +1398,7 @@ const reviewDoneKey = (escrowId: string, index: number, submittedAt: string) => 
 const reviewTriesKey = (escrowId: string, index: number, submittedAt: string) => `milestone_review_tries:${escrowId}:${index}:${submittedAt}`;
 const MAX_REVIEW_ATTEMPTS = 5;
 
-// Last application count Patron has actually SCORED for a given job. Without this,
+// Last application count Atelier has actually SCORED for a given job. Without this,
 // a job with zero (or unchanged) applicants gets re-queried and re-scored every
 // 15s forever — burning LLM calls for nothing and flooding the command center
 // with the same "no suitable applicant" notification on a loop. Only re-run
@@ -1413,13 +1413,13 @@ const scoredCountKey = (escrowId: string) => `scored_applications:${escrowId}`;
 /**
  * Rate the freelancer on-chain once a job finishes.
  *
- * This is what makes Patron's reputation REAL rather than derived. Anyone can
+ * This is what makes Atelier's reputation REAL rather than derived. Anyone can
  * compute a reputation score from their own database and call it behaviour-based;
  * Atelier's submitRating puts it on the contract, where it is readable by
  * anyone — including Atelier's own dApp and any future client — and cannot be
  * quietly recalculated to flatter us.
  *
- * The score isn't invented: it comes from the review scores the guild master
+ * The score isn't invented: it comes from the review scores the agent
  * actually produced for this job's milestones, mapped from 0–100 onto the
  * contract's 1–5. A job that needed two revisions genuinely earns a lower rating
  * than one accepted first time, and that difference is now permanent and public.
@@ -1538,7 +1538,7 @@ function sweepStrandedBriefs(): void {
  * path: money nobody earned goes back.
  *
  * Deliberately only touches jobs still at "posted". The moment a freelancer is
- * hired their claim on the escrow is exactly what makes Patron worth trusting.
+ * hired their claim on the escrow is exactly what makes Atelier worth trusting.
  */
 /**
  * How much of an escrow is genuinely still at stake, in USDC.
@@ -1735,7 +1735,7 @@ async function sweepStrandedEscrows(): Promise<void> {
       }
       console.log(`[poller] stranded escrow ${task.escrowId} reclaimed, $${recovered.toFixed(2)} returned (${txHash})`);
 
-      const message = `"${brief.title ?? "Commission"}" was never finished. Its remaining $${recovered.toFixed(2)} has been released from escrow and is back in your Patron balance.`;
+      const message = `"${brief.title ?? "Commission"}" was never finished. Its remaining $${recovered.toFixed(2)} has been released from escrow and is back in your Atelier balance.`;
       broadcast({ type: "task_completed", message, escrowId: task.escrowId, txHash, timestamp: Date.now() });
       void telegram.notifyClientForEscrow(task.escrowId, `💸 <b>Escrow released.</b>\n\n${telegram.esc(message)}`);
     } catch (err) {
@@ -1868,7 +1868,7 @@ async function sweepOverdueCommissions(): Promise<void> {
         type: "escalated",
         reasoning:
           `This commission passed its ${brief.durationDays ?? "?"}-day delivery window ${daysLate} day(s) ago with ` +
-          `$${held.toFixed(2)} still in escrow. Patron escalated it to a human arbiter rather than leaving the money ` +
+          `$${held.toFixed(2)} still in escrow. Atelier escalated it to a human arbiter rather than leaving the money ` +
           `locked — it cannot refund on its own, and waiting for the emergency window would take another month.`,
         target: store.hiredFor(task.escrowId) ?? undefined,
         timestamp: Date.now(),
@@ -1879,13 +1879,13 @@ async function sweepOverdueCommissions(): Promise<void> {
       void telegram.notifyWorkerForEscrow(
         task.escrowId,
         `⏰ <b>This job passed its deadline.</b>\n\nIt has gone to a human arbiter to decide how the $${held.toFixed(2)} is settled. ` +
-          `If you have delivered work, say so — the arbiter reads the whole trail.\n\nhttps://patron-guild.vercel.app/jobs/${task.escrowId}`,
+          `If you have delivered work, say so — the arbiter reads the whole trail.\n\n${config.publicAppUrl}/jobs/${task.escrowId}`,
       );
       void telegram.notifyClientForEscrow(
         task.escrowId,
         `⏰ <b>Your commission ran past its deadline.</b>\n\n${telegram.esc(brief.title ?? "It")} was due ${daysLate} day(s) ago with ` +
           `$${held.toFixed(2)} still escrowed, so it has gone to a human arbiter. Your money stays locked until they rule — ` +
-          `Patron cannot release or reclaim it on its own.\n\nhttps://patron-guild.vercel.app/jobs/${task.escrowId}`,
+          `Atelier cannot release or reclaim it on its own.\n\n${config.publicAppUrl}/jobs/${task.escrowId}`,
       );
     } catch (err) {
       // Expected when the contract does not consider it overdue yet.
@@ -1915,7 +1915,7 @@ async function pollOnce() {
   // RESOLVED it nothing noticed. The page kept saying "with a human arbiter"
   // forever, neither party was told the outcome, and the client's share of the
   // split never came back to their balance. Escalation is a handover, not an
-  // ending — Patron still owes both sides the result.
+  // ending — Atelier still owes both sides the result.
   const tasks = store
     .listTasks(300)
     .filter((t) => t.escrowId && (t.status === "posted" || t.status === "active" || t.status === "disputed"));
@@ -2086,7 +2086,7 @@ async function pollOnce() {
           llmExhausted = true;
           broadcast({
             type: "error",
-            message: "The guild master's language model has hit its rate limit — hiring and reviews are paused until it resets. Escrowed funds are unaffected.",
+            message: "The agent's language model has hit its rate limit — hiring and reviews are paused until it resets. Escrowed funds are unaffected.",
             timestamp: Date.now(),
           });
         }
@@ -2101,7 +2101,7 @@ async function pollOnce() {
   // fails silently per-task forever: the daemon stays healthy, the API keeps
   // answering, and jobs simply stop moving with nothing on screen to say why.
   // Announce the outage ONCE, and announce recovery once, so the command
-  // center can tell a viewer that Patron has gone blind rather than idle.
+  // center can tell a viewer that Atelier has gone blind rather than idle.
   const nowDegraded = tasks.length > 0 && pollFailures >= tasks.length;
   if (nowDegraded && !pollerDegraded) {
     pollerDegraded = true;
@@ -2112,7 +2112,7 @@ async function pollOnce() {
     });
   } else if (!nowDegraded && pollerDegraded) {
     pollerDegraded = false;
-    broadcast({ type: "error", message: "Subgraph contact restored — the guild master is reading the chain again.", timestamp: Date.now() });
+    broadcast({ type: "error", message: "Subgraph contact restored — the agent is reading the chain again.", timestamp: Date.now() });
   }
 }
 
@@ -2215,7 +2215,7 @@ const MILESTONE_RESOLVED = 5;
 /**
  * Notice when a human arbiter has ruled, and finish the job properly.
  *
- * Escalation was treated as the end of Patron's involvement: the task was
+ * Escalation was treated as the end of Atelier's involvement: the task was
  * marked "disputed" and dropped out of the poll set forever. So when a dispute
  * was actually resolved on Atelier — money moved, the split was decided —
  * nothing on this side noticed. The tracking page said "with a human arbiter"
@@ -2292,7 +2292,7 @@ async function settleResolvedDispute(task: store.TaskRow, brief: { milestones?: 
     });
   }
 
-  const jobLink = `https://patron-guild.vercel.app/jobs/${task.escrowId}`;
+  const jobLink = `${config.publicAppUrl}/jobs/${task.escrowId}`;
   // A dispute is over ONE milestone, so the sentence has to say which stake was
   // split. "$2.50 split 50/50" against a $5 job reads as the whole job, which
   // is precisely the confusion #56 caused.
@@ -2349,9 +2349,9 @@ async function settleResolvedDispute(task: store.TaskRow, brief: { milestones?: 
   /**
    * And record the award as a payment, so "Paid out" tells the truth.
    *
-   * That figure counts payments with direction escrow_release, which Patron
+   * That figure counts payments with direction escrow_release, which Atelier
    * writes when IT releases a milestone. An arbiter's award moves the same
-   * money through the same escrow without Patron touching it, so the page
+   * money through the same escrow without Atelier touching it, so the page
    * showed $0.00 for a freelancer who had been paid $1.25. Keyed on the escrow
    * so re-settling cannot pay them twice on paper.
    */
@@ -2393,7 +2393,7 @@ async function settleResolvedDispute(task: store.TaskRow, brief: { milestones?: 
       "⚖️ <b>The dispute on your commission has been resolved.</b>",
       "",
       telegram.esc(outcomeForClient + remainder),
-      returned > 0.000001 ? `$${returned.toFixed(2)} is back in your Patron balance to commission or withdraw.` : "",
+      returned > 0.000001 ? `$${returned.toFixed(2)} is back in your Atelier balance to commission or withdraw.` : "",
       "",
       jobLink,
     ]

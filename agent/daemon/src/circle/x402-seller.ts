@@ -18,7 +18,7 @@ const ARC_TESTNET_NETWORK = `eip155:${5042002}`;
  * `true` if the caller paid and the handler should proceed, `false` if the
  * middleware already wrote a 402 (or an error) and the caller must stop.
  */
-export function createPatronPaywall(sellerAddress: `0x${string}`, priceUsdc: string) {
+export function createAtelierPaywall(sellerAddress: `0x${string}`, priceUsdc: string) {
   const paywall = createGatewayMiddleware({
     sellerAddress,
     networks: ARC_TESTNET_NETWORK,
