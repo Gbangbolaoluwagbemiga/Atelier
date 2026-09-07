@@ -10,7 +10,27 @@ import fs from "node:fs";
 const DATA_DIR = path.join(process.cwd(), "data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new DatabaseSync(path.join(DATA_DIR, "patron.db"));
+const DB_PATH = path.join(DATA_DIR, "atelier.db");
+
+/**
+ * The database was named for the product this grew out of. Renaming the file
+ * without moving it would silently open a brand-new empty database: the daemon
+ * would boot fine and every registered worker — including the MPC wallet each
+ * one is paid into — would simply be gone. So carry the old file over, once,
+ * and only when there is no new one to overwrite.
+ */
+const LEGACY_DB_PATH = path.join(DATA_DIR, "patron.db");
+if (!fs.existsSync(DB_PATH) && fs.existsSync(LEGACY_DB_PATH)) {
+  fs.renameSync(LEGACY_DB_PATH, DB_PATH);
+  // SQLite keeps the journal alongside the database; leaving them behind would
+  // strand a hot write-ahead log next to a database that no longer exists.
+  for (const suffix of ["-wal", "-shm", "-journal"]) {
+    if (fs.existsSync(LEGACY_DB_PATH + suffix)) fs.renameSync(LEGACY_DB_PATH + suffix, DB_PATH + suffix);
+  }
+  console.log("[store] carried data/patron.db over to data/atelier.db");
+}
+
+const db = new DatabaseSync(DB_PATH);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS tasks (
@@ -21,10 +41,10 @@ db.exec(`
     status TEXT NOT NULL,
     brief_json TEXT,
     created_at INTEGER NOT NULL,
-    -- Who commissioned this, when we know. Atelier requires Patron to be the
+    -- Who commissioned this, when we know. Atelier requires Atelier to be the
     -- escrow depositor (only the depositor may approve milestones, and the whole
-    -- product is that a machine approves them), so a refund lands with Patron
-    -- rather than with the client. Recording the payer is what lets Patron pass
+    -- product is that a machine approves them), so a refund lands with Atelier
+    -- rather than with the client. Recording the payer is what lets Atelier pass
     -- it back — see /api/jobs/refund.
     client_address TEXT
   );
@@ -41,7 +61,7 @@ db.exec(`
 
   -- Who put money INTO the treasury, and who has taken any back out.
   --
-  -- The treasury is one pooled wallet: anyone can send to it and Patron spends
+  -- The treasury is one pooled wallet: anyone can send to it and Atelier spends
   -- from it to fund escrows. Without this table a depositor's contribution is
   -- indistinguishable from anyone else's the moment it lands, so there is
   -- nothing to show them and nothing to bound a withdrawal by.
@@ -111,16 +131,16 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
 
-  -- The managed-worker layer. One row per human who has joined the guild.
+  -- The managed-worker layer. One row per human who has signed up.
   --
   -- handle:   what they call themselves; the only thing they have to choose.
   -- channel:  which door they came through ('web' | 'telegram'), so a notifier
   --           knows how to reach them. Not a separate table — a person is a
   --           person regardless of surface.
-  -- wallet_*: a real Circle MPC wallet Patron provisioned FOR them. Patron
+  -- wallet_*: a real Circle MPC wallet Atelier provisioned FOR them. Atelier
   --           signs on their instruction; no key exists anywhere to export.
-  -- mode:     'managed' (Patron signs) | 'own' (they signed up with their own
-  --           address and sign for themselves — Patron only notifies).
+  -- mode:     'managed' (Atelier signs) | 'own' (they signed up with their own
+  --           address and sign for themselves — Atelier only notifies).
   CREATE TABLE IF NOT EXISTS workers (
     id TEXT PRIMARY KEY,
     handle TEXT NOT NULL,
@@ -343,7 +363,7 @@ export function recordDecision(d: {
  * The offset matters more than it looks. This was capped at 100 with no way to
  * ask for anything older, and production was sitting at 98 — so within days
  * the ledger would have started dropping its own history off the bottom with
- * nothing on screen to say so. "Every decision the guild master has ever made,
+ * nothing on screen to say so. "Every decision the agent has ever made,
  * verbatim" is the claim the whole project rests on; silently truncating it is
  * the one failure that turns that claim into a lie.
  */
@@ -394,7 +414,7 @@ export function recordPaymentOnce(p: {
   ).run(p.id, p.direction, p.escrowId ?? null, p.amountUsdc, p.counterparty ?? null, p.txHash ?? null, p.reason ?? null, Date.now());
 }
 
-/** Who Patron hired for this escrow, per its own decision record. */
+/** Who Atelier hired for this escrow, per its own decision record. */
 export function hiredFor(escrowId: string): string | null {
   const row = db
     .prepare(`SELECT target FROM decisions WHERE task_id = ? AND type = 'applicant_accepted' AND target IS NOT NULL ORDER BY timestamp DESC LIMIT 1`)
