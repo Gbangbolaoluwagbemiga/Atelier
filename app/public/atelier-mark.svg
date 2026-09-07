@@ -14,7 +14,12 @@
     a machine services company, which is precisely the thing this is not.
   -->
   <defs>
-    <linearGradient id="atelier-bar" x1="0" y1="0" x2="1" y2="0">
+    <!-- userSpaceOnUse is required, not stylistic: the crossbar is a horizontal
+         line, so its object bounding box has zero height, and a gradient in
+         objectBoundingBox units on a zero-height box is not rendered at all.
+         With the default units the crossbar silently disappears and the mark
+         reads as a caret rather than an A. -->
+    <linearGradient id="atelier-bar" gradientUnits="userSpaceOnUse" x1="21" y1="38" x2="43" y2="38">
       <stop offset="0%" stop-color="#45C8D6"/>
       <stop offset="100%" stop-color="#F2C15C"/>
     </linearGradient>

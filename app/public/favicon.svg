@@ -8,7 +8,12 @@
   -->
   <rect width="64" height="64" rx="15" fill="#0B0E13"/>
   <defs>
-    <linearGradient id="fav-bar" x1="0" y1="0" x2="1" y2="0">
+    <!-- userSpaceOnUse is required, not stylistic: the crossbar is a horizontal
+         line, so its object bounding box has zero height, and a gradient in
+         objectBoundingBox units on a zero-height box is not rendered at all.
+         With the default units the crossbar silently disappears and the mark
+         reads as a caret rather than an A. -->
+    <linearGradient id="fav-bar" gradientUnits="userSpaceOnUse" x1="22.5" y1="38" x2="41.5" y2="38">
       <stop offset="0%" stop-color="#45C8D6"/>
       <stop offset="100%" stop-color="#F2C15C"/>
     </linearGradient>
