@@ -2,7 +2,7 @@
    ATELIER — the actor semantic.
 
    Two products are being merged, and they arrive with two identities:
-   SecureFlow's navy-and-teal glass, and Patron's amber-on-black editorial.
+   a navy-and-teal glass surface and an amber-on-black editorial voice.
    Blending them into a pleasant average would produce a third look that says
    nothing and is worse than either.
 
@@ -43,7 +43,7 @@
 
 :root {
   /* ── The two actors ──────────────────────────────────────────────────────
-     Light mode. Bright amber on a pale ground is illegible — Patron learned
+     Light mode. Bright amber on a pale ground is illegible — we learned
      this the hard way — so the light values are the same hues carried down to
      a legible lightness rather than the dark-mode swatches reused. */
   --actor-human: oklch(0.52 0.11 205);
@@ -68,7 +68,7 @@
 
   /* ── Type ────────────────────────────────────────────────────────────────
      Fraunces carries the big moments — a headline, a sum paid to a person.
-     Inter keeps doing the work everywhere else. Patron's instinct was right:
+     Inter keeps doing the work everywhere else. The instinct was right:
      money moving to a human should not be set in the same face as a form
      label. */
   --font-serif-display: "Fraunces", Georgia, "Iowan Old Style", serif;
@@ -77,7 +77,7 @@
 .dark {
   /* Dark mode is the real surface — this is where both products live.
      Teal is lifted off SecureFlow's existing accent so the app still feels
-     like itself; amber is Patron's #f2c15c, unchanged, because it is the
+     like itself; amber is #f2c15c, unchanged, because it is the
      brand and it is already correct on near-black. */
   --actor-human: oklch(0.78 0.13 199);
   --actor-human-fg: oklch(0.14 0.02 220);
@@ -193,7 +193,7 @@
   }
 
   /* ── The one enormous number ─────────────────────────────────────────────
-     Patron's best idea: money paid to a human is the largest thing on the
+     The best idea we kept: money paid to a human is the largest thing on the
      screen, set in the serif, and never abbreviated into a stat tile. Kept
      here because the point of this platform is that a person got paid. */
   .actor-figure {

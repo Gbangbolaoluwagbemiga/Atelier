@@ -57,27 +57,27 @@ function approveMilestone(uint256 escrowId, uint256 milestoneIndex) external …
 cannot manage an escrow that a client funded — there is no seat at the table
 for a third party.
 
-Patron works around this by **being the depositor itself.** When a human
-commissions Patron today (`POST /api/instruct`), they deposit into Patron's
-shared treasury, and `createEscrow` is then called with Patron's own Circle
+Atelier works around this by **being the depositor itself.** When a human
+commissions Atelier today (`POST /api/instruct`), they deposit into Atelier's
+shared treasury, and `createEscrow` is then called with Atelier's own Circle
 Agent Wallet as the signer:
 
 ```ts
 // agent/daemon/src/web3/secureflow.ts
-account: signer.address,   // Patron's wallet — not the human's
+account: signer.address,   // Atelier's wallet — not the human's
 ```
 
-The human's position is a row in Patron's SQLite ledger. On-chain they are
-nobody. Concretely, a human client of Patron today:
+The human's position is a row in Atelier's SQLite ledger. On-chain they are
+nobody. Concretely, a human client of Atelier today:
 
 - is **not** the escrow depositor
 - **cannot** approve or reject a milestone
 - **cannot** raise a dispute — `disputeMilestone` admits only the depositor
   and the beneficiary
 - **cannot** cancel, extend, or reclaim after the deadline
-- relies on Patron's honesty and uptime for the return of unspent funds
+- relies on Atelier's honesty and uptime for the return of unspent funds
 
-That is a custodial arrangement. It is fine for what Patron was — an agent
+That is a custodial arrangement. It is fine for what Atelier was — an agent
 spending *its own* money — and it is not fine as the basis for asking a
 stranger to hand over management of *their* money.
 
@@ -148,9 +148,9 @@ case we did *not* design for, per BRIEF.md:
 
 - **A new contract deployment.** The deployed `0x6142…ab59` cannot gain this;
   Arc mainnet is already on the schedule for Sept 14, so this rides along.
-- **Patron's daemon changes shape** for human-commissioned jobs: it stops being
+- **Atelier's daemon changes shape** for human-commissioned jobs: it stops being
   the depositor and starts being the manager of an escrow the client funded.
-  Its agent-commissioned path (`/api/hire`, x402) is unaffected — there, Patron
+  Its agent-commissioned path (`/api/hire`, x402) is unaffected — there, Atelier
   genuinely is the client and should be the depositor.
 - **The `verified`/reputation work stacks on top**, because the manager is now
   a distinct on-chain role that can carry its own record.
@@ -164,7 +164,7 @@ the client signs, the relayer submits. Rejected because it needs the client
 present to sign each approval, which is precisely the labour Autopilot is
 supposed to remove. It solves gas, not delegation.
 
-**Keep Patron as depositor, add an off-chain promise.** Rejected: it is the
+**Keep Atelier as depositor, add an off-chain promise.** Rejected: it is the
 current arrangement, and no amount of UI can make a SQLite row into an escrow.
 
 **A generic account-abstraction session key.** Stronger in the abstract, but it

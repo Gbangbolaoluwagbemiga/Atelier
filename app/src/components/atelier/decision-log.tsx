@@ -1,7 +1,7 @@
 /**
  * THE DECISION LOG.
  *
- * Patron's Ledger is the best-looking screen either source product has, and the
+ * The Ledger is the best-looking screen in the product, and the
  * reason is not the palette — it is the marginalia layout. Time and actor sit
  * in a narrow left column; the reasoning gets the main column and room to be a
  * paragraph. It reads as a *record* rather than a feed, which is the right

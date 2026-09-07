@@ -1,7 +1,7 @@
 /**
  * Reading and changing who manages a job.
  *
- * The on-chain `jobManager` is the authority here, not the Patron daemon's task
+ * The on-chain `jobManager` is the authority here, not the agent daemon's task
  * table. The daemon knows what it BELIEVES it manages; the contract knows what
  * it will actually let the agent do. When they disagree — a client revoked
  * management and the daemon has not polled since — the contract is right.

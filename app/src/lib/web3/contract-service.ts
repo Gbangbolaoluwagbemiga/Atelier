@@ -267,7 +267,7 @@ export class ContractService {
    * themselves.
    *
    * This is the on-chain answer to "is this job on Autopilot", and it is the
-   * one that counts: the Patron daemon's task table says what the agent BELIEVES
+   * one that counts: the agent daemon's task table says what the agent BELIEVES
    * it manages, while this says what the contract will actually let it do. When
    * the two disagree — a client revoked the manager and the daemon has not
    * noticed yet — this is right and the daemon is stale.

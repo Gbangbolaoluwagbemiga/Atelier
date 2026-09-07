@@ -20,7 +20,7 @@ type Escrow @entity {
   #
   # The agent currently permitted to hire, approve and reject on this escrow —
   # null when the client manages it themselves. This is the on-chain answer to
-  # "is this job on Autopilot", and it is the only trustworthy one: the Patron
+  # "is this job on Autopilot", and it is the only trustworthy one: the agent
   # daemon's own task table records what the agent believes it manages, which
   # can be stale by exactly the interval between a client revoking and the
   # daemon next polling.

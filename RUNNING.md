@@ -11,12 +11,13 @@ others are missing rather than erroring.
 
 ## First time
 
-Secrets are not in this repo. Copy them from the source projects:
+Secrets are not in this repo. Start from the checked-in examples and fill in
+your own keys:
 
 ```bash
-cp ../../Arc/Secureflow/Atelier-scaffold/.env          app/.env
-cp ../../Arc/Secureflow/Atelier-scaffold/backend/.env  app/backend/.env
-cp ../../Arc/Patron/daemon/.env                           agent/daemon/.env
+cp app/.env.example           app/.env
+cp app/backend/.env.example   app/backend/.env
+cp agent/daemon/.env.example  agent/daemon/.env
 ```
 
 Then two edits, because both backends default to port 8787:
@@ -26,7 +27,7 @@ Then two edits, because both backends default to port 8787:
 PORT=8080
 
 # app/.env — point Atelier at the daemon
-VITE_PATRON_API_URL=http://localhost:8080
+VITE_AGENT_API_URL=http://localhost:8080
 ```
 
 Install:

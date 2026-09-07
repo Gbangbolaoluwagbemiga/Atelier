@@ -59,7 +59,7 @@ forge script script/Deploy.s.sol  --rpc-url arc_testnet --broadcast
 PROXY_ADDRESS=0x… forge script script/Upgrade.s.sol --rpc-url arc_testnet --broadcast
 ```
 
-**The proxy address is the contract.** The frontend, the Patron daemon, the
+**The proxy address is the contract.** The frontend, the agent daemon, the
 subgraph and every explorer link point at the proxy and never at the
 implementation, which changes on every upgrade.
 

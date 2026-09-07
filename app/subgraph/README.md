@@ -1,7 +1,7 @@
 # SecureFlow subgraph
 
 Indexes the escrow contract on Arc. Consumed by Atelier's frontend and — more
-importantly for the pitch — by Patron's agent, which polls it to decide who to
+importantly for the pitch — by Atelier's agent, which polls it to decide who to
 hire and when to release payment. It is load-bearing infrastructure here, not a
 read-only convenience.
 
@@ -37,7 +37,7 @@ npm run deploy:studio
 ```
 
 Studio then gives you a **query URL** containing an API key. That URL is what
-belongs in `VITE_GRAPH_URL` (frontend) and `GRAPH_URL` (Patron daemon).
+belongs in `VITE_GRAPH_URL` (frontend) and `GRAPH_URL` (agent daemon).
 
 Keep the API key out of git — both are `.env` values, and the frontend one ships
 in the browser bundle, so use a Studio key rate-limited for public use rather
