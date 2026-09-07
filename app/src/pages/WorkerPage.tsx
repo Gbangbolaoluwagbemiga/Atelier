@@ -69,7 +69,7 @@ export default function WorkerPage() {
           The worker service is not running
         </h1>
         <p className="text-muted-foreground mt-3">
-          Set <code className="font-mono text-xs">VITE_PATRON_API_URL</code> to a
+          Set <code className="font-mono text-xs">VITE_AGENT_API_URL</code> to a
           running Atelier agent to open this door.
         </p>
       </div>

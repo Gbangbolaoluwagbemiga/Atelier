@@ -26,7 +26,7 @@
 import { AUTOPILOT_CONFIGURED } from "./agent-api";
 
 const BASE = (
-  (import.meta.env.VITE_PATRON_API_URL as string | undefined) ?? ""
+  (import.meta.env.VITE_AGENT_API_URL as string | undefined) ?? ""
 )
   .trim()
   .replace(/\/$/, "");

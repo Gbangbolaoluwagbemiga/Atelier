@@ -525,7 +525,7 @@ export default function AutopilotComposePage() {
         {!AUTOPILOT_CONFIGURED && (
           <p className="text-xs text-muted-foreground mt-3 text-center">
             Autopilot is not configured for this deployment — set
-            <code className="mx-1 font-mono">VITE_PATRON_API_URL</code>
+            <code className="mx-1 font-mono">VITE_AGENT_API_URL</code>
             to point at a running daemon.
           </p>
         )}

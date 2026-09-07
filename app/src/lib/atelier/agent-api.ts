@@ -1,7 +1,7 @@
 /**
- * ATELIER ↔ PATRON DAEMON.
+ * ATELIER ↔ AGENT DAEMON.
  *
- * Autopilot is not a new brain. It is Patron's daemon — already running 24/7,
+ * Autopilot is not a new brain. It is the agent daemon — already running 24/7,
  * already holding its keys server-side, already polling the subgraph to score
  * applicants and release payment — surfaced inside Atelier. This module is the
  * seam.
@@ -11,7 +11,7 @@
  * exactly the behaviour we already have. So Atelier talks to two backends: the
  * Express API for Atelier's own concerns, and this one for agent activity.
  *
- * Shapes here mirror `patron/daemon/src/store.ts` and `patron/web/src/types.ts`.
+ * Shapes here mirror `agent/daemon/src/store.ts` and the daemon's own types.
  * They are duplicated rather than imported because the daemon is a separate
  * deployable with its own release cycle — importing across that boundary would
  * couple two things that ship independently. When the daemon's shapes change,
@@ -22,7 +22,7 @@
 import type { Actor, Decision } from "./actor";
 
 const BASE = (
-  (import.meta.env.VITE_PATRON_API_URL as string | undefined) ?? ""
+  (import.meta.env.VITE_AGENT_API_URL as string | undefined) ?? ""
 )
   .trim()
   .replace(/\/$/, "");

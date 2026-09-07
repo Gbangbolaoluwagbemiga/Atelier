@@ -81,10 +81,10 @@ export default function DevPreviewPage() {
             Autopilot daemon:{" "}
             {AUTOPILOT_CONFIGURED ? (
               <code className="font-mono text-xs">
-                {import.meta.env.VITE_PATRON_API_URL}
+                {import.meta.env.VITE_AGENT_API_URL}
               </code>
             ) : (
-              "not configured — set VITE_PATRON_API_URL"
+              "not configured — set VITE_AGENT_API_URL"
             )}
           </span>
         </div>

@@ -49,7 +49,7 @@ const DECISIONS = [
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  vi.stubEnv("VITE_PATRON_API_URL", "https://daemon.test");
+  vi.stubEnv("VITE_AGENT_API_URL", "https://daemon.test");
   fetchMock = vi.fn(async (url: string) => {
     const body = url.includes("/api/tasks") ? TASKS : DECISIONS;
     return { ok: true, json: async () => body } as Response;
@@ -112,7 +112,7 @@ describe("fetchDecisionsForEscrow", () => {
 /*
  * Not tested here: the AUTOPILOT_CONFIGURED === false path.
  *
- * `VITE_PATRON_API_URL` is read at module scope, and Vite replaces
+ * `VITE_AGENT_API_URL` is read at module scope, and Vite replaces
  * `import.meta.env.VITE_*` statically at transform time — so vi.stubEnv plus
  * resetModules cannot move it, and a test that appears to check it would only
  * be re-asserting the value the test runner was configured with.
