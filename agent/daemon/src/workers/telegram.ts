@@ -8,7 +8,7 @@
 // Long-polling (getUpdates) rather than webhooks, deliberately: no public
 // callback URL, no second service, no inbound port. It runs inside the daemon
 // that is already deployed, needing nothing but a bot token — and if that token
-// is absent the bot simply doesn't start and the rest of Patron is unaffected.
+// is absent the bot simply doesn't start and the rest of Atelier is unaffected.
 
 import * as store from "../store.js";
 import * as workers from "./service.js";
@@ -124,7 +124,9 @@ function workerFor(tgUserId: number) {
   return store.getWorkerByChannelRef("telegram", String(tgUserId));
 }
 
-const WEB = "https://patron-guild.vercel.app";
+/* Was hardcoded to a previous product's deployment, so every link the bot sent
+   took a freelancer to the wrong app entirely. Set PUBLIC_APP_URL on deploy. */
+const WEB = config.publicAppUrl;
 
 /**
  * Testers said the bot felt like "one linear thing" with no sense of what else
@@ -134,7 +136,7 @@ const WEB = "https://patron-guild.vercel.app";
  * just a confusing one.
  */
 const HELP = [
-  "🏰 <b>Patron</b> — an AI posts a job, locks the money before anyone applies, and pays you when your work is accepted.",
+  "🎨 <b>Atelier</b> — an AI posts a job, locks the money before anyone applies, and pays you when your work is accepted.",
   "",
   "<b>Finding work</b>",
   "/jobs — everything open right now",
@@ -157,13 +159,13 @@ const HELP = [
   "",
   "<b>You</b>",
   "/profile — your handle, skills and rating",
-  "/skills &lt;text&gt; — tell the guild what you do",
+  "/skills &lt;text&gt; — tell Atelier what you do",
   "/link 0x… — use your own wallet instead of the one we made you",
   "",
   "<b>Seeing everything</b>",
   `The full ledger — every job, every payment, and the AI's actual reasoning for`,
   `every decision it has ever made — is public at ${WEB}`,
-  `Your own page: ${WEB}/work`,
+  `Your own page: ${WEB}/get-hired`,
   "",
   "You keep 100% of what a job pays. The 1% network fee is paid by the client, not taken from you.",
 ].join("\n");
@@ -276,7 +278,7 @@ async function showJobs(chatId: number, tgUserId: number, filter = "", page = 0)
       "",
       pages > 1 ? `<i>Page ${p + 1} of ${pages}</i>` : "",
       llmPaused()
-        ? `⏳ <i>The guild master is rate-limited and resumes in ${llmPauseRemaining()}. You can still apply now — applications are on-chain and queue up.</i>`
+        ? `⏳ <i>The agent is rate-limited and resumes in ${llmPauseRemaining()}. You can still apply now — applications are on-chain and queue up.</i>`
         : "",
       `<i>Filter with</i> <code>/jobs logo</code> <i>or a minimum budget:</i> <code>/jobs 5</code>`,
     ]
@@ -326,7 +328,7 @@ async function showJobDetail(chatId: number, id: string): Promise<void> {
       graded,
       "",
       detail.outcome ? `<b>Outcome:</b> ${detail.outcome}` : "",
-      `Full reasoning, verbatim: ${WEB}/jobs/${id}`,
+      `Full reasoning, verbatim: ${WEB}/jobs`,
     ]
       .filter(Boolean)
       .join("\n"),
@@ -401,7 +403,7 @@ async function handleText(msg: TgMessage) {
       await send(
         chatId,
         [
-          "🏰 <b>Patron</b> — an AI posts a job, locks the money on-chain, and pays you when the work is accepted.",
+          "🎨 <b>Atelier</b> — an AI posts a job, locks the money on-chain, and pays you when the work is accepted.",
           "",
           "No wallet to install. No crypto to learn. You'll be set up in about ten seconds.",
           "",
@@ -429,7 +431,7 @@ async function handleText(msg: TgMessage) {
 
     if (cmd === "/submit") {
       const worker = workerFor(tgUserId);
-      if (!worker) return void (await send(chatId, "You're not in the guild yet — send /start."));
+      if (!worker) return void (await send(chatId, "You're not signed up yet — send /start."));
       const id = rest.trim();
       if (!id) {
         return void (await send(chatId, "Which commission? Send <code>/submit 31</code> using the entry number from /jobs."));
@@ -443,11 +445,11 @@ async function handleText(msg: TgMessage) {
     //    answer here reads as evasive about someone's money.
     if (cmd === "/wallet") {
       const worker = workerFor(tgUserId);
-      if (!worker) return void (await send(chatId, "You're not in the guild yet — send /start."));
+      if (!worker) return void (await send(chatId, "You're not signed up yet — send /start."));
       if (worker.mode === "own") {
         return void (await send(
           chatId,
-          [`You're using your own wallet:`, `<code>${worker.walletAddress}</code>`, "", "You hold the keys. Patron only tells you when work appears."].join("\n"),
+          [`You're using your own wallet:`, `<code>${worker.walletAddress}</code>`, "", "You hold the keys. Atelier only tells you when work appears."].join("\n"),
         ));
       }
       return void (await send(
@@ -488,7 +490,7 @@ async function handleText(msg: TgMessage) {
 
     if (cmd === "/profile") {
       const worker = workerFor(tgUserId);
-      if (!worker) return void (await send(chatId, "You're not in the guild yet — send /start."));
+      if (!worker) return void (await send(chatId, "You're not signed up yet — send /start."));
       let rating = "no ratings yet";
       try {
         if (worker.walletAddress) {
@@ -505,7 +507,7 @@ async function handleText(msg: TgMessage) {
           `<b>${esc(worker.handle)}</b>`,
           `Joined ${joined} · ${worker.mode === "managed" ? "wallet managed for you" : "your own wallet"}`,
           "",
-          `<b>What you do:</b> ${esc(worker.skills) || "not set — /skills to tell the guild"}`,
+          `<b>What you do:</b> ${esc(worker.skills) || "not set — /skills to tell Atelier"}`,
           `<b>On-chain rating:</b> ${rating}`,
           "",
           "Your rating is written to the contract when a job completes, so it's verifiable by anyone and not something we can quietly change.",
@@ -515,7 +517,7 @@ async function handleText(msg: TgMessage) {
 
     if (cmd === "/skills") {
       const worker = workerFor(tgUserId);
-      if (!worker) return void (await send(chatId, "You're not in the guild yet — send /start."));
+      if (!worker) return void (await send(chatId, "You're not signed up yet — send /start."));
       if (!rest) return void (await send(chatId, "Tell me what you do, like: <code>/skills logo design, brand identity</code>"));
       store.setWorkerSkills(worker.id, rest.slice(0, 200));
       return void (await send(chatId, `Noted — <b>${esc(rest.slice(0, 200))}</b>. /profile to see it.`));
@@ -523,7 +525,7 @@ async function handleText(msg: TgMessage) {
 
     if (cmd === "/mine") {
       const worker = workerFor(tgUserId);
-      if (!worker) return void (await send(chatId, "You're not in the guild yet — send /start."));
+      if (!worker) return void (await send(chatId, "You're not signed up yet — send /start."));
       const mine = await workers.myWork(worker.id);
       if (mine.length === 0) {
         return void (await send(chatId, "You haven't applied to anything yet. /jobs to see what's open."));
@@ -547,7 +549,7 @@ async function handleText(msg: TgMessage) {
 
     if (cmd === "/balance") {
       const worker = workerFor(tgUserId);
-      if (!worker) return void (await send(chatId, "You're not in the guild yet — send /start."));
+      if (!worker) return void (await send(chatId, "You're not signed up yet — send /start."));
       try {
         const { balance, address } = await workers.balance(worker.id);
         await send(
@@ -555,7 +557,7 @@ async function handleText(msg: TgMessage) {
           [
             `💰 <b>$${Number(balance).toFixed(2)} USDC</b>`,
             "",
-            "This is already yours — it sits in your own wallet, not with Patron.",
+            "This is already yours — it sits in your own wallet, not with Atelier.",
             `<code>${address}</code>`,
             "",
             "/withdraw to move it to any address you control.",
@@ -569,7 +571,7 @@ async function handleText(msg: TgMessage) {
 
     if (cmd === "/withdraw") {
       const worker = workerFor(tgUserId);
-      if (!worker) return void (await send(chatId, "You're not in the guild yet — send /start."));
+      if (!worker) return void (await send(chatId, "You're not signed up yet — send /start."));
       if (rest.startsWith("0x")) return void (await doWithdraw(chatId, worker.id, rest as `0x${string}`));
       pending.set(chatId, { kind: "withdraw" });
       await send(chatId, "Paste the wallet address you'd like your earnings sent to (it starts with 0x).");
@@ -650,7 +652,7 @@ async function handleText(msg: TgMessage) {
       await send(
         chatId,
         [
-          `You're in, <b>${esc(worker.handle)}</b>. 🏰`,
+          `You're in, <b>${esc(worker.handle)}</b>. 🎨`,
           "",
           "I set up a wallet for you in the background. You don't have to do anything with it, nobody can take what's in it, and anything you earn lands there directly.",
           "",
@@ -673,7 +675,7 @@ async function handleText(msg: TgMessage) {
   const worker = workerFor(tgUserId);
   if (!worker) {
     pending.delete(chatId);
-    return void (await send(chatId, "You're not in the guild yet — send /start."));
+    return void (await send(chatId, "You're not signed up yet — send /start."));
   }
 
   // Ask for evidence before applying. Testers pointed out that with only a text
@@ -709,8 +711,8 @@ async function handleText(msg: TgMessage) {
           // entirely on-chain and works regardless; it is the SCORING that needs
           // the model, so when it's paused say so rather than going quiet.
           llmPaused()
-            ? `Your application is on-chain and safe. The guild master is rate-limited right now and resumes in ${llmPauseRemaining()} — I'll message you as soon as it has scored everyone.`
-            : "The job stays open for a while so others can apply, then the guild master scores everyone together and hires the best fit. I'll message you either way — you don't have to keep checking.",
+            ? `Your application is on-chain and safe. The agent is rate-limited right now and resumes in ${llmPauseRemaining()} — I'll message you as soon as it has scored everyone.`
+            : "The job stays open for a while so others can apply, then the agent scores everyone together and hires the best fit. I'll message you either way — you don't have to keep checking.",
           `<a href="https://testnet.arcscan.app/tx/${txHash}">See it on the block explorer</a>`,
         ].join("\n"),
       );
@@ -855,13 +857,13 @@ async function handleCallback(cq: NonNullable<TgUpdate["callback_query"]>) {
   }
 
   const worker = workerFor(tgUserId);
-  if (!worker) return void (await send(chatId, "You're not in the guild yet — send /start."));
+  if (!worker) return void (await send(chatId, "You're not signed up yet — send /start."));
 
   if (action === "apply" && arg) {
     pending.set(chatId, { kind: "cover", escrowId: arg });
     return void (await send(
       chatId,
-      "Tell me why you're right for this one — be specific about what you'd deliver. The guild master reads this and scores it.",
+      "Tell me why you're right for this one — be specific about what you'd deliver. The agent reads this and scores it.",
     ));
   }
 

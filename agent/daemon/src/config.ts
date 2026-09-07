@@ -38,14 +38,14 @@ export const config = {
    */
   hireScoreThreshold: Number(process.env.HIRE_SCORE_THRESHOLD ?? 55),
 
-  // Atelier — Patron calls this contract, does NOT deploy its own
+  // Atelier — Atelier calls this contract, does NOT deploy its own
   atelierAddress: (process.env.ATELIER_CONTRACT_ADDRESS?.trim() ||
     "0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59") as `0x${string}`,
   usdcAddress: (process.env.USDC_ADDRESS?.trim() ||
     "0x3600000000000000000000000000000000000000") as `0x${string}`,
   graphUrl: process.env.GRAPH_URL?.trim() || "",
 
-  // Circle Programmable Wallets (MPC) — the Patron Agent Wallet treasury.
+  // Circle Programmable Wallets (MPC) — the Atelier Agent Wallet treasury.
   circleApiKey: process.env.CIRCLE_API_KEY?.trim() || "",
   circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET?.trim() || "",
   circleWalletId: process.env.CIRCLE_WALLET_ID?.trim() || "",
@@ -57,12 +57,12 @@ export const config = {
     process.env.GATEWAY_FACILITATOR_URL?.trim() || "https://gateway-api-testnet.circle.com",
   x402OrderFee: process.env.X402_ORDER_FEE?.trim() || "0.05",
 
-  // x402 BUY side — Patron paying a marketplace service (services/portfolio-check)
+  // x402 BUY side — Atelier paying a marketplace service (services/portfolio-check)
   // to verify the leading applicant before hiring. Unset = skip verification.
   portfolioCheckUrl: process.env.PORTFOLIO_CHECK_URL?.trim() || "",
 
   // Application-level spending policy — the second cage. The Developer-Controlled
-  // Wallets SDK has no native policy engine, so Patron enforces caps itself before
+  // Wallets SDK has no native policy engine, so Atelier enforces caps itself before
   // every signed spend (see circle/gateway.ts).
   dailySpendCapUsdc: Number(process.env.DAILY_SPEND_CAP_USDC ?? 50),
   x402BuySpendCapUsdc: Number(process.env.X402_BUY_SPEND_CAP_USDC ?? 5),
@@ -75,7 +75,7 @@ export const config = {
   // quietly locked 100x the requested amount.
   maxJobBudgetUsdc: Number(process.env.MAX_JOB_BUDGET_USDC ?? 100),
 
-  // How long a job stays open for applications before the guild master judges.
+  // How long a job stays open for applications before the agent judges.
   //
   // Without a window, scoring fired the moment the FIRST application landed and
   // hired anyone clearing the bar — so the job went to whoever was fastest, not
@@ -100,6 +100,15 @@ export const config = {
    * unauthenticated wallet service is worse than no wallet service.
    */
   googleClientId: process.env.GOOGLE_CLIENT_ID?.trim() || "",
+
+  /**
+   * Where Atelier is served, for links the bot sends into a chat.
+   *
+   * Configurable because it was hardcoded to a previous product's deployment,
+   * so every link the bot sent took a freelancer to the wrong app. A URL that
+   * differs per environment does not belong in source.
+   */
+  publicAppUrl: (process.env.PUBLIC_APP_URL?.trim() || "http://localhost:5173").replace(/\/$/, ""),
 
   port: Number(process.env.PORT ?? 8787),
 };
