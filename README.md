@@ -101,6 +101,12 @@ Sign in with Google, pick a name, and a Circle MPC wallet is provisioned behind
 you. Applying costs no gas and no signature — the daemon signs on your
 instruction. Same Google account always returns the same wallet.
 
+Or skip the browser entirely: **[@The_Atelierbot](https://t.me/The_Atelierbot)**
+is the same worker service in a chat — browse, apply, submit and withdraw, with
+jobs pushed to you rather than you checking. The two doors are namespaced
+separately, so a Telegram account and a web account are different people unless
+you link them.
+
 The trade is stated where someone can act on it rather than buried: **we hold
 the keys.** Withdraw to an address you own, or bring your own wallet from the
 start and sign everything yourself.
