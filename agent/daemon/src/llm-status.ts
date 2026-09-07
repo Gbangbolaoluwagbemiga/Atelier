@@ -1,4 +1,4 @@
-// llm-status.ts — is the guild master currently able to think?
+// llm-status.ts — is the agent currently able to think?
 //
 // Shared by the poller (which discovers a rate limit) and the surfaces people
 // actually talk to (which have to set expectations honestly). Its own module
@@ -9,7 +9,7 @@
 // Why this exists at all: everything a WORKER does — joining, browsing, applying,
 // submitting, withdrawing — is completely LLM-free. Someone can get a real wallet
 // and put a real application on-chain with the model entirely dead. What needs the
-// model is Patron's RESPONSE: scoring applicants, hiring, reviewing work.
+// model is Atelier's RESPONSE: scoring applicants, hiring, reviewing work.
 //
 // So the failure isn't that the door is shut. It's that a person walks through it,
 // is told "I'll message you either way", and then hears nothing. Telling them the
@@ -22,7 +22,7 @@ export function setLlmPausedUntil(timestamp: number): void {
   pausedUntil = timestamp;
 }
 
-/** True while the guild master cannot score or review. */
+/** True while the agent cannot score or review. */
 export function llmPaused(): boolean {
   return Date.now() < pausedUntil;
 }

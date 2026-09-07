@@ -8,7 +8,7 @@
 // the work and someone who writes well about doing the work. Asked how we verify
 // an applicant is qualified, the honest answer was that we largely didn't.
 //
-// Meanwhile Patron already holds real evidence and wasn't using it for the
+// Meanwhile Atelier already holds real evidence and wasn't using it for the
 // decision: every job is on a public chain, ratings are written to the contract
 // on completion, and disputes are a matter of record. This module gathers that
 // and hands it to the scorer as VERIFIED FACT, kept clearly apart from the
@@ -21,11 +21,12 @@
 //
 // The on-chain record is deliberately a MINOR input. Weighting it heavily would
 // entrench whoever arrived first and permanently disadvantage the newcomer with
-// a stronger CV — and since Patron creates a wallet for every managed worker,
+// a stronger CV — and since Atelier creates a wallet for every managed worker,
 // every genuine new applicant starts with an empty record BY CONSTRUCTION.
 // Judging people on a record we just made for them would be circular.
 
 import * as store from "../store.js";
+import { config } from "../config.js";
 import { getAverageRating } from "../web3/atelier.js";
 
 const LINK_TIMEOUT_MS = 8_000;
@@ -72,7 +73,7 @@ async function readPortfolio(url: string): Promise<{ url: string; reachable: boo
     const res = await fetch(url, {
       redirect: "follow",
       signal: AbortSignal.timeout(LINK_TIMEOUT_MS),
-      headers: { "User-Agent": "PatronBot/1.0 (+https://patron-guild.vercel.app)" },
+      headers: { "User-Agent": `AtelierBot/1.0 (+${config.publicAppUrl})` },
     });
     if (!res.ok) return { url, reachable: false, note: `does not resolve (HTTP ${res.status})`, content: null };
 
@@ -183,7 +184,7 @@ async function readPortfolio(url: string): Promise<{ url: string; reachable: boo
 /**
  * Everything checkable about one applicant.
  *
- * Completed/disputed counts come from Patron's own decision log, which is public
+ * Completed/disputed counts come from Atelier's own decision log, which is public
  * on the ledger and backed by on-chain transactions — so a judge or an applicant
  * can audit any of it rather than taking our word.
  */
@@ -231,7 +232,7 @@ export async function gatherEvidence(address: string, coverLetter: string): Prom
  *
  * Two separate blocks, because they carry different weight and different trust:
  * what the applicant SHOWED (their CV or portfolio, fetched — untrusted text
- * written by whoever owns that page) and what Patron KNOWS (their history here —
+ * written by whoever owns that page) and what Atelier KNOWS (their history here —
  * verified, but minor, and absent for everyone new).
  */
 export function renderEvidence(e: ApplicantEvidence): { shown: string; record: string } {
@@ -248,7 +249,7 @@ export function renderEvidence(e: ApplicantEvidence): { shown: string; record: s
 
   const record = lines.length
     ? lines.join("\n")
-    : "- No history on Patron. Expected for anyone new, and NOT a mark against them.";
+    : "- No history on Atelier. Expected for anyone new, and NOT a mark against them.";
 
   return { shown, record };
 }

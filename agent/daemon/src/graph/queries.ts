@@ -1,5 +1,5 @@
-// Patron-specific subgraph queries
-// All jobs Patron posted are identified by depositor === Patron's Agent Wallet address
+// Atelier-specific subgraph queries
+// All jobs Atelier posted are identified by depositor === Atelier's Agent Wallet address
 
 export const GET_AGENT_JOBS = `
   query GetAgentJobs($agentAddress: Bytes!) {

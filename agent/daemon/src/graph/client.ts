@@ -1,4 +1,4 @@
-// Reads from the same Atelier v3 subgraph — Patron queries jobs it posted
+// Reads from the same Atelier v3 subgraph — Atelier queries jobs it posted
 import { config } from "../config.js";
 
 export function isGraphConfigured(): boolean {

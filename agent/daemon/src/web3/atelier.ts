@@ -1,6 +1,6 @@
-// atelier.ts — the only place Patron actually writes to the Atelier contract.
+// atelier.ts — the only place Atelier actually writes to the Atelier contract.
 //
-// Writes go through the Patron Agent Wallet's viem WalletClient (Circle MPC-backed,
+// Writes go through the Atelier Agent Wallet's viem WalletClient (Circle MPC-backed,
 // see circle/circleSigner.ts). `writeContract` ABI-encodes calldata the same way for
 // any function shape — arrays, strings, structs — so the same MPC wallet that signs
 // x402 payments also signs createEscrow's array/string params with no special
@@ -125,14 +125,14 @@ export async function createEscrow(params: CreateEscrowParams): Promise<{ escrow
 /**
  * Every Atelier write, funnelled through one place.
  *
- * `as` is who signs. It defaults to the Patron treasury, which is what every
- * call site did implicitly before — Patron's own actions (hiring, approving,
- * rejecting, escalating) are unchanged and still go out as Patron.
+ * `as` is who signs. It defaults to the Atelier treasury, which is what every
+ * call site did implicitly before — Atelier's own actions (hiring, approving,
+ * rejecting, escalating) are unchanged and still go out as Atelier.
  *
  * Passing a different signer is what the managed-worker layer needs: applying
  * to a job and submitting work must be signed BY THE FREELANCER, because
- * Atelier authorises those on `msg.sender`. Patron cannot apply on someone's
- * behalf from its own wallet — the contract would record Patron as the
+ * Atelier authorises those on `msg.sender`. Atelier cannot apply on someone's
+ * behalf from its own wallet — the contract would record Atelier as the
  * applicant. So the worker's own Circle wallet signs, on their instruction.
  */
 async function write(
@@ -152,7 +152,7 @@ async function write(
   return hash;
 }
 
-// ── Patron's own actions (signed by the treasury) ───────────────────────────
+// ── Atelier's own actions (signed by the treasury) ───────────────────────────
 
 export async function acceptFreelancer(escrowId: bigint, freelancer: `0x${string}`): Promise<`0x${string}`> {
   return write("acceptFreelancer", [escrowId, freelancer]);
@@ -166,15 +166,15 @@ export async function rejectMilestone(escrowId: bigint, milestoneIndex: bigint, 
   return write("rejectMilestone", [escrowId, milestoneIndex, reason]);
 }
 
-/** Human-arbiter escalation path — Patron's one-way key can never do this itself; it only calls it after max revisions. */
+/** Human-arbiter escalation path — Atelier's one-way key can never do this itself; it only calls it after max revisions. */
 export async function disputeMilestone(escrowId: bigint, milestoneIndex: bigint, reason: string): Promise<`0x${string}`> {
   return write("disputeMilestone", [escrowId, milestoneIndex, reason]);
 }
 
 // ── A freelancer's own actions (signed by THEIR wallet) ─────────────────────
 // Atelier authorises each of these on msg.sender, so the signer here is the
-// freelancer, never Patron. In managed mode that wallet is a Circle MPC wallet
-// Patron provisioned for them; in bring-your-own mode these never run at all
+// freelancer, never Atelier. In managed mode that wallet is a Circle MPC wallet
+// Atelier provisioned for them; in bring-your-own mode these never run at all
 // because the freelancer signs from their own wallet via Atelier's dApp.
 
 export async function applyToJob(
@@ -201,7 +201,7 @@ export async function submitMilestone(
 
 /**
  * On-chain reputation. Present in the ABI and previously unused — this is what
- * makes Patron's reputation real rather than derived: humans and clients rating
+ * makes Atelier's reputation real rather than derived: humans and clients rating
  * each other on the contract, readable by anyone, not computed from our own
  * database.
  */
@@ -237,7 +237,7 @@ export async function getAverageRating(who: `0x${string}`): Promise<{ average: n
 // stranded: a job that attracts no suitable applicant keeps its budget locked
 // in escrow with no recovery path. Several of ours are sitting like that now.
 //
-// This matters beyond bookkeeping. Patron's central claim is that no machine in
+// This matters beyond bookkeeping. Atelier's central claim is that no machine in
 // the chain can take your money — and the honest completion of that claim is
 // that money nobody earned comes back, rather than staying locked forever
 // because we never implemented the return path.
@@ -246,7 +246,7 @@ export async function getAverageRating(who: `0x${string}`): Promise<{ average: n
  * Cancel an unfilled job and return its budget to whoever funded it.
  *
  * Only valid before a freelancer is hired — once someone is working, their
- * claim on the escrow is exactly what makes Patron trustworthy, and the
+ * claim on the escrow is exactly what makes Atelier trustworthy, and the
  * contract enforces that.
  */
 export async function cancelJob(escrowId: bigint, as: CircleSigner = createCircleSigner()): Promise<`0x${string}`> {

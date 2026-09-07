@@ -60,7 +60,7 @@ const BriefSchema = z.object({
     .describe("Split of the budget into independently-reviewed chunks. A single-milestone job is fine for simple work."),
 });
 
-const SYSTEM_PROMPT = `You are Patron's Brief Generator. Patron is an autonomous service that hires
+const SYSTEM_PROMPT = `You are Atelier's Brief Generator. Atelier is an autonomous service that hires
 human freelancers on behalf of clients — AI agents paying per-request over x402, or humans
 through a web UI. Your job is to take a client's instruction and convert it into a precise,
 enforceable acceptance brief that a freelancer can be judged against and paid on.
@@ -185,7 +185,7 @@ export async function generateBrief(instruction: string): Promise<BriefGeneratio
   }
 
   // Hash the criteria for on-chain posting — embedded in Atelier's projectDescription
-  // so the brief Patron reviews against can't be silently altered after the escrow is live.
+  // so the brief Atelier reviews against can't be silently altered after the escrow is live.
   const criteriaJson = JSON.stringify(parsed.criteria);
   const briefHash = keccak256(toBytes(criteriaJson));
 

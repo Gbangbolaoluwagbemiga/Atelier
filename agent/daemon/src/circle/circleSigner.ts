@@ -17,7 +17,7 @@ const { createEIP1193Provider } = nodeRequire(
 /**
  * Custody via Circle Programmable Wallets (developer-controlled, MPC).
  *
- * Circle holds the key shares — Patron NEVER sees a raw private key. Circle's
+ * Circle holds the key shares — Atelier NEVER sees a raw private key. Circle's
  * EIP-1193 provider drives the MPC wallet over the API; wrapped in a viem
  * WalletClient so the Agent Wallet can both:
  *   • sign x402 payment authorizations (EIP-712 `signTypedData`) — this is exactly
@@ -51,14 +51,14 @@ export function circleCustodyReady(): boolean {
 /**
  * Build an MPC-backed signer for ANY wallet under this Circle developer account.
  *
- * Patron's treasury is one such wallet; a freelancer onboarded through the worker
+ * Atelier's treasury is one such wallet; a freelancer onboarded through the worker
  * layer is another. Circle's EIP-1193 provider is scoped to the developer account
  * and selects the wallet by address, so signing "as" a worker is the same call
  * path as signing as the treasury — no second SDK, no raw key on either side.
  *
  * This is what makes the managed-worker layer possible: a human can own a real
  * wallet, and have real transactions signed on their instruction, without ever
- * holding a key. See PATRON_INBOX.md.
+ * holding a key. See AGENT_INBOX.md.
  */
 export function createSignerFor(address: `0x${string}`): CircleSigner {
   if (!config.circleApiKey || !config.circleEntitySecret) {
@@ -90,7 +90,7 @@ export function createSignerFor(address: `0x${string}`): CircleSigner {
   };
 }
 
-/** The Patron Agent Wallet — the treasury. Default signer for everything Patron does as itself. */
+/** The Atelier Agent Wallet — the treasury. Default signer for everything Atelier does as itself. */
 export function createCircleSigner(): CircleSigner {
   if (!config.circleWalletAddress) {
     throw new Error("Circle custody needs CIRCLE_WALLET_ADDRESS — run `npm run circle:setup` first");

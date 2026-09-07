@@ -17,6 +17,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { config } from "../config.js";
 import {
   imageDimensions,
   readSvgSource,
@@ -161,7 +162,7 @@ async function fetchImage(url: string): Promise<FetchResult> {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       redirect: "follow",
-      headers: { "User-Agent": "PatronBot/1.0 (+https://patron-guild.vercel.app)" },
+      headers: { "User-Agent": `AtelierBot/1.0 (+${config.publicAppUrl})` },
     });
     if (!res.ok) return { error: `the link returned ${res.status}` };
 

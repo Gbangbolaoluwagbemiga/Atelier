@@ -5,12 +5,12 @@
 // Keeping the surface out of here is what makes the second door cost a day
 // instead of a week, and what lets us change our minds about surfaces later.
 //
-// The architectural property that makes all of this cheap: Patron's poller reads
+// The architectural property that makes all of this cheap: Atelier's poller reads
 // the Atelier subgraph, not a list of applicants it maintains. It has no idea
 // who produced an application. So a worker applying through this service flows
 // into reviewApplications → acceptFreelancer → reviewMilestone → approveMilestone
 // with zero changes to the scorer, the reviewer, the agent, the store, the SSE
-// stream, or the frontend. The guild master genuinely cannot tell which door
+// stream, or the frontend. The agent genuinely cannot tell which door
 // someone came through — and doesn't need to.
 
 import crypto from "node:crypto";
@@ -42,12 +42,12 @@ export interface JoinParams {
 }
 
 /**
- * Join the guild.
+ * Join Atelier.
  *
  * Managed mode (the default) provisions a real MPC wallet and drips enough for
  * gas, and the person is never told either happened — because why would you tell
  * them. Bring-your-own mode records their address and provisions nothing; for
- * those users Patron is a notifier and coordinator, never a custodian.
+ * those users Atelier is a notifier and coordinator, never a custodian.
  */
 export async function join(params: JoinParams): Promise<store.WorkerRow> {
   const handle = params.handle.trim();
@@ -102,7 +102,7 @@ export interface Quest {
   criteria: string[];
   /** How the budget is split, so a worker can see they're paid in stages. */
   milestones: { description: string; amount: number }[];
-  /** When applications close and the guild master judges them together. */
+  /** When applications close and the agent judges them together. */
   closesAt: number;
   /** Only set when a worker was supplied — lets a surface hide "Apply" on ones they've taken. */
   alreadyApplied?: boolean;
@@ -163,7 +163,7 @@ export async function openQuestsFor(workerId: string): Promise<Quest[]> {
  *
  * Worse than the failure was the message. The raw error says "insufficient
  * funds", which the API's sanitiser matched to its treasury rule and rendered as
- * "Patron's treasury doesn't hold enough USDC" — telling a freelancer that OUR
+ * "Atelier's treasury doesn't hold enough USDC" — telling a freelancer that OUR
  * wallet was empty when the issue was a drip in flight to theirs.
  */
 async function ensureGas(worker: store.WorkerRow): Promise<void> {
@@ -187,7 +187,7 @@ const MIN_GAS_USDC = Number(process.env.WORKER_MIN_GAS_USDC ?? 0.01);
 function signerFor(worker: store.WorkerRow) {
   if (worker.mode === "own") {
     throw new UserFacingError(
-      "You signed up with your own wallet, so Patron can't sign for you — apply from Atelier with your wallet and Patron will still see it.",
+      "You signed up with your own wallet, so Atelier can't sign for you — apply from Atelier with your wallet and Atelier will still see it.",
     );
   }
   if (!worker.walletAddress) throw new UserFacingError("No wallet on this account yet.");
@@ -197,9 +197,9 @@ function signerFor(worker: store.WorkerRow) {
 /**
  * Apply to a commission.
  *
- * The freelancer's OWN wallet signs this, not Patron's — Atelier authorises
- * applyToJob on msg.sender, so an application signed by Patron would record
- * Patron as the applicant. Their tap is the instruction; Patron is the broker
+ * The freelancer's OWN wallet signs this, not Atelier's — Atelier authorises
+ * applyToJob on msg.sender, so an application signed by Atelier would record
+ * Atelier as the applicant. Their tap is the instruction; Atelier is the broker
  * executing it in their name.
  */
 /**
@@ -240,7 +240,7 @@ export async function apply(
    * confident and the only thing separating applicants is how well they write.
    * Someone with ten years of logos had no way to show it.
    *
-   * A LINK rather than an upload, deliberately. Patron has no file storage, and
+   * A LINK rather than an upload, deliberately. Atelier has no file storage, and
    * the obvious shortcut — accepting a Telegram upload and putting its URL
    * on-chain — would be a security hole: Telegram's file URLs embed the bot
    * token, so that would publish our credentials permanently on a public chain.
@@ -265,7 +265,7 @@ export async function apply(
   await ensureGas(worker);
   if (await atelier.hasApplied(BigInt(escrowId), signer.address)) {
     throw new UserFacingError(
-      "You've already applied to this one — the guild master has your application and will come back to you either way.",
+      "You've already applied to this one — the agent has your application and will come back to you either way.",
     );
   }
 
@@ -460,7 +460,7 @@ export async function myWork(
       completed: ["✅", "Finished and paid"],
       disputed: ["⚖️", "With a human arbiter"],
       hired: ["🔨", "You were hired — send your work"],
-      applied: ["⏳", "Applied, waiting on the guild master"],
+      applied: ["⏳", "Applied, waiting on the agent"],
       lost: ["—", "Applied, but someone else was hired"],
     };
     const [icon, status] = presentation[state];
