@@ -38,8 +38,8 @@ export interface NavItem {
     | "client"
     | "arbiter"
     | "admin"
-    /** Only for someone who has NOT connected a wallet of their own. */
-    | "no-wallet";
+    /** Only for a visitor with no account at all — no wallet, no managed session. */
+    | "signed-out";
 }
 
 /**
@@ -49,15 +49,17 @@ export interface NavItem {
 export const PRIMARY_NAV: readonly NavItem[] = [
   { to: "/jobs", label: "Browse Jobs", visibility: "always" },
   /*
-   * The no-wallet door, shown to everyone who does not already have a wallet.
+   * The door in, shown only to somebody who has not come through one yet.
    *
-   * It is for someone who has never held a private key, so gating it on being a
-   * freelancer would hide it from every person it was built for. But once
-   * somebody connects their OWN wallet they have stopped being that person —
-   * they sign for themselves, and an entrance offering to hold their keys is
-   * clutter at best and confusing at worst.
+   * It is for a person who has never held a private key, so gating it on being
+   * a freelancer would hide it from everyone it was built for. But it is an
+   * ENTRANCE, and an entrance is clutter once you are inside: a wallet user
+   * signs for themselves and has no use for it, and a signed-in managed worker
+   * already reaches the same page from their wallet menu.
+   *
+   * So it disappears the moment there is an account of either kind.
    */
-  { to: "/get-hired", label: "Get Hired", visibility: "no-wallet" },
+  { to: "/get-hired", label: "Get Hired", visibility: "signed-out" },
   { to: "/post", label: "Post a Job", visibility: "always" },
   /*
    * One destination for both sides of the table.
@@ -83,6 +85,8 @@ export const PRIMARY_NAV: readonly NavItem[] = [
 export interface NavRoles {
   /** True once the visitor has connected a wallet they control. */
   hasOwnWallet?: boolean;
+  /** True once they are signed in with a managed Circle wallet. */
+  hasManagedAccount?: boolean;
   isFreelancer: boolean;
   isClient: boolean;
   isArbiter: boolean;
@@ -100,8 +104,8 @@ export function visibleNav(
       // Either side of the table. My Jobs sorts out which tabs to show.
       case "participant":
         return roles.isFreelancer || roles.isClient;
-      case "no-wallet":
-        return !roles.hasOwnWallet;
+      case "signed-out":
+        return !roles.hasOwnWallet && !roles.hasManagedAccount;
       case "freelancer":
         return roles.isFreelancer;
       case "client":

@@ -25,6 +25,7 @@ import { useJobCreatorStatus } from "@/hooks/use-job-creator-status";
 import { usePendingApprovals } from "@/hooks/use-pending-approvals";
 import { useWeb3 } from "@/contexts/web3-context";
 import { visibleNav, isCurrent, type NavItem } from "@/lib/atelier/nav";
+import { useManagedWorker } from "@/hooks/use-managed-worker";
 
 /** One link, styled identically wherever it appears. */
 function NavLink({
@@ -76,9 +77,11 @@ export function Navbar() {
   const { isJobCreator } = useJobCreatorStatus();
   const { hasPendingApprovals } = usePendingApprovals();
   const { wallet } = useWeb3();
+  const { worker: managedWorker } = useManagedWorker();
 
   const items = visibleNav({
     hasOwnWallet: wallet.isConnected,
+    hasManagedAccount: !!managedWorker,
     isFreelancer,
     isClient: isJobCreator,
     isArbiter,

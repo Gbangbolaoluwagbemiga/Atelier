@@ -8,6 +8,7 @@ import {
 
 const NOBODY: NavRoles = {
   hasOwnWallet: false,
+  hasManagedAccount: false,
   isFreelancer: false,
   isClient: false,
   isArbiter: false,
@@ -73,16 +74,26 @@ describe("visibleNav", () => {
   });
 
   /**
-   * Someone who connected their own wallet has stopped being the person Get
-   * Hired is for — they sign for themselves. An entrance offering to hold their
-   * keys is clutter at best and confusing at worst.
+   * Get Hired is an ENTRANCE, and an entrance is clutter once you are inside.
+   * A wallet user signs for themselves and has no use for it; a signed-in
+   * managed worker already reaches the same page from their wallet menu.
    */
   it("hides Get Hired once a wallet of their own is connected", () => {
     const paths = visibleNav({ ...NOBODY, hasOwnWallet: true }).map((i) => i.to);
     expect(paths).not.toContain("/get-hired");
   });
 
-  it("still shows it to a freelancer who has no wallet of their own", () => {
+  it("hides Get Hired once signed in with a managed account", () => {
+    const paths = visibleNav({ ...NOBODY, hasManagedAccount: true }).map((i) => i.to);
+    expect(paths).not.toContain("/get-hired");
+  });
+
+  /**
+   * But it must survive being a freelancer with neither — that is somebody who
+   * applied through Telegram, say, and is now on the web with no session. They
+   * are exactly who the door exists for.
+   */
+  it("still shows it to a freelancer with no account in this browser", () => {
     const paths = visibleNav({ ...NOBODY, isFreelancer: true }).map((i) => i.to);
     expect(paths).toContain("/get-hired");
   });
