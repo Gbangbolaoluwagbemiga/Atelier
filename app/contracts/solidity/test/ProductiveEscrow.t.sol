@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "./JobManagerBase.t.sol";
 import "./MockYieldAdapter.t.sol";
+import "../src/yield/AtelierYield.sol";
 
 /**
  * PRODUCTIVE ESCROW.
@@ -21,51 +22,57 @@ import "./MockYieldAdapter.t.sol";
  * got paid.
  */
 contract ProductiveEscrowTest is JobManagerBase {
+    AtelierYield internal yield_;
     MockYieldAdapter internal venue;
 
     function setUp() public override {
         super.setUp();
-        venue = new MockYieldAdapter(address(usdc), address(sf));
-        sf.setYieldAdapter(address(usdc), address(venue));
-        sf.setYieldBuffer(2000); // 20%
+        /* The yield layer is a companion contract now — it was 1.6KB of why
+           Atelier could not be deployed at all. Same behaviour, wired through
+           the escrow's single controller pointer. */
+        yield_ = new AtelierYield(address(sf));
+        venue = new MockYieldAdapter(address(usdc), address(yield_));
+        yield_.setYieldAdapter(address(usdc), address(venue));
+        yield_.setYieldBuffer(2000);
+        sf.setYieldController(address(yield_)); // 20%
     }
 
     /* ─────────────── The policy ─────────────── */
 
     function test_yieldIsOffUntilTheDepositorAsks() public {
         uint256 id = _createOpenJob();
-        assertFalse(sf.yieldOptIn(id), "must never default to on");
-        assertEq(sf.investableAmount(id), 0, "deployable while opted out");
+        assertFalse(yield_.yieldOptIn(id), "must never default to on");
+        assertEq(yield_.investableAmount(id), 0, "deployable while opted out");
 
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
-        assertTrue(sf.yieldOptIn(id));
+        yield_.setYieldOptIn(id, true);
+        assertTrue(yield_.yieldOptIn(id));
 
         vm.prank(client);
-        sf.setYieldOptIn(id, false);
-        assertFalse(sf.yieldOptIn(id));
+        yield_.setYieldOptIn(id, false);
+        assertFalse(yield_.yieldOptIn(id));
     }
 
     function test_onlyTheDepositorMayOptIn() public {
         uint256 id = _createOpenJob();
         vm.prank(outsider);
         vm.expectRevert(Atelier.Unauthorized.selector);
-        sf.setYieldOptIn(id, true);
+        yield_.setYieldOptIn(id, true);
     }
 
     function test_bufferCannotBeSetToNothing() public {
         // A zero buffer turns the venue from an optimisation into a dependency.
-        vm.expectRevert(Atelier.BufferTooLow.selector);
-        sf.setYieldBuffer(0);
-        vm.expectRevert(Atelier.BufferTooLow.selector);
-        sf.setYieldBuffer(999);
-        sf.setYieldBuffer(1000); // the floor is allowed
+        vm.expectRevert(AtelierYield.BufferTooLow.selector);
+        yield_.setYieldBuffer(0);
+        vm.expectRevert(AtelierYield.BufferTooLow.selector);
+        yield_.setYieldBuffer(999);
+        yield_.setYieldBuffer(1000); // the floor is allowed
     }
 
     function test_adapterMustMatchItsToken() public {
         MockYieldAdapter wrong = new MockYieldAdapter(address(0xBEEF), address(sf));
-        vm.expectRevert(Atelier.InvalidConfig.selector);
-        sf.setYieldAdapter(address(usdc), address(wrong));
+        vm.expectRevert(AtelierYield.InvalidConfig.selector);
+        yield_.setYieldAdapter(address(usdc), address(wrong));
     }
 
     /**
@@ -76,11 +83,11 @@ contract ProductiveEscrowTest is JobManagerBase {
     function test_deploysNothingWhileTheJobIsStillOpen() public {
         uint256 id = _createOpenJob();
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
+        yield_.setYieldOptIn(id, true);
 
-        assertEq(sf.investableAmount(id), 0, "deployable while still cancellable");
-        sf.investIdle(id);
-        assertEq(sf.escrowDeployed(id), 0);
+        assertEq(yield_.investableAmount(id), 0, "deployable while still cancellable");
+        yield_.investIdle(id);
+        assertEq(yield_.escrowDeployed(id), 0);
     }
 
     /**
@@ -94,12 +101,12 @@ contract ProductiveEscrowTest is JobManagerBase {
     function test_capKeepsTheLargestMilestoneInCash() public {
         uint256 id = _assignedJob();
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
+        yield_.setYieldOptIn(id, true);
 
-        assertEq(sf.investableAmount(id), 120e6, "cap is not the safe amount");
+        assertEq(yield_.investableAmount(id), 120e6, "cap is not the safe amount");
 
-        sf.investIdle(id);
-        uint256 deployed = sf.escrowDeployed(id);
+        yield_.investIdle(id);
+        uint256 deployed = yield_.escrowDeployed(id);
 
         assertEq(deployed, 120e6);
         assertGe(BUDGET - deployed, M2, "cash cannot cover the largest milestone");
@@ -108,14 +115,14 @@ contract ProductiveEscrowTest is JobManagerBase {
     function test_investingTwiceDoesNotStackPastTheCap() public {
         uint256 id = _assignedJob();
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
+        yield_.setYieldOptIn(id, true);
 
-        sf.investIdle(id);
-        uint256 first = sf.escrowDeployed(id);
-        sf.investIdle(id);
-        sf.investIdle(id);
+        yield_.investIdle(id);
+        uint256 first = yield_.escrowDeployed(id);
+        yield_.investIdle(id);
+        yield_.investIdle(id);
 
-        assertEq(sf.escrowDeployed(id), first, "repeat calls stacked");
+        assertEq(yield_.escrowDeployed(id), first, "repeat calls stacked");
     }
 
     /**
@@ -125,14 +132,14 @@ contract ProductiveEscrowTest is JobManagerBase {
     function test_capTightensAsTheEscrowDrainsDown() public {
         uint256 id = _assignedJob();
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
-        sf.investIdle(id);
+        yield_.setYieldOptIn(id, true);
+        yield_.investIdle(id);
 
         _submit(id, 0);
         vm.prank(client);
         sf.approveMilestone(id, 0);
 
-        assertEq(sf.investableAmount(id), 0, "still deploying with one claim left");
+        assertEq(yield_.investableAmount(id), 0, "still deploying with one claim left");
     }
 
     /* ─────────────── The invariant, under a hostile venue ─────────────── */
@@ -151,10 +158,10 @@ contract ProductiveEscrowTest is JobManagerBase {
     function _fundedAndDeployed() internal returns (uint256 id) {
         id = _assignedJob();
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
+        yield_.setYieldOptIn(id, true);
 
-        sf.investIdle(id);
-        assertGt(sf.escrowDeployed(id), 0, "fixture deployed nothing");
+        yield_.investIdle(id);
+        assertGt(yield_.escrowDeployed(id), 0, "fixture deployed nothing");
 
         _submit(id, 0);
     }
@@ -209,7 +216,7 @@ contract ProductiveEscrowTest is JobManagerBase {
      */
     function test_paymentComesFromCash_thenTheExcessIsRecalled() public {
         uint256 id = _fundedAndDeployed();
-        uint256 deployedBefore = sf.escrowDeployed(id);
+        uint256 deployedBefore = yield_.escrowDeployed(id);
         uint256 cashBefore = usdc.balanceOf(address(sf));
 
         vm.prank(client);
@@ -219,8 +226,8 @@ contract ProductiveEscrowTest is JobManagerBase {
         // Cash alone covered the payment: it fell by no more than the payment.
         assertGe(cashBefore, M1, "cash could not have covered this alone");
         // And the now-unsafe deployment was pulled back.
-        assertLt(sf.escrowDeployed(id), deployedBefore, "excess left lent out");
-        assertEq(sf.investableCeiling(id), 0, "ceiling should be zero with one claim left");
+        assertLt(yield_.escrowDeployed(id), deployedBefore, "excess left lent out");
+        assertEq(yield_.investableCeiling(id), 0, "ceiling should be zero with one claim left");
     }
 
     /* ─────────────── Disputes ─────────────── */
@@ -250,8 +257,8 @@ contract ProductiveEscrowTest is JobManagerBase {
     function test_cancellationRefundsWhileTheVenueIsDown() public {
         uint256 id = _createOpenJob();
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
-        sf.investIdle(id);
+        yield_.setYieldOptIn(id, true);
+        yield_.investIdle(id);
         venue.setRevertOnWithdraw(true);
 
         uint256 before = usdc.balanceOf(client);
@@ -266,35 +273,37 @@ contract ProductiveEscrowTest is JobManagerBase {
     function test_yieldIsReportedOnlyWhenItIsReal() public {
         uint256 id = _assignedJob();
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
-        sf.investIdle(id);
+        yield_.setYieldOptIn(id, true);
+        yield_.investIdle(id);
 
-        assertEq(sf.yieldEarned(address(usdc)), 0, "reported yield before any accrued");
+        assertEq(yield_.yieldEarned(address(usdc)), 0, "reported yield before any accrued");
 
         venue.simulateYield(int256(uint256(5e6)));
-        assertEq(sf.yieldEarned(address(usdc)), 5e6, "did not report real yield");
+        assertEq(yield_.yieldEarned(address(usdc)), 5e6, "did not report real yield");
 
         // A venue that has LOST money must report zero, never a negative dressed
         // up as a positive by an underflow.
         venue.simulateYield(-int256(uint256(50e6)));
-        assertEq(sf.yieldEarned(address(usdc)), 0, "reported yield on a loss");
+        assertEq(yield_.yieldEarned(address(usdc)), 0, "reported yield on a loss");
     }
 
     function test_disconnectingAVenueStopsNewDeploymentsOnly() public {
         uint256 id = _assignedJob();
         vm.prank(client);
-        sf.setYieldOptIn(id, true);
-        sf.investIdle(id);
-        uint256 deployed = sf.deployedAssets(address(usdc));
+        yield_.setYieldOptIn(id, true);
+        yield_.investIdle(id);
+        uint256 deployed = yield_.deployedAssets(address(usdc));
         assertGt(deployed, 0);
 
-        sf.setYieldAdapter(address(usdc), address(0));
+        yield_.setYieldAdapter(address(usdc), address(0));
 
-        // Nothing new goes out...
-        vm.expectRevert(Atelier.YieldNotEnabled.selector);
-        sf.investIdle(id);
+        /* Nothing new goes out. A no-op rather than a revert: investIdle is
+           permissionless so a keeper can poke it, and a keeper that reverts on
+           every call for a token with no venue is noise, not a signal. */
+        yield_.investIdle(id);
+        assertEq(yield_.investableAmount(id), 0, "still deployable with no venue");
         // ...and what is already out there is not force-exited at the worst
         // possible moment; it drains through the ordinary payout path.
-        assertEq(sf.deployedAssets(address(usdc)), deployed);
+        assertEq(yield_.deployedAssets(address(usdc)), deployed);
     }
 }

@@ -69,7 +69,7 @@ contract AtelierUpgradeTest is JobManagerBase {
         sf.upgradeToAndCall(address(v2), "");
 
         // Still on the original implementation.
-        assertEq(sf.version(), "3.0.0-atelier");
+        assertEq(sf.version(), "3.1.0-productive");
     }
 
     /**

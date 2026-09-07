@@ -203,7 +203,8 @@ handler offering only the permitted calls proves nothing.
 |---|---|
 | Network | Arc EVM Testnet · chain `5042002` |
 | Proxy (**the contract**) | [`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`](https://testnet.arcscan.app/address/0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE) |
-| Implementation | `0x38c42aBd2C652784AE3F2100Fa34127Ad67cAc5f` |
+| Implementation | `0xdf805C1a12Be30944Ea6B2038436247944ddA88a` · `3.1.0-productive` |
+| Yield controller | [`0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC`](https://testnet.arcscan.app/address/0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC) |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
 **The proxy address is the contract.** The implementation changes on every
@@ -234,19 +235,21 @@ live on-chain), Autopilot brief generation and review, the managed-worker door
 with Google sign-in and Circle MPC wallets, the decision log, disputes and
 arbitration.
 
-**Built and tested but not deployed:** productive escrow. `Atelier` with the
-yield layer compiles to 26.2KB — about 1.6KB over EIP-170's limit — so the
-deployed implementation is the one without it. The fix is architectural (the
-yield layer wants to be a companion contract) and is not something to rush.
-Uniswap v4 is not on Arc *testnet* in any case; it is on Arc mainnet, which
-opens 2026-09-16.
+**Productive escrow is deployed.** The yield layer moved into `AtelierYield`, a
+companion contract, which brought Atelier from 26.2KB to 23,611 bytes — under
+EIP-170's limit with ~965 to spare. The live proxy was upgraded in place to
+`3.1.0-productive` with the escrow counter intact, which is what the UUPS work
+was for.
+
+No venue is attached yet, on purpose: pointing an escrow at a yield venue is a
+decision about somebody else's capital and should be a deliberate transaction,
+not a side effect of a deploy. Uniswap v4 is not on Arc *testnet* in any case —
+it is on Arc mainnet, which opens 2026-09-16.
 
 ---
 
 ## Roadmap
 
-- [ ] Split the yield layer into a companion contract so productive escrow fits
-      under EIP-170, then upgrade the live proxy
 - [ ] Deploy the subgraph to Subgraph Studio and switch `VITE_GRAPH_URL`
 - [ ] Arc mainnet deployment
 - [ ] Wire the Uniswap v4 adapter to a live PoolManager and fork-test it

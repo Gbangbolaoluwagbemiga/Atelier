@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "./JobManagerBase.t.sol";
 import "./MockYieldAdapter.t.sol";
+import "../src/yield/AtelierYield.sol";
 
 /**
  * Handler: a live escrow with yield enabled, and a venue the fuzzer can break
@@ -16,6 +17,7 @@ contract YieldHandler is Test {
     Atelier public sf;
     MockUSDC public usdc;
     MockYieldAdapter public venue;
+    AtelierYield public yield_;
 
     address public client;
     address public worker;
@@ -25,10 +27,10 @@ contract YieldHandler is Test {
     uint256 public constant BUDGET = 900e6;
 
     constructor(
-        Atelier _sf, MockUSDC _usdc, MockYieldAdapter _venue,
+        Atelier _sf, MockUSDC _usdc, MockYieldAdapter _venue, AtelierYield _yield,
         address _client, address _worker, address _arbiter, uint256 _escrowId
     ) {
-        sf = _sf; usdc = _usdc; venue = _venue;
+        sf = _sf; usdc = _usdc; venue = _venue; yield_ = _yield;
         client = _client; worker = _worker; arbiter = _arbiter; escrowId = _escrowId;
     }
 
@@ -43,11 +45,11 @@ contract YieldHandler is Test {
     function earnValue(uint256 amount) external { venue.simulateYield(int256(amount % 50e6)); }
 
     /* ── the escrow being used ── */
-    function invest() external { try sf.investIdle(escrowId) {} catch {} }
+    function invest() external { try yield_.investIdle(escrowId) {} catch {} }
 
     function optIn(bool on) external {
         vm.prank(client);
-        try sf.setYieldOptIn(escrowId, on) {} catch {}
+        try yield_.setYieldOptIn(escrowId, on) {} catch {}
     }
 
     function submit(uint256 raw) external {
@@ -90,6 +92,7 @@ contract YieldHandler is Test {
  * breaks, a freelancer somewhere cannot be paid because a pool was busy.
  */
 contract ProductiveEscrowInvariantTest is JobManagerBase {
+    AtelierYield internal yield_;
     MockYieldAdapter internal venue;
     YieldHandler internal handler;
     uint256 internal jobId;
@@ -97,9 +100,14 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
     function setUp() public override {
         super.setUp();
 
-        venue = new MockYieldAdapter(address(usdc), address(sf));
-        sf.setYieldAdapter(address(usdc), address(venue));
-        sf.setYieldBuffer(2000);
+        /* The yield layer is a companion contract now — it was 1.6KB of why
+           Atelier could not be deployed at all. Same behaviour, wired through
+           the escrow's single controller pointer. */
+        yield_ = new AtelierYield(address(sf));
+        venue = new MockYieldAdapter(address(usdc), address(yield_));
+        yield_.setYieldAdapter(address(usdc), address(venue));
+        yield_.setYieldBuffer(2000);
+        sf.setYieldController(address(yield_));
 
         jobId = _createOpenJob();
         _apply(jobId, worker);
@@ -108,9 +116,9 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
         vm.prank(worker);
         sf.startWork(jobId);
         vm.prank(client);
-        sf.setYieldOptIn(jobId, true);
+        yield_.setYieldOptIn(jobId, true);
 
-        handler = new YieldHandler(sf, usdc, venue, client, worker, arbiter, jobId);
+        handler = new YieldHandler(sf, usdc, venue, yield_, client, worker, arbiter, jobId);
         targetContract(address(handler));
     }
 
@@ -137,7 +145,7 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
      */
     function invariant_contractCanAlwaysCoverWhatItOwes() public view {
         uint256 claimable =
-            usdc.balanceOf(address(sf)) + sf.deployedAssets(address(usdc));
+            usdc.balanceOf(address(sf)) + yield_.deployedAssets(address(usdc));
         uint256 owed =
             sf.escrowedAmount(address(usdc)) + sf.totalFeesByToken(address(usdc));
 
@@ -158,7 +166,7 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
         ) return;
 
         assertLe(
-            sf.escrowDeployed(jobId),
+            yield_.escrowDeployed(jobId),
             esc.totalAmount - esc.paidAmount,
             "deployed more than the escrow still owes"
         );
@@ -195,7 +203,7 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
      */
     function test_deadVenueDelaysButDoesNotLose() public {
         handler.invest();
-        uint256 deployed = sf.escrowDeployed(jobId);
+        uint256 deployed = yield_.escrowDeployed(jobId);
         assertGt(deployed, 0);
 
         handler.breakVenue();
@@ -205,7 +213,7 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
         // Payment went through from cash...
         assertEq(usdc.balanceOf(worker), M1, "payout blocked");
         // ...and the stranded capital is still on the books, not written off.
-        assertEq(sf.escrowDeployed(jobId), deployed, "stranded capital written off");
+        assertEq(yield_.escrowDeployed(jobId), deployed, "stranded capital written off");
 
         // When the venue recovers, the next payout reclaims it.
         handler.healVenue();
@@ -221,7 +229,7 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
      */
     function test_handlerActuallyDeploysAndPays() public {
         handler.invest();
-        assertGt(sf.escrowDeployed(jobId), 0, "handler never deployed capital");
+        assertGt(yield_.escrowDeployed(jobId), 0, "handler never deployed capital");
 
         handler.submit(0);
         handler.approve(0);
