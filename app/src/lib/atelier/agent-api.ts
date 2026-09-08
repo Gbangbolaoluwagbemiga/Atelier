@@ -207,6 +207,24 @@ export async function fetchDecisionsForEscrow(
 }
 
 /** Every job the daemon is managing. Used to tell Autopilot jobs from manual. */
+export interface WhitelistedToken {
+  address: `0x${string}`;
+  symbol: string;
+  decimals: number;
+  native: boolean;
+}
+
+/**
+ * The tokens an escrow can actually be funded in.
+ *
+ * The contract's whitelist is a mapping, which cannot be listed, so the daemon
+ * rebuilds it from logs and re-checks each one. One token is a statement, not a
+ * question -- only ask the client to choose when the answer could differ.
+ */
+export async function fetchWhitelistedTokens(signal?: AbortSignal): Promise<WhitelistedToken[]> {
+  return get<WhitelistedToken[]>("/api/tokens", signal);
+}
+
 export async function fetchTasks(signal?: AbortSignal): Promise<TaskRow[]> {
   const raw = await get<unknown>("/api/tasks", signal);
   return Array.isArray(raw) ? (raw as TaskRow[]) : [];

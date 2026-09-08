@@ -16,6 +16,7 @@ import { createPublicClient, http as viemHttp, formatEther, verifyMessage } from
 import { config, arcTestnet, rpcUrl } from "./config.js";
 import { AgentClient, type AgentEvent } from "./agent/AgentClient.js";
 import { createAtelierGateway } from "./circle/gateway.js";
+import { listWhitelistedTokens } from "./web3/tokens.js";
 import { createAtelierPaywall, ORDER_FEE_USDC } from "./circle/x402-seller.js";
 import * as atelier from "./web3/atelier.js";
 import { graphQuery, isGraphConfigured } from "./graph/client.js";
@@ -635,6 +636,21 @@ const server = http.createServer(async (req, res) => {
   // ── REST for the command center ──
   if (req.method === "GET" && url.pathname === "/api/tasks") {
     return json(res, 200, store.listTasks());
+  }
+  /**
+   * Which tokens an escrow can actually be funded in.
+   *
+   * Reconstructed from logs and re-checked against the contract's mapping, so a
+   * delisted token disappears from here rather than being offered and then
+   * reverting at createEscrow. Callers should treat one token as a statement
+   * and more than one as a question worth asking the client.
+   */
+  if (req.method === "GET" && url.pathname === "/api/tokens") {
+    try {
+      return json(res, 200, await listWhitelistedTokens());
+    } catch (err) {
+      return json(res, 502, { error: "Could not read the token whitelist from the chain.", detail: String(err) });
+    }
   }
   /**
    * The decision log, paged.

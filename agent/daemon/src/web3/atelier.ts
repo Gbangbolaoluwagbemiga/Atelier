@@ -38,7 +38,7 @@ const erc20Abi = [
 ] as const;
 
 let publicClient: PublicClient | null = null;
-function getPublicClient(): PublicClient {
+export function getPublicClient(): PublicClient {
   if (!publicClient) {
     publicClient = createPublicClient({ chain: arcTestnet, transport: http(rpcUrl) });
   }

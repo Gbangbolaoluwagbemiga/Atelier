@@ -21,7 +21,7 @@
  * a delivery is accepted — below the fold.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, Info, Loader2, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
@@ -35,8 +35,10 @@ import { useCreateEscrow } from "@/hooks/use-escrows";
 import { toastError } from "@/lib/atelier/errors";
 import {
   AUTOPILOT_CONFIGURED,
+  fetchWhitelistedTokens,
   previewBrief,
   type AutopilotBrief,
+  type WhitelistedToken,
 } from "@/lib/atelier/agent-api";
 
 const EXAMPLES = [
@@ -52,6 +54,11 @@ export default function AutopilotComposePage() {
   const createEscrow = useCreateEscrow();
 
   const [instruction, setInstruction] = useState("");
+  /* Which tokens the escrow will actually accept. Read from the chain rather
+     than assumed: the contract rejects anything not whitelisted, and an admin
+     can delist one between page loads. */
+  const [tokens, setTokens] = useState<WhitelistedToken[] | null>(null);
+  const [payToken, setPayToken] = useState<string>("");
   const [brief, setBrief] = useState<AutopilotBrief | null>(null);
   const [thinking, setThinking] = useState(false);
   const [funding, setFunding] = useState(false);
@@ -61,6 +68,19 @@ export default function AutopilotComposePage() {
   const [windowUnit, setWindowUnit] = useState<"minutes" | "hours" | "days">(
     "minutes",
   );
+  useEffect(() => {
+    const ac = new AbortController();
+    fetchWhitelistedTokens(ac.signal)
+      .then((list) => {
+        setTokens(list);
+        // Default to the chain's own currency when it is one of them; on Arc
+        // that is USDC, which is what a client means by "dollars" anyway.
+        setPayToken((prev) => prev || (list.find((t) => t.native) ?? list[0])?.address || "");
+      })
+      .catch(() => setTokens([]));
+    return () => ac.abort();
+  }, []);
+
   const reviewWindow =
     windowValue *
     (windowUnit === "hours" ? 60 : windowUnit === "days" ? 1440 : 1);
@@ -128,6 +148,10 @@ export default function AutopilotComposePage() {
         depositor: wallet.address,
         arbiters: [],
         required_confirmations: 1,
+        // The token the client picked above, so the choice is not cosmetic.
+        // Empty falls through to the hook's default rather than sending
+        // address(0), which the contract reads as the native currency.
+        ...(payToken ? { token: payToken } : {}),
         // Amounts are USDC with 6 decimals on Arc. Rounded rather than floored
         // so a milestone of 12.005 does not quietly lose its last cent and take
         // the sum out of agreement with the total.
@@ -237,6 +261,39 @@ export default function AutopilotComposePage() {
                 arbiter takes over. Three is the floor — fewer escalates people
                 who were visibly getting closer.
               </p>
+
+              <Field label="Paid in">
+                {tokens === null ? (
+                  <div className="h-9 flex items-center text-xs text-muted-foreground">
+                    Reading the whitelist…
+                  </div>
+                ) : tokens.length === 0 ? (
+                  <div className="h-9 flex items-center text-xs text-muted-foreground">
+                    Could not read the whitelist — funding will use the default token.
+                  </div>
+                ) : tokens.length === 1 ? (
+                  /* One option is not a question. State it and move on. */
+                  <div className="h-9 flex items-center gap-2 text-sm">
+                    <span className="font-medium">{tokens[0].symbol}</span>
+                    <span className="text-xs text-muted-foreground">
+                      the only token this escrow accepts today
+                    </span>
+                  </div>
+                ) : (
+                  <select
+                    value={payToken}
+                    onChange={(e) => setPayToken(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {tokens.map((t) => (
+                      <option key={t.address} value={t.address}>
+                        {t.symbol}
+                        {t.native ? " — this chain's own currency" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
 
               {/*
                 The review window, in whichever unit the client is thinking in.

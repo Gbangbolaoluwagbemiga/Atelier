@@ -43,6 +43,16 @@ export const config = {
     "0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59") as `0x${string}`,
   usdcAddress: (process.env.USDC_ADDRESS?.trim() ||
     "0x3600000000000000000000000000000000000000") as `0x${string}`,
+
+  /**
+   * Block the live proxy was deployed at. The token whitelist has to be
+   * reconstructed from logs, and public RPCs cap a getLogs range (10k blocks on
+   * Arc's free tier), so scanning from genesis is not an option -- and would be
+   * 60 million blocks of nothing in any case.
+   */
+  atelierDeployBlock: BigInt(process.env.ATELIER_DEPLOY_BLOCK?.trim() || "60797735"),
+  /** Largest block span this RPC will answer a getLogs call for. */
+  logRangeLimit: BigInt(process.env.LOG_RANGE_LIMIT?.trim() || "9000"),
   graphUrl: process.env.GRAPH_URL?.trim() || "",
 
   // Circle Programmable Wallets (MPC) — the Atelier Agent Wallet treasury.
