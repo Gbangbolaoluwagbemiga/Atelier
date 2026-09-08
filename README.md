@@ -2,10 +2,11 @@
 
 # Atelier
 
-**Where AI agents hire people.**
+**Freelance work where nobody has to be trusted.**
 
-Real work, done by humans, paid in USDC — whether the client is a person or a
-machine.
+The money is locked before the work starts, and it can only move the way the
+contract says. The client cannot disappear with it. We cannot freeze it, take a
+cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
@@ -18,30 +19,92 @@ machine.
 
 ## The problem
 
-Circle's Agent Marketplace lets an AI agent pay for dozens of services. Every
-one of them is a machine — data, inference, voice synthesis, analytics. When an
-agent needs work only a person can do (a logo with taste, a voiceover with
-warmth, copy with a point of view), there is nowhere to buy it.
+Freelancing asks two strangers to trust each other with money, and neither has
+any reason to.
 
-Meanwhile the freelancer side of crypto has the opposite problem. To earn a
-first dollar you must install a wallet, add a network by chain ID, source gas,
-find an escrow and sign twice. Eight steps and three foreign concepts. Most
-people, reasonably, do not bother — which is how a marketplace ends up with
-working infrastructure and no humans in it.
+The freelancer goes first and hopes. They deliver the work, then wait — for a
+client who has gone quiet, or who now says the brief meant something else, or
+who simply never pays. The client's risk runs the other way: pay up front and
+the work may never arrive, or arrive as something they cannot use.
 
-**Atelier is the shop for human labour in the agent economy, with a front door
-a non-crypto freelancer can actually walk through.**
+The industry's answer is to insert a company in the middle. That company holds
+the money, decides disputes, and charges 10-20% for the service. It works, but
+look at what you actually bought: you replaced *trusting your counterparty* with
+*trusting a private company* — one that can also freeze your balance, close your
+account, change its fees, or rule against you with no appeal. For a freelancer
+in a country the platform decides to stop serving, that is not a hypothetical.
 
-## What it does
+**Atelier removes the middleman rather than replacing it.** The money sits in a
+contract, not in a company's bank account. Escrow is funded before a job is
+visible, so an application is never speculative work. Payment is released per
+milestone against work the client accepted. When the two sides genuinely
+disagree, an arbiter rules — and the arbiter can only choose between the two
+parties, never pay themselves.
 
-Escrowed, milestone-based freelance work on Arc, where the client may be a
-person or an autonomous agent — and where a client who is a person can hand the
-*management* of their job to an agent without handing over the money.
+No operator key can move a user's money. Not ours.
+
+---
+
+## Hiring, done entirely by a human
+
+This is the primary path, and it is complete. A person can post work, choose who
+does it, and manage it to completion without an agent involved anywhere.
+
+1. **Post a job.** Title, brief, budget, deadline, milestones. Funding the
+   escrow is part of posting — an unfunded job never appears on the board, so
+   every job a freelancer sees is money already locked.
+2. **Read the applications.** Cover letters, skills, on-chain history, and past
+   ratings that were earned on completed jobs rather than self-reported.
+3. **Hire.** One transaction assigns the freelancer and starts the clock.
+4. **Review each milestone.** Approve and that milestone pays out immediately.
+   Request a revision and say what is missing.
+5. **Escalate if it goes wrong.** Either side can call an arbiter, who releases
+   to the freelancer or refunds the client.
+
+Nothing above is degraded or a fallback. Manual is the default the product is
+designed around.
+
+---
+
+## Then, optionally: hand over the managing, never the money
+
+Managing a job is real work — writing a brief that is specific enough to judge
+against, reading twenty applications fairly, checking a deliverable against what
+was actually asked for. Some clients want to do it. Others want the outcome and
+not the job of getting there.
+
+**Autopilot** is an agent that does that managing on your behalf. You post
+"logo, $50, 3 days"; it writes the brief, scores applicants, hires, reviews
+submissions and releases payment against milestones you funded.
+
+The delegation is deliberately narrow. An Autopilot manager can hire, approve,
+reject and escalate. It has no path to move a single cent to itself — not by
+hiring itself, not by approving its own work, not by cancelling into its own
+wallet. That is enforced in the contract, not by policy, and it is the first of
+[the three ideas](#the-three-ideas-worth-reading-the-code-for) below.
+
+Turn it off and you are back at the manual flow, mid-job, with the money
+untouched.
+
+---
+
+## And because it is a contract, the client need not be a person
+
+Once hiring is a contract call rather than a company's dashboard, an AI agent
+can be a client on exactly the same terms as a human — it funds the same escrow,
+faces the same arbiter, and cannot pay itself either.
+
+That matters because agent marketplaces today sell only machine services: data,
+inference, voice synthesis, analytics. When an agent needs work only a person
+can do — a logo with taste, a voiceover with warmth, copy with a point of view —
+there is nowhere to buy it. Atelier is that shop, and it reaches humans who do
+not own a wallet: sign in with Google or Telegram and a Circle MPC wallet is
+created for you, gas included.
 
 | Client | Managed by | What it is |
 |---|---|---|
-| Human | Themselves | Ordinary milestone escrow |
-| **Human** | **Autopilot** | Post "logo, $50, 3 days" — the agent briefs, hires, reviews and pays |
+| **Human** | **Themselves** | **Ordinary milestone escrow — the primary path** |
+| Human | Autopilot | Post "logo, $50, 3 days" — the agent briefs, hires, reviews and pays |
 | AI agent | Autopilot | An agent commissions work via x402 and never touches a human approval step |
 
 **The freelancer is always a human.** That is the product. What varies is who
