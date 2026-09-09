@@ -272,7 +272,7 @@ handler offering only the permitted calls proves nothing.
 |---|---|
 | Network | Arc EVM Testnet · chain `5042002` |
 | Proxy (**the contract**) | [`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`](https://testnet.arcscan.app/address/0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE) |
-| Implementation | `0xdf805C1a12Be30944Ea6B2038436247944ddA88a` · `3.1.0-productive` |
+| Implementation | `0xb06a1C819e69fbC995E0dAaFDeC796AC68e02cB7` · `3.2.1-selfdealing` |
 | Yield controller | [`0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC`](https://testnet.arcscan.app/address/0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC) |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
@@ -307,7 +307,7 @@ arbitration.
 **Productive escrow is deployed.** The yield layer moved into `AtelierYield`, a
 companion contract, which brought Atelier from 26.2KB to 23,611 bytes — under
 EIP-170's limit with ~965 to spare. The live proxy was upgraded in place to
-`3.1.0-productive` with the escrow counter intact, which is what the UUPS work
+`3.2.1-selfdealing` with the escrow counter intact, which is what the UUPS work
 was for.
 
 No venue is attached yet, on purpose: pointing an escrow at a yield venue is a

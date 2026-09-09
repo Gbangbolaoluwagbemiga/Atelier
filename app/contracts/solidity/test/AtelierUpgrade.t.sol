@@ -64,12 +64,22 @@ contract AtelierUpgradeTest is JobManagerBase {
     function test_nonOwnerCannotUpgrade() public {
         AtelierV2 v2 = new AtelierV2();
 
+        // Captured rather than hardcoded: the property is that a rejected
+        // upgrade changes nothing, and pinning the literal made this test fail
+        // on every legitimate version bump for a reason unrelated to what it
+        // checks.
+        string memory before = sf.version();
+
         vm.prank(outsider);
         vm.expectRevert();
         sf.upgradeToAndCall(address(v2), "");
 
         // Still on the original implementation.
-        assertEq(sf.version(), "3.1.0-productive");
+        assertEq(sf.version(), before);
+        assertTrue(
+            keccak256(bytes(sf.version())) != keccak256(bytes(v2.version())),
+            "the rejected implementation took effect anyway"
+        );
     }
 
     /**

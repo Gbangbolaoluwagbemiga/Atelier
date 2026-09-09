@@ -376,7 +376,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.1.0-productive";
+        return "3.2.1-selfdealing";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -402,6 +402,21 @@ contract Atelier is
         string calldata projectTitle,
         string calldata projectDescription
     ) external payable whenNotPaused nonReentrant returns (uint256) {
+        /**
+         * Hiring yourself is how a reputation gets manufactured: fund an escrow,
+         * release it to yourself, rate yourself five stars, repeat. The money
+         * makes a round trip minus the fee, and the rating is indistinguishable
+         * on-chain from one a real client left.
+         *
+         * address(0) is not self-dealing -- that is how an open job is declared.
+         *
+         * Checked here, with the other input validation, rather than after the
+         * deposit has been pulled. The transaction reverted either way, but
+         * taking someone's tokens and then deciding the call was invalid is the
+         * wrong order, and it made the rejection cost a full transfer in gas.
+         */
+        if (beneficiary == msg.sender) revert SelfDealing();
+
         if (totalAmount == 0) revert InvalidAmount();
         if (durationDays == 0) revert InvalidConfig();
         if (token != NATIVE_TOKEN && !whitelistedTokens[token]) revert TokenNotWhitelisted();
@@ -427,16 +442,6 @@ contract Atelier is
         }
 
         if (fee > 0) totalFeesByToken[token] += fee;
-
-        /**
-         * Hiring yourself is how a reputation gets manufactured: fund an escrow,
-         * release it to yourself, rate yourself five stars, repeat. The money
-         * makes a round trip minus the fee, and the rating is indistinguishable
-         * on-chain from one a real client left.
-         *
-         * address(0) is not self-dealing -- that is how an open job is declared.
-         */
-        if (beneficiary == msg.sender) revert SelfDealing();
 
         uint256 escrowId = nextEscrowId++;
         bool isOpenJob = beneficiary == address(0);
