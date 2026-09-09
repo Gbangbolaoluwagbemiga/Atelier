@@ -94,14 +94,27 @@ app.use("/v1/evidence", auth, evidenceRouter);
 app.use("/v1/analytics", auth, analyticsRouter);
 app.use("/v1/applications", auth, applicationsRouter);
 
-app.listen(port, () => {
-  console.log(`atelier-api listening on :${port}`);
-  if (!apiSecret) {
-    console.warn(
-      "[atelier-api] API_SECRET is unset; /v1 routes are open (set API_SECRET for production)",
-    );
-  }
-});
+/*
+ * Bind a port only when we own the process.
+ *
+ * On a serverless host the platform owns the listener and imports the app as a
+ * handler; calling listen() there either throws or quietly holds a port nothing
+ * routes to, which looks exactly like a deployed service that answers nothing.
+ * Locally there is no platform, so we still bind.
+ */
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`atelier-api listening on :${port}`);
+    if (!apiSecret) {
+      console.warn(
+        "[atelier-api] API_SECRET is unset; /v1 routes are open (set API_SECRET for production)",
+      );
+    }
+  });
+}
+
+/** The handler a serverless host mounts. Harmless when running standalone. */
+export default app;
 
 
 
