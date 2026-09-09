@@ -50,14 +50,19 @@ interface IPoolManager {
  *
  * The escrow-side integration is complete and fuzz-tested against a hostile
  * venue (see test/ProductiveEscrowInvariant.t.sol). THIS adapter — the v4 leg —
- * is written against v4's unlock/callback pattern but is NOT yet wired to a
- * live PoolManager, because v4 is not deployed on Arc testnet, where Atelier's
- * escrows live. It is deployed on Arc MAINNET, which opens 2026-09-16, and on
- * Ethereum/Base/Unichain Sepolia, where the fork tests point.
+ * IS A SCAFFOLD. It makes no call to the PoolManager at all: deposit() would
+ * hold the assets idle, and withdraw() reads the same balance twice and so can
+ * only ever compute a recovery of zero. Neither is a wiring gap that setting a
+ * router closes; the liquidity logic is simply not written yet.
  *
- * Until it is proven against a real pool, `setLiquidityRouter` is unset and
- * deposit() reverts, so the escrow's adapter slot cannot be pointed at a
- * half-finished integration by accident.
+ * That combination is the dangerous one. Assets could go in and could never
+ * come back out, and the escrow's breaker cannot help: it survives a reverting
+ * venue by paying from cash, but the principal already sent in would be stuck.
+ *
+ * So deposit() reverts unconditionally, not merely while unconfigured. Money
+ * cannot enter a venue that has no exit, and no admin action can change that
+ * without shipping the integration. test/UniswapV4Fork.t.sol pins this against
+ * the real PoolManager on Base.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 contract UniswapV4StableAdapter is IYieldAdapter, Ownable2Step {
@@ -67,6 +72,8 @@ contract UniswapV4StableAdapter is IYieldAdapter, Ownable2Step {
     error NotConfigured();
     error PairNotStable();
     error ShortfallOnWithdraw(uint256 requested, uint256 recovered);
+    /// The v4 liquidity logic is not written. See STATUS above.
+    error IntegrationNotImplemented();
 
     /// The escrow this adapter serves. Immutable: an adapter serves one vault.
     address public immutable escrow;
@@ -129,15 +136,12 @@ contract UniswapV4StableAdapter is IYieldAdapter, Ownable2Step {
      *      "stay in cash", which costs yield and nothing else — so failing
      *      closed here is free, and failing open would not be.
      */
-    function deposit(uint256 assets) external payable override onlyEscrow {
-        if (liquidityRouter == address(0)) revert NotConfigured();
-
-        IERC20(asset).safeTransferFrom(msg.sender, address(this), assets);
-        principalDeposited += assets;
-
-        // v4 mints liquidity inside an unlock callback; the router holds the
-        // position-manager logic and is called here once wired.
-        emit Deposited(assets);
+    function deposit(uint256) external payable override onlyEscrow {
+        // Before any transfer, and before the router is even consulted. There is
+        // no code here that could give these assets back, so the only safe
+        // amount to accept is none. Restore the body below together with the
+        // unlock/modifyLiquidity/settle path, never ahead of it.
+        revert IntegrationNotImplemented();
     }
 
     /**
@@ -150,7 +154,11 @@ contract UniswapV4StableAdapter is IYieldAdapter, Ownable2Step {
         if (liquidityRouter == address(0)) revert NotConfigured();
 
         uint256 before = IERC20(asset).balanceOf(address(this));
-        // Burn exactly enough liquidity to cover `assets`, inside unlock().
+        // MISSING: burn enough liquidity to cover `assets` inside unlock(), which
+        // is what would move the balance between these two reads. Without it the
+        // subtraction is a balance minus itself, so `recovered` is structurally
+        // zero and the shortfall check below always trips. Left as a revert on
+        // purpose — an adapter that cannot pay out must say so.
         uint256 recovered = IERC20(asset).balanceOf(address(this)) - before;
 
         if (recovered < assets) revert ShortfallOnWithdraw(assets, recovered);

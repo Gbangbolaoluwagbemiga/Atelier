@@ -21,6 +21,9 @@ evm_version = "shanghai"
 
 [rpc_endpoints]
 arc_testnet = "${ARC_RPC_URL}"
+# Uniswap v4 is not on Arc testnet, so the adapter's fork tests point at a chain
+# that has a real PoolManager. Base needs no key for read-only forking.
+base = "${BASE_RPC_URL:-https://mainnet.base.org}"
 
 [etherscan]
 arc_testnet = { key = "${ETHERSCAN_API_KEY}", url = "https://testnet.arcscan.app/api" }
