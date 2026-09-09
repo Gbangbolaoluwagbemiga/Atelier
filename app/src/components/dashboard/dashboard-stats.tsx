@@ -12,12 +12,40 @@ interface DashboardStatsProps {
   }>;
 }
 
-export function DashboardStats({ escrows }: DashboardStatsProps) {
-  const totalValue = escrows.reduce(
-    (sum, escrow) => sum + Number.parseFloat(escrow.totalAmount) / 1e6,
-    0
-  );
+/**
+ * Statuses where the contract is no longer holding anything for this job.
+ *
+ * Completed paid it out, cancelled and refunded sent it back, expired was
+ * reclaimed. Money in any of these has already gone somewhere.
+ */
+const SETTLED = new Set(["completed", "cancelled", "refunded", "expired"]);
 
+export function DashboardStats({ escrows }: DashboardStatsProps) {
+  /*
+   * What the escrow contract is actually holding right now.
+   *
+   * This summed every escrow the client had ever created, at its full original
+   * amount — so cancelling a job left its budget in the total forever, and the
+   * headline figure contradicted the list directly underneath it: 13.00 USDC
+   * above a single 5 USDC job.
+   *
+   * Two corrections. Settled jobs are excluded, because their money has already
+   * gone to the freelancer or come back. And what has been released along the
+   * way is subtracted from the jobs still running, because a milestone that has
+   * been paid is not sitting in escrow either.
+   */
+  const totalValue = escrows.reduce((sum, escrow) => {
+    if (SETTLED.has(escrow.status)) return sum;
+    const held =
+      Number.parseFloat(escrow.totalAmount) - Number.parseFloat(escrow.releasedAmount);
+    return sum + Math.max(0, held) / 1e6;
+  }, 0);
+
+  /*
+   * Released stays a lifetime total on purpose. "What has this client paid out"
+   * is a real question, and unlike the figure above it does not go stale — a
+   * finished job's payment did happen.
+   */
   const totalReleased = escrows.reduce(
     (sum, escrow) => sum + Number.parseFloat(escrow.releasedAmount) / 1e6,
     0
