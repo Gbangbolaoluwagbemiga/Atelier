@@ -110,6 +110,8 @@ contract Atelier is
     error ProposalAlreadyExists();
     error ManagerCannotBeBeneficiary();
     error ManagerCannotSelfHire();
+    /// A rating is only worth something if the two sides are different people.
+    error SelfDealing();
     error NoManagerSet();
     error YieldNotEnabled();
     error BufferTooLow();
@@ -426,6 +428,16 @@ contract Atelier is
 
         if (fee > 0) totalFeesByToken[token] += fee;
 
+        /**
+         * Hiring yourself is how a reputation gets manufactured: fund an escrow,
+         * release it to yourself, rate yourself five stars, repeat. The money
+         * makes a round trip minus the fee, and the rating is indistinguishable
+         * on-chain from one a real client left.
+         *
+         * address(0) is not self-dealing -- that is how an open job is declared.
+         */
+        if (beneficiary == msg.sender) revert SelfDealing();
+
         uint256 escrowId = nextEscrowId++;
         bool isOpenJob = beneficiary == address(0);
 
@@ -705,6 +717,10 @@ contract Atelier is
         if (_ratings[escrowId][msg.sender].ratedAt != 0) revert AlreadyRated();
 
         address rated = isDepositor ? esc.beneficiary : esc.depositor;
+        // Unreachable while the two checks above hold. Kept because this is the
+        // function whose output people trust, and it should not depend on
+        // another function having been written correctly.
+        if (rated == msg.sender) revert SelfDealing();
 
         Rating memory r = Rating({
             rater: msg.sender,
@@ -756,6 +772,10 @@ contract Atelier is
          * their own agent as the worker either.
          */
         if (freelancer == jobManager[escrowId]) revert ManagerCannotSelfHire();
+
+        // The same self-dealing route, one step later: an open job the depositor
+        // applies to and then awards to themselves.
+        if (freelancer == esc.depositor) revert SelfDealing();
 
         esc.beneficiary = freelancer;
         esc.isOpenJob = false;
