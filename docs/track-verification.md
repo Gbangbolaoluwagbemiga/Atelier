@@ -59,7 +59,7 @@ id: arc-testnet  | Arc Testnet | eip155:5042002 | services: ['subgraphs']
 `network: arc-testnet` is already correct and this is a redeploy rather than a
 chain move. Subgraph builds clean against Studio, now also indexing the Autopilot
 delegation. **Remaining: a Studio account and deploy key** — see
-`app/subgraph/README.md`.
+`subgraph/README.md`.
 
 ---
 

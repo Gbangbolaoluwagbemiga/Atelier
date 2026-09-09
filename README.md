@@ -213,10 +213,15 @@ would mean the agent stops when you close your laptop.
 
 | Path | |
 |---|---|
-| [`app/`](app) | The Atelier web app, Express API, contracts and subgraph |
-| [`app/contracts/solidity/`](app/contracts/solidity) | `Atelier.sol`, the yield adapters, 70 Foundry tests |
-| [`app/subgraph/`](app/subgraph) | The Graph subgraph — escrows, milestones, manager events |
+| [`app/`](app) | The web app — one deployable Vite project, plus the contracts it talks to |
+| [`app/contracts/solidity/`](app/contracts/solidity) | `Atelier.sol`, the yield adapters, 86 Foundry tests |
+| [`backend/`](backend) | The Express API — uploads, messaging, the gasless relayer |
+| [`subgraph/`](subgraph) | The Graph subgraph — escrows, milestones, manager events |
 | [`agent/daemon/`](agent/daemon) | Autopilot: the LLM loop, Circle wallets, x402, Telegram |
+
+The API and the subgraph sit beside `app/` rather than inside it, so `app/` is a
+single deployable project. Three package.json files under one root made every
+host's framework detection guess, and guess differently each time.
 
 ---
 
@@ -227,13 +232,13 @@ Three services. See [`RUNNING.md`](RUNNING.md) for the detail.
 ```bash
 # 1. install
 (cd app && npm install)
-(cd app/backend && npm install)
+(cd backend && npm install)
 (cd agent/daemon && npm install)
 
 # 2. contracts need OpenZeppelin fetched — see app/contracts/solidity/README.md
 
 # 3. configure — copy .env.example in each of the three, then run
-(cd app/backend && npm run dev)   # :8787
+(cd backend && npm run dev)   # :8787
 (cd agent/daemon && npm start)    # :8080
 (cd app          && npm run dev)  # :5173
 ```
@@ -256,7 +261,7 @@ Open **http://localhost:5173**.
 ```bash
 (cd app/contracts/solidity && forge test)   # 86
 (cd app && npm test)                        # 93
-(cd app/backend && npx vitest run)          # 32
+(cd backend && npx vitest run)          # 32
 (cd app && npm run e2e)                     # 39 — needs all three services up
 ```
 

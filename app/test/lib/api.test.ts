@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 describe("buildUploadAuthMessage — frontend/backend parity", () => {
   it("produces byte-identical output on both sides", async () => {
     const frontend = await import("@/lib/api");
-    const backend = await import("../../backend/src/routes/upload.ts");
+    const backend = await import("../../../backend/src/routes/upload.ts");
 
     const cases: Array<[string | number, number, string, number]> = [
       [1, 0, "0xABCDEF0000000000000000000000000000abcd", 1_700_000_000_000],

@@ -16,7 +16,7 @@ your own keys:
 
 ```bash
 cp app/.env.example           app/.env
-cp app/backend/.env.example   app/backend/.env
+cp backend/.env.example   backend/.env
 cp agent/daemon/.env.example  agent/daemon/.env
 ```
 
@@ -34,7 +34,7 @@ Install:
 
 ```bash
 (cd app && npm install)
-(cd app/backend && npm install)
+(cd backend && npm install)
 (cd agent/daemon && npm install)
 ```
 
@@ -44,7 +44,7 @@ Contracts need OpenZeppelin fetched — see
 ## Start
 
 ```bash
-(cd app/backend && npm run dev)   # :8787
+(cd backend && npm run dev)   # :8787
 (cd agent/daemon     && npm start)      # :8080
 (cd app        && npm run dev)    # :5173 or :5174
 ```
@@ -94,7 +94,7 @@ the UUPS proxy is deployed. See
 
 ```bash
 (cd app && npm test)                       # 63 unit/component
-(cd app/backend && npx vitest run)         # 32 backend routes
+(cd backend && npx vitest run)         # 32 backend routes
 (cd app/contracts/solidity && forge test)  # 47 contract, incl. fuzz + upgrade
 (cd app && npm run e2e)                    # 33 full-stack, needs all 3 running
 ```

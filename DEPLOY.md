@@ -72,7 +72,7 @@ cast send <PROXY> "authorizeArbiter(address)" <YOUR_ADDRESS> \
 VITE_SECUREFLOW_CONTRACT_ADDRESS=<PROXY>
 ```
 
-   and `app/backend/.env` (`CONTRACT_ADDRESS`), and
+   and `backend/.env` (`CONTRACT_ADDRESS`), and
    `agent/daemon/.env` (`SECUREFLOW_CONTRACT_ADDRESS`).
 
 4. **Sync the ABI** so the frontend can encode the new functions:
@@ -116,7 +116,7 @@ This is the $5,000 Graph track. Goldsky does not qualify; the track asks for
 3. Copy the **deploy key** it shows you.
 
 Then update the manifest to the new contract — this is why the contract goes
-first. In `app/subgraph/subgraph.yaml`:
+first. In `subgraph/subgraph.yaml`:
 
 ```yaml
 source:
@@ -134,7 +134,7 @@ Using the right `startBlock` matters: too low and indexing crawls millions of
 empty blocks, too high and you silently miss escrows.
 
 ```bash
-cd app/subgraph
+cd subgraph
 npm run auth -- <DEPLOY_KEY>
 npm run codegen
 npm run build

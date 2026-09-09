@@ -24,7 +24,7 @@ dataSources:
         - ManagerEvent
       abis:
         - name: Atelier
-          file: ../contracts/solidity/out/Atelier.sol/Atelier.json
+          file: ../app/contracts/solidity/out/Atelier.sol/Atelier.json
       eventHandlers:
         # EscrowCreated now includes platformFee as 7th param
         - event: EscrowCreated(indexed uint256,indexed address,indexed address,address[],uint256,uint256,uint256,address,uint256,bool)
