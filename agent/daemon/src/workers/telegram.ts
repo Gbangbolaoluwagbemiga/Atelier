@@ -57,7 +57,20 @@ type Pending =
 
 const pending = new Map<number, Pending>();
 
-async function call<T = unknown>(method: string, body: Record<string, unknown>): Promise<T | null> {
+/**
+ * @param quietTransport suppress logging for network-level failures.
+ *   getUpdates is a long poll: it is SUPPOSED to sit open for 25 seconds, and a
+ *   connection that drops or times out is ordinary weather, not news. Logging
+ *   each one buried every other line in the daemon's output. The loop reports
+ *   the outage once instead, and reports recovery once.
+ *   API-level failures (ok:false) are always logged -- those mean the bot is
+ *   misconfigured or the token is wrong, which never fixes itself.
+ */
+async function call<T = unknown>(
+  method: string,
+  body: Record<string, unknown>,
+  quietTransport = false,
+): Promise<T | null> {
   try {
     const res = await fetch(API(method), {
       method: "POST",
@@ -73,7 +86,7 @@ async function call<T = unknown>(method: string, body: Record<string, unknown>):
     return json.result ?? null;
   } catch (err) {
     // A network blip must never kill the poll loop.
-    console.warn(`[telegram] ${method} error:`, err instanceof Error ? err.message : err);
+    if (!quietTransport) console.warn(`[telegram] ${method} error:`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -920,9 +933,19 @@ export function startTelegramBot(): void {
   }
 
   let offset = 0;
+  /** Consecutive transport failures, for backoff and for saying it once. */
+  let outage = 0;
   const loop = async () => {
     for (;;) {
-      const updates = await call<TgUpdate[]>("getUpdates", { offset, timeout: 25, allowed_updates: ["message", "callback_query"] });
+      const updates = await call<TgUpdate[]>(
+        "getUpdates",
+        { offset, timeout: 25, allowed_updates: ["message", "callback_query"] },
+        true,
+      );
+      if (updates !== null && outage > 0) {
+        console.log(`[telegram] reconnected after ${outage} failed poll(s)`);
+        outage = 0;
+      }
       if (updates?.length) {
         for (const u of updates) {
           offset = Math.max(offset, u.update_id + 1);
@@ -948,8 +971,14 @@ export function startTelegramBot(): void {
           }
         }
       } else if (updates === null) {
-        // transport failure — back off rather than hammer
-        await new Promise((r) => setTimeout(r, 5_000));
+        // Transport failure. Say it once, then go quiet until it recovers, and
+        // back off geometrically rather than retrying every five seconds
+        // forever -- a sustained outage used to produce twelve log lines a
+        // minute and twelve pointless requests with it.
+        outage++;
+        if (outage === 1) console.warn("[telegram] polling interrupted — retrying quietly until it recovers");
+        const wait = Math.min(5_000 * 2 ** (outage - 1), 60_000);
+        await new Promise((r) => setTimeout(r, wait));
       }
     }
   };
