@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-304%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-250%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -244,20 +244,29 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**234 tests.** The contract suite went from zero.
+**250 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
-| Contract | **70** | Delegation, upgrade safety, productive escrow, whole-journey E2E |
+| Contract | **86** | Delegation, upgrade safety, productive escrow, self-dealing, whole-journey E2E |
 | Frontend | **93** | Actor semantics, nav, error humanising, worker session, brief reconciliation |
 | Backend | **32** | Route handlers |
 | Full-stack E2E | **39** | Real browser against real services — Playwright |
 
 ```bash
-(cd app/contracts/solidity && forge test)   # 70
+(cd app/contracts/solidity && forge test)   # 86
 (cd app && npm test)                        # 93
 (cd app/backend && npx vitest run)          # 32
 (cd app && npm run e2e)                     # 39 — needs all three services up
+```
+
+Eleven of the contract tests are the Uniswap fork suite. They skip without a
+fork, so the count above holds offline; against a real PoolManager they run for
+real, and need the cancun profile because v4 takes its lock with `TSTORE`:
+
+```bash
+FOUNDRY_PROFILE=fork forge test --match-path test/UniswapV4Fork.t.sol \
+  --fork-url https://mainnet.base.org
 ```
 
 Three of the contract suites are **fuzzed invariants at 128,000 calls each**,
