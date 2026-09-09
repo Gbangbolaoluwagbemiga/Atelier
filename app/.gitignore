@@ -100,3 +100,6 @@ subgraph/generated/
 
 # IDE
 .config/
+
+# Fork-profile build output (foundry.toml [profile.fork])
+out-fork/

@@ -31,3 +31,24 @@ base = "${BASE_RPC_URL:-https://mainnet.base.org}"
 
 [etherscan]
 arc_testnet = { key = "${ETHERSCAN_API_KEY}", url = "https://testnet.arcscan.app/api" }
+
+# Fork tests against a real Uniswap v4 PoolManager.
+#
+# The default profile is pinned to shanghai for Arc, and PoolManager's lock uses
+# transient storage -- so under the default profile its bytecode halts with
+# EvmError: NotActivated the moment unlock() is called. That is a property of
+# the chain the test forks (Base, which has cancun), not of Atelier's own
+# deployment target, so it belongs in its own profile rather than loosening the
+# one that governs what gets deployed to Arc.
+#
+#   FOUNDRY_PROFILE=fork forge test --match-path test/UniswapV4Fork.t.sol \
+#     --fork-url https://mainnet.base.org
+[profile.fork]
+src = "src"
+out = "out-fork"
+libs = ["lib"]
+via_ir = true
+optimizer = true
+optimizer_runs = 1
+solc_version = "0.8.28"
+evm_version = "cancun"
