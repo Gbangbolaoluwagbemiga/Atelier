@@ -207,6 +207,24 @@ export async function fetchDecisionsForEscrow(
 }
 
 /** Every job the daemon is managing. Used to tell Autopilot jobs from manual. */
+export interface AgentLimits {
+  /** Largest budget the agent will accept for one job, in USDC. */
+  maxJobBudgetUsdc: number;
+  /** How long a job stays open for applications before it is judged. */
+  applicationWindowMinutes: number;
+}
+
+/**
+ * What the daemon will actually accept.
+ *
+ * Fetched rather than assumed: the cap lived only on the server, so the compose
+ * page offered an example budget above it and the only way to learn the limit
+ * was to be refused after a model call had already been spent.
+ */
+export async function fetchLimits(signal?: AbortSignal): Promise<AgentLimits> {
+  return get<AgentLimits>("/api/limits", signal);
+}
+
 export interface WhitelistedToken {
   address: `0x${string}`;
   symbol: string;

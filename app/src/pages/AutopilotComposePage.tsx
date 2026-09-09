@@ -35,15 +35,17 @@ import { useCreateEscrow } from "@/hooks/use-escrows";
 import { toastError } from "@/lib/atelier/errors";
 import {
   AUTOPILOT_CONFIGURED,
+  fetchLimits,
   fetchWhitelistedTokens,
   previewBrief,
+  type AgentLimits,
   type AutopilotBrief,
   type WhitelistedToken,
 } from "@/lib/atelier/agent-api";
 
 const EXAMPLES = [
   "A logo for a coffee roastery. Budget $50, 3 days.",
-  "Write 800 words on stablecoin settlement for our blog. Budget $120, 5 days.",
+  "Write 800 words on stablecoin settlement for our blog. Budget $80, 5 days.",
   "Voiceover for a 90-second explainer, warm tone. Budget $75, 2 days.",
 ];
 
@@ -57,6 +59,7 @@ export default function AutopilotComposePage() {
   /* Which tokens the escrow will actually accept. Read from the chain rather
      than assumed: the contract rejects anything not whitelisted, and an admin
      can delist one between page loads. */
+  const [limits, setLimits] = useState<AgentLimits | null>(null);
   const [tokens, setTokens] = useState<WhitelistedToken[] | null>(null);
   const [payToken, setPayToken] = useState<string>("");
   const [brief, setBrief] = useState<AutopilotBrief | null>(null);
@@ -70,6 +73,9 @@ export default function AutopilotComposePage() {
   );
   useEffect(() => {
     const ac = new AbortController();
+    // Best-effort: an unreachable daemon leaves the cap unknown, and an unknown
+    // cap must not block a client who is within it. The server still enforces.
+    fetchLimits(ac.signal).then(setLimits).catch(() => setLimits(null));
     fetchWhitelistedTokens(ac.signal)
       .then((list) => {
         setTokens(list);
@@ -89,7 +95,17 @@ export default function AutopilotComposePage() {
   /* The daemon rejects an instruction with no budget, with a message the client
      would only see after waiting for an LLM call. Cheaper to notice here. */
   const hasBudget = /\$\s*\d|\d+\s*(usdc|dollars?)\b/i.test(trimmed);
-  const ready = trimmed.length > 12 && hasBudget;
+  /* The stated figure, read the same way the daemon reads it. Checking only
+     that a budget EXISTS let an over-cap instruction through to a model call
+     that was always going to be refused — which is how a built-in example
+     asking for $120 against a $100 cap shipped. */
+  const statedBudget = (() => {
+    const m = trimmed.match(/\$\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:usdc|dollars?)\b/i);
+    const raw = m?.[1] ?? m?.[2];
+    return raw ? Number(raw) : null;
+  })();
+  const overCap = limits != null && statedBudget != null && statedBudget > limits.maxJobBudgetUsdc;
+  const ready = trimmed.length > 12 && hasBudget && !overCap;
 
   /* The escrow contract requires the milestones to sum to the total, so the
      budget is DERIVED from the milestones rather than being a separate field
@@ -179,6 +195,43 @@ export default function AutopilotComposePage() {
     } finally {
       setFunding(false);
     }
+  }
+
+  /*
+   * Ask for the wallet before the work, not after it.
+   *
+   * Funding an escrow is signed by the client's own wallet, so composing a
+   * brief without one always ended at "Connect a wallet to fund this" — after
+   * the client had written an instruction and spent a model call on it. The
+   * dead end was at the bottom of the stairs.
+   *
+   * Placed below every hook, so the gate never changes how many run, and above
+   * both conditional returns. It gates on a BROWSER wallet specifically:
+   * managed Circle accounts are the freelancer side of the product, they earn
+   * from escrows rather than funding them, and Browse Jobs and Get Hired stay
+   * open with no wallet at all.
+   */
+  if (!wallet.isConnected) {
+    return (
+      <div className="container mx-auto px-4 py-20 sm:py-28 max-w-lg text-center">
+        <h1 className="font-display text-2xl sm:text-3xl font-bold">
+          Connect a wallet to post a job
+        </h1>
+        <p className="text-muted-foreground mt-3 leading-relaxed">
+          Autopilot manages the job, but the money stays yours the whole way —
+          funded from your wallet, held by the escrow contract, and the agent can
+          never pay itself. So there is a wallet to connect first.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
+          <Button asChild variant="outline">
+            <Link to="/jobs">Browse jobs instead</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/post">Back to modes</Link>
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   /* ─────────────── Step 2: the agent's proposal ─────────────── */
@@ -536,7 +589,14 @@ export default function AutopilotComposePage() {
           />
 
           <div className="flex flex-wrap gap-2 mt-3">
-            {EXAMPLES.map((ex) => (
+            {/* Never suggest something the daemon would refuse. An example over
+                the cap is worse than no example: it reads as the product's own
+                recommendation and then gets rejected. */}
+            {EXAMPLES.filter((ex) => {
+              if (!limits) return true;
+              const m = ex.match(/\$\s*(\d+(?:\.\d+)?)/);
+              return !m || Number(m[1]) <= limits.maxJobBudgetUsdc;
+            }).map((ex) => (
               <button
                 key={ex}
                 type="button"
@@ -547,6 +607,19 @@ export default function AutopilotComposePage() {
               </button>
             ))}
           </div>
+
+          {overCap ? (
+            <p className="text-xs text-destructive mt-3">
+              ${statedBudget} is over the current per-job cap of $
+              {limits?.maxJobBudgetUsdc}. Lower the budget and Autopilot will
+              write the brief.
+            </p>
+          ) : limits ? (
+            <p className="text-xs text-muted-foreground mt-3">
+              Up to <strong className="text-foreground">${limits.maxJobBudgetUsdc}</strong> per job
+              right now.
+            </p>
+          ) : null}
 
           {trimmed.length > 12 && !hasBudget && (
             <p className="text-sm text-muted-foreground mt-3">

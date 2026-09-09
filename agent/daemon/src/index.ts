@@ -645,6 +645,21 @@ const server = http.createServer(async (req, res) => {
    * reverting at createEscrow. Callers should treat one token as a statement
    * and more than one as a question worth asking the client.
    */
+  /**
+   * The limits the daemon enforces, so the UI can respect them instead of
+   * discovering them by being refused.
+   *
+   * The per-job cap lived only in this file, so the compose page shipped an
+   * example instruction of "Budget $120" against a $100 cap: one of the three
+   * suggestions the product offered was guaranteed to be rejected, and the only
+   * way to find out was to spend a model call on it.
+   */
+  if (req.method === "GET" && url.pathname === "/api/limits") {
+    return json(res, 200, {
+      maxJobBudgetUsdc: config.maxJobBudgetUsdc,
+      applicationWindowMinutes: config.applicationWindowMinutes,
+    });
+  }
   if (req.method === "GET" && url.pathname === "/api/tokens") {
     try {
       return json(res, 200, await listWhitelistedTokens());

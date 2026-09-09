@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ARC_TESTNET } from "@/lib/web3/config";
 
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ProjectDetailsStep } from "@/components/create/project-details-step";
 import { MilestonesStep } from "@/components/create/milestones-step";
 import { ReviewStep } from "@/components/create/review-step";
@@ -373,6 +373,39 @@ export default function CreateEscrowPage() {
       setIsSubmitting(false);
     }
   };
+
+  /*
+   * The same gate as the Autopilot side, for the same reason.
+   *
+   * Creating an escrow is signed by the client's wallet, so without one this
+   * page let somebody fill in a title, a budget, a deadline and every milestone
+   * before a toast at submit told them it was never going to work. Ask first.
+   *
+   * Below every hook so the gate cannot change how many run.
+   */
+  if (!wallet.isConnected) {
+    return (
+      <div className="container mx-auto px-4 py-20 sm:py-28 max-w-lg text-center">
+        <h1 className="font-display text-2xl sm:text-3xl font-bold">
+          Connect a wallet to post a job
+        </h1>
+        <p className="text-muted-foreground mt-3 leading-relaxed">
+          The budget is locked in the escrow contract when you post, funded from
+          your wallet — so a freelancer can see the money is real before they
+          apply. That needs a wallet connected.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
+          <Button asChild variant="outline">
+            <Link to="/jobs">Browse jobs instead</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/post">Back to modes</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen py-12 gradient-mesh">
