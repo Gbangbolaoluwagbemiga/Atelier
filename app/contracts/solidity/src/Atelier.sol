@@ -112,6 +112,8 @@ contract Atelier is
     error ManagerCannotSelfHire();
     /// A rating is only worth something if the two sides are different people.
     error SelfDealing();
+    /// Every milestone is already delivered or paid; there is nothing to hand on.
+    error NothingLeftToFinish();
     error NoManagerSet();
     error YieldNotEnabled();
     error BufferTooLow();
@@ -313,6 +315,8 @@ contract Atelier is
     event MilestoneProposalRejected(uint256 indexed escrowId, uint256 indexed milestoneIndex);
     event JobManagerSet(uint256 indexed escrowId, address indexed manager);
     event JobManagerRevoked(uint256 indexed escrowId, address indexed manager);
+    /// A job put back on the board after arbitration, with its history intact.
+    event JobReopened(uint256 indexed escrowId, address indexed previousFreelancer);
     event YieldAdapterSet(address indexed token, address indexed adapter);
     event YieldOptInChanged(uint256 indexed escrowId, bool optedIn);
     event YieldDeployed(address indexed token, uint256 amount);
@@ -376,7 +380,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.4.0-post-dispute-exit";
+        return "3.5.0-reopen-after-dispute";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -719,6 +723,52 @@ contract Atelier is
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor && msg.sender != esc.beneficiary) revert Unauthorized();
         emit EvidenceSubmitted(escrowId, milestoneIndex, msg.sender, cid);
+    }
+
+    /**
+     * @notice Put the unfinished part of an arbitrated job back on the board.
+     *
+     * The alternative to taking the money back. A dispute means this client and
+     * this freelancer are done, but it does not mean the work stopped being
+     * worth doing — and the client may prefer the job finished to refunded.
+     *
+     * WHAT THE NEXT FREELANCER INHERITS
+     *
+     * Everything, and that is the point. Nothing is erased: the previous
+     * freelancer's submissions stay on their milestones, the dispute reason and
+     * the arbiter's ruling stay where they were written, and the evidence trail
+     * is untouched. So whoever picks this up can read what was delivered, what
+     * the disagreement was, and how it was settled, before deciding whether
+     * they can finish it. A job reopened with its history hidden would just be
+     * a trap with a budget attached.
+     *
+     * Only milestones nobody has submitted are back in play. Paid work stays
+     * paid, and delivered-but-unapproved work stays with the milestone it
+     * belongs to.
+     */
+    function reopenAfterDispute(uint256 escrowId) external whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+        if (esc.status != EscrowStatus.InProgress || disputeVoteCounts[escrowId] == 0)
+            revert CannotCancelAssignedJob();
+
+        Milestone[] storage ms = escrowMilestones[escrowId];
+        bool unfinished;
+        for (uint256 i; i < ms.length; ++i) {
+            if (ms[i].status == MilestoneStatus.NotStarted && ms[i].amount > 0) unfinished = true;
+        }
+        if (!unfinished) revert NothingLeftToFinish();
+
+        address previous = esc.beneficiary;
+        _removeFromUserEscrows(previous, escrowId);
+
+        esc.beneficiary = address(0);
+        esc.isOpenJob = true;
+        esc.workStarted = false;
+        esc.status = EscrowStatus.Pending;
+
+        emit JobReopened(escrowId, previous);
+        emit EscrowUpdated(escrowId, EscrowStatus.Pending, block.timestamp);
     }
 
     /* ===================== RATINGS ===================== */

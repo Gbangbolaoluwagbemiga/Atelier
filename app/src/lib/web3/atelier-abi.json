@@ -1276,6 +1276,19 @@
   },
   {
     "type": "function",
+    "name": "reopenAfterDispute",
+    "inputs": [
+      {
+        "name": "escrowId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "reputation",
     "inputs": [
       {
@@ -2169,6 +2182,25 @@
   },
   {
     "type": "event",
+    "name": "JobReopened",
+    "inputs": [
+      {
+        "name": "escrowId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "previousFreelancer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "MilestoneApproved",
     "inputs": [
       {
@@ -2900,6 +2932,11 @@
   },
   {
     "type": "error",
+    "name": "NothingLeftToFinish",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NothingToRefund",
     "inputs": []
   },
@@ -2945,6 +2982,11 @@
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "SelfDealing",
+    "inputs": []
   },
   {
     "type": "error",

@@ -27,8 +27,13 @@ contract AtelierV2 is Atelier {
     }
 
     function markFuture(uint256 escrowId) external {
-        (address depositor,,,,,,,,,,,,) = this.escrows(escrowId);
-        if (msg.sender != depositor) revert Unauthorized();
+        /* Reads storage that existed BEFORE the upgrade, so the flag can only be
+           set for an escrow that survived it — which is the property under test.
+           This used to decode the whole escrow struct through an external call;
+           the tuple decode alone cost enough bytecode to push this fixture past
+           EIP-170 whenever Atelier itself grew, which is a silly reason for a
+           real feature to be blocked. */
+        if (escrowId == 0 || escrowId >= nextEscrowId) revert InvalidMilestone();
         futureFlag[escrowId] = true;
     }
 }

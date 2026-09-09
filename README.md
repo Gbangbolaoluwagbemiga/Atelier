@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-256%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-263%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -303,17 +303,17 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**256 tests.** The contract suite went from zero.
+**263 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
-| Contract | **92** | Delegation, upgrade safety, productive escrow, self-dealing, whole-journey E2E |
+| Contract | **99** | Delegation, upgrade safety, productive escrow, self-dealing, whole-journey E2E |
 | Frontend | **93** | Actor semantics, nav, error humanising, worker session, brief reconciliation |
 | Backend | **32** | Route handlers |
 | Full-stack E2E | **39** | Real browser against real services — Playwright |
 
 ```bash
-(cd app/contracts/solidity && forge test)   # 92
+(cd app/contracts/solidity && forge test)   # 99
 (cd app && npm test)                        # 93
 (cd backend && npx vitest run)          # 32
 (cd app && npm run e2e)                     # 39 — needs all three services up
@@ -340,7 +340,7 @@ handler offering only the permitted calls proves nothing.
 |---|---|
 | Network | Arc EVM Testnet · chain `5042002` |
 | Proxy (**the contract**) | [`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`](https://testnet.arcscan.app/address/0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE) |
-| Implementation | `0x5333a1a9aec72147e972b8a78d0bb0c42fdee2e2` · `3.4.0-post-dispute-exit` |
+| Implementation | `0x92ec06cf0fff41123564ed8f31d200dde8e5e060` · `3.5.0-reopen-after-dispute` |
 | Yield controller | [`0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC`](https://testnet.arcscan.app/address/0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC) |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
@@ -386,7 +386,7 @@ stake, which is on the roadmap rather than claimed.
 **Productive escrow is deployed.** The yield layer moved into `AtelierYield`, a
 companion contract, which brought Atelier from 26.2KB to 23,611 bytes — under
 EIP-170's limit with ~965 to spare. The live proxy was upgraded in place to
-`3.4.0-post-dispute-exit` with the escrow counter intact, which is what the UUPS work
+`3.5.0-reopen-after-dispute` with the escrow counter intact, which is what the UUPS work
 was for.
 
 **The Uniswap v4 leg is written and proven on a fork.** `UniswapV4StableAdapter`

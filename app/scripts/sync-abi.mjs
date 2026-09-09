@@ -25,6 +25,13 @@ const root = resolve(here, "..");
 const ARTIFACT = resolve(root, "contracts/solidity/out/Atelier.sol/Atelier.json");
 const FULL = resolve(root, "src/lib/web3/AtelierABI.json");
 const BARE = resolve(root, "src/lib/web3/atelier-abi.json");
+/*
+ * The daemon keeps its own copy and this script did not touch it, so the two
+ * drifted silently: the frontend learned about a new function and the agent did
+ * not. Nothing fails loudly when that happens — a call just encodes against an
+ * ABI missing the entry it needs.
+ */
+const DAEMON = resolve(root, "../agent/daemon/src/web3/AtelierABI.json");
 
 if (!existsSync(ARTIFACT)) {
   console.error(
@@ -53,6 +60,11 @@ writeFileSync(
   JSON.stringify({ ...existingFull, ...artifact }, null, 2) + "\n",
 );
 writeFileSync(BARE, JSON.stringify(artifact.abi, null, 2) + "\n");
+if (existsSync(DAEMON)) {
+  // A bare array, which is the shape the daemon imports and casts to Abi.
+  writeFileSync(DAEMON, JSON.stringify(artifact.abi, null, 2) + "\n");
+  console.log("Daemon ABI synced too.");
+}
 
 const names = artifact.abi
   .filter((e) => e.type === "function")

@@ -129,3 +129,132 @@ contract PostDisputeExitTest is JobManagerBase {
         assertGe(usdc.balanceOf(client) - before, M2, "pre-hire withdrawal broke");
     }
 }
+
+/**
+ * The other option after arbitration: hand the rest of the job on.
+ *
+ * A dispute means this client and this freelancer are done. It does not mean
+ * the work stopped being worth doing, and the client may want it finished
+ * rather than refunded. What makes that fair to whoever picks it up is that
+ * nothing is erased — they can read what was delivered, what the disagreement
+ * was, and how the arbiter settled it, before deciding to take it on.
+ */
+contract ReopenAfterDisputeTest is JobManagerBase {
+    /// Same setup as the sibling suite. Duplicated rather than inherited, so
+    /// its tests do not run a second time under this contract's name.
+    function _disputedJob() internal returns (uint256 escrowId) {
+        escrowId = _createOpenJob();
+        _apply(escrowId, worker);
+        vm.prank(client);
+        sf.acceptFreelancer(escrowId, worker);
+        vm.prank(worker);
+        sf.startWork(escrowId);
+        _submit(escrowId, 0);
+        vm.prank(worker);
+        sf.disputeMilestone(escrowId, 0, "It meets every criterion listed");
+    }
+
+    function _resolve(uint256 escrowId) internal {
+        vm.prank(arbiter);
+        sf.resolveDispute(escrowId, 0, M1 / 2, M1 - M1 / 2, "Half each");
+    }
+
+    function test_theJobGoesBackOnTheBoard() public {
+        uint256 id = _disputedJob();
+        _resolve(id);
+
+        vm.prank(client);
+        sf.reopenAfterDispute(id);
+
+        Atelier.Escrow memory esc = sf.getEscrow(id);
+        assertTrue(esc.isOpenJob, "not back on the board");
+        assertEq(esc.beneficiary, address(0), "still assigned to the old freelancer");
+        assertEq(uint8(esc.status), uint8(Atelier.EscrowStatus.Pending), "not open for applications");
+        assertFalse(esc.workStarted, "still marked as work in progress");
+    }
+
+    /// The whole point: the next person can see what happened here.
+    function test_thePreviousWorkAndTheRulingSurvive() public {
+        uint256 id = _disputedJob();
+        _resolve(id);
+
+        vm.prank(client);
+        sf.reopenAfterDispute(id);
+
+        Atelier.Milestone[] memory ms = sf.getMilestones(id);
+        assertGt(ms[0].submittedAt, 0, "the previous submission was erased");
+        assertGt(bytes(ms[0].disputeReason).length, 0, "the disagreement was erased");
+        assertGt(bytes(ms[0].resolutionReason).length, 0, "the arbiter's ruling was erased");
+        assertGt(ms[0].resolvedAt, 0, "no record that this went to arbitration");
+    }
+
+    /// Paid work stays paid; only the untouched milestone is up for grabs.
+    function test_theUnfinishedMilestoneIsStillFunded() public {
+        uint256 id = _disputedJob();
+        _resolve(id);
+
+        vm.prank(client);
+        sf.reopenAfterDispute(id);
+
+        assertEq(sf.getMilestones(id)[1].amount, M2, "the remaining budget went missing");
+    }
+
+    /// And a new freelancer can actually take it.
+    function test_someoneElseCanPickItUpAndBePaid() public {
+        uint256 id = _disputedJob();
+        _resolve(id);
+
+        vm.prank(client);
+        sf.reopenAfterDispute(id);
+
+        address newcomer = address(0xFEE15A);
+        _apply(id, newcomer);
+
+        vm.prank(client);
+        sf.acceptFreelancer(id, newcomer);
+
+        vm.prank(newcomer);
+        sf.startWork(id);
+
+        vm.prank(newcomer);
+        sf.submitMilestone(id, 1, "Finished what the last one left");
+
+        uint256 before = usdc.balanceOf(newcomer);
+        vm.prank(client);
+        sf.approveMilestone(id, 1);
+
+        assertEq(usdc.balanceOf(newcomer) - before, M2, "the new freelancer was not paid");
+    }
+
+    /* ─────────── limits ─────────── */
+
+    function test_cannotReopenAJobThatWasNeverDisputed() public {
+        uint256 id = _createOpenJob();
+        _apply(id, worker);
+        vm.prank(client);
+        sf.acceptFreelancer(id, worker);
+
+        vm.prank(client);
+        vm.expectRevert(Atelier.CannotCancelAssignedJob.selector);
+        sf.reopenAfterDispute(id);
+    }
+
+    function test_cannotReopenWhenEveryMilestoneIsAlreadyDelivered() public {
+        uint256 id = _disputedJob();
+        _resolve(id);
+        _submit(id, 1); // nothing left untouched
+
+        vm.prank(client);
+        vm.expectRevert(Atelier.NothingLeftToFinish.selector);
+        sf.reopenAfterDispute(id);
+    }
+
+    function test_onlyTheClientMayReopen() public {
+        uint256 id = _disputedJob();
+        _resolve(id);
+
+        vm.prank(worker);
+        vm.expectRevert(Atelier.Unauthorized.selector);
+        sf.reopenAfterDispute(id);
+    }
+}
