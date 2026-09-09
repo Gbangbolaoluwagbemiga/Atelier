@@ -376,7 +376,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.3.0-manager-escalation";
+        return "3.4.0-post-dispute-exit";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -1034,8 +1034,32 @@ contract Atelier is
     {
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
-        if (!esc.isOpenJob) revert CannotCancelAssignedJob();
-        if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
+
+        /**
+         * Two ways to be allowed here.
+         *
+         * Before anyone is hired, this is ordinary fund management on an open
+         * job. After arbitration, it is the exit from a job that has visibly
+         * broken — and that case had no exit at all. A dispute settles one
+         * milestone, not the job: the escrow returned to InProgress with the
+         * remaining milestones funded and unreachable, because cancelJob and
+         * this function both refused an assigned job, and disputeMilestone
+         * refuses a milestone nobody submitted. The client's only route was to
+         * wait out the deadline plus the emergency delay.
+         *
+         * A settled dispute is identifiable without new storage: votes are
+         * never reset, and the status only returns to InProgress once a
+         * resolution has gone through.
+         *
+         * The milestone check below is what keeps this fair. Only work nobody
+         * has submitted can be taken back, so it costs the freelancer nothing
+         * they earned — anything already delivered still goes through review or
+         * arbitration.
+         */
+        bool beforeHiring = esc.isOpenJob && esc.status == EscrowStatus.Pending;
+        bool afterArbitration =
+            esc.status == EscrowStatus.InProgress && disputeVoteCounts[escrowId] > 0;
+        if (!beforeHiring && !afterArbitration) revert CannotCancelAssignedJob();
         if (withdrawAmount == 0 || withdrawAmount > esc.totalAmount) revert InvalidAmount();
 
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);
