@@ -6,8 +6,8 @@
     "codegen": "graph codegen",
     "build": "graph build",
     "auth": "graph auth",
-    "deploy": "graph deploy atelier-secureflow --node https://subgraphs.thegraph.com/deploy --ipfs https://ipfs.thegraph.com",
-    "deploy:studio": "graph deploy atelier-secureflow",
+    "deploy": "graph deploy atelier --node https://subgraphs.thegraph.com/deploy --ipfs https://ipfs.thegraph.com",
+    "deploy:studio": "graph deploy atelier",
     "deploy:goldsky": "goldsky subgraph deploy atelier/v1 --path ."
   },
   "dependencies": {

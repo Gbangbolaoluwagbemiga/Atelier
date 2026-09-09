@@ -112,7 +112,7 @@ This is the $5,000 Graph track. Goldsky does not qualify; the track asks for
 "an API key from Subgraph Studio".
 
 1. Go to [Subgraph Studio](https://thegraph.com/studio/), connect a wallet.
-2. **Create a Subgraph**, name it `atelier-secureflow`, network **Arc Testnet**.
+2. **Create a Subgraph**, name it `atelier`, network **Arc Testnet**.
 3. Copy the **deploy key** it shows you.
 
 Then update the manifest to the new contract — this is why the contract goes

@@ -21,7 +21,7 @@ a chain move.
 ## Deploying to Subgraph Studio
 
 1. Create a subgraph at [Subgraph Studio](https://thegraph.com/studio/), name it
-   `atelier-secureflow`, and pick **Arc Testnet** as the network.
+   `atelier`, and pick **Arc Testnet** as the network.
 2. Authenticate once with the deploy key Studio shows you:
 
 ```bash
