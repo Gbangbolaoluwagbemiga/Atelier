@@ -376,7 +376,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.2.1-selfdealing";
+        return "3.3.0-manager-escalation";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -594,7 +594,25 @@ contract Atelier is
         external whenNotPaused
     {
         Escrow storage esc = _requireEscrow(escrowId);
-        if (msg.sender != esc.depositor && msg.sender != esc.beneficiary) revert Unauthorized();
+        /**
+         * The manager may escalate, and this is not a widening of its powers.
+         *
+         * An Autopilot manager can approve and reject, so when its revision
+         * rounds run out it has exactly two moves left: approve work it has
+         * judged inadequate, or reject it again forever. Both are worse than
+         * handing the decision to a person. Without this the agent's escalation
+         * reverted Unauthorized on any job the client funded themselves -- the
+         * agent is the manager there, not the depositor -- and the job stuck
+         * with nobody paid and nothing refunded.
+         *
+         * It cannot pay itself by escalating. An arbiter may award only the
+         * freelancer or the client, so the one-way key holds: this hands the
+         * decision away rather than taking it.
+         */
+        if (
+            msg.sender != esc.depositor && msg.sender != esc.beneficiary
+                && msg.sender != jobManager[escrowId]
+        ) revert Unauthorized();
         if (esc.status != EscrowStatus.InProgress) revert EscrowNotActive();
 
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);

@@ -109,8 +109,9 @@ export function AutopilotControl({
                 <span className="font-mono text-xs">
                   {shortAddress(manager)}
                 </span>
-                . It cannot move your money anywhere else, and only you can raise
-                a dispute.
+                . It cannot move your money anywhere else, and it cannot settle
+                a dispute — if it runs out of revision rounds it hands the job
+                to a human arbiter, exactly as you or the freelancer could.
               </>
             ) : (
               "You write the brief, choose the freelancer, and approve each milestone yourself."

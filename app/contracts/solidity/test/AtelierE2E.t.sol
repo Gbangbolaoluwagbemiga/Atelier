@@ -228,8 +228,10 @@ contract AtelierE2ETest is JobManagerBase {
         vm.expectRevert(Atelier.EscrowNotActive.selector);
         sf.approveMilestone(id, 1);
 
+        // Not Unauthorized any more -- a manager may escalate -- but a frozen
+        // escrow refuses it just as it refuses the approve above.
         vm.prank(manager);
-        vm.expectRevert(Atelier.Unauthorized.selector);
+        vm.expectRevert(Atelier.EscrowNotActive.selector);
         sf.disputeMilestone(id, 1, "let me back in");
 
         // ── A human rules: two thirds to the worker.

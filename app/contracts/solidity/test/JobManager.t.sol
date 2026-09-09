@@ -159,13 +159,36 @@ contract JobManagerTest is JobManagerBase {
 
     /* ─────────── ADR test 3 — the levers a manager was never given ─────────── */
 
-    function test_managerCannotDispute() public {
+    /**
+     * The manager MAY escalate, and gains nothing by it.
+     *
+     * This used to assert the opposite. Denying it left an Autopilot job the
+     * client funded themselves with no exit: the agent is the manager there,
+     * not the depositor, so when its revision rounds ran out its escalation
+     * reverted and the job stuck with nobody paid and nothing refunded. Its
+     * only remaining moves were to approve work it had judged inadequate or
+     * reject forever, both worse than asking a person.
+     *
+     * Escalating hands the decision away rather than taking it, so the one-way
+     * key is untouched — which is what the balance assertions below are for.
+     */
+    function test_managerMayEscalateButGainsNothing() public {
         uint256 id = _liveAutopilotJob();
         _submit(id, 0);
 
+        uint256 managerBefore = usdc.balanceOf(manager);
+        uint256 escrowBefore = usdc.balanceOf(address(sf));
+
         vm.prank(manager);
-        vm.expectRevert(Atelier.Unauthorized.selector);
-        sf.disputeMilestone(id, 0, "trying to escalate");
+        sf.disputeMilestone(id, 0, "revision rounds exhausted");
+
+        assertEq(usdc.balanceOf(manager), managerBefore, "manager gained by escalating");
+        assertEq(usdc.balanceOf(address(sf)), escrowBefore, "escrow moved on escalation");
+
+        // Escalation freezes the job to the manager, exactly as a client's would.
+        vm.prank(manager);
+        vm.expectRevert(Atelier.EscrowNotActive.selector);
+        sf.approveMilestone(id, 0);
     }
 
     function test_managerCannotExtendDeadline() public {

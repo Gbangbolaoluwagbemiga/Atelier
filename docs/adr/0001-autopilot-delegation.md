@@ -72,8 +72,8 @@ nobody. Concretely, a human client of Atelier today:
 
 - is **not** the escrow depositor
 - **cannot** approve or reject a milestone
-- **cannot** raise a dispute — `disputeMilestone` admits only the depositor
-  and the beneficiary
+- **cannot** raise a dispute — `disputeMilestone` admitted only the depositor
+  and the beneficiary when this was written; see the amendment below
 - **cannot** cancel, extend, or reclaim after the deadline
 - relies on Atelier's honesty and uptime for the return of unspent funds
 
@@ -103,7 +103,7 @@ A manager may do the *labour* of managing, and nothing else:
 | `submitMilestone` (freelancer) | — | — |
 | `approveMilestone` | ✅ | ✅ |
 | `rejectMilestone` | ✅ | ✅ |
-| `disputeMilestone` | ✅ | ❌ |
+| `disputeMilestone` | ✅ | ✅ — see amendment |
 | `cancelJob` | ✅ | ❌ |
 | `withdrawJobFunds` / `addJobFunds` | ✅ | ❌ |
 | `extendDeadline` | ✅ | ❌ |
@@ -137,7 +137,7 @@ case we did *not* design for, per BRIEF.md:
 
 1. Manager cannot approve into its own address, by any path
 2. Manager cannot become the beneficiary — direct, or via `acceptFreelancer`
-3. Manager cannot dispute, cancel, extend, or withdraw
+3. Manager cannot cancel, extend, or withdraw; it may escalate and gains nothing by it
 4. Revocation is immediate: a revoked manager's next call reverts
 5. Depositor retains every one of its powers while a manager is set
 6. A dispute mid-Autopilot resolves normally and pays out from reserve
@@ -213,3 +213,35 @@ testing nothing.
 Sept 14 Arc mainnet push), then wire `setJobManager` into Atelier's Autopilot
 job creation, then delete the in-source `NOT TRUE YET` marker in
 `PostJobPage.tsx` and the custody notice in `AutopilotComposePage.tsx`.
+
+---
+
+## Amendment — the manager may escalate (3.3.0)
+
+The original decision denied `disputeMilestone` to the manager, and listed the
+client keeping dispute rights as one of the bounds on manager–freelancer
+collusion. Denying it turned out to strand jobs.
+
+On a job the client funds themselves — which is now the normal Autopilot path,
+not the custodial one this ADR was written against — the agent is the manager
+and not the depositor. So when its revision rounds ran out, its escalation
+reverted `Unauthorized` and the job stopped there: nobody paid, nothing
+refunded, no arbiter. The agent's only remaining moves were to approve work it
+had already judged inadequate, or to reject it forever. Both are worse for the
+client than handing the decision to a person.
+
+**What this does not change.** Escalation hands the decision away rather than
+taking it: an arbiter may award only the freelancer or the client, and the
+manager is neither. The one-way key is intact, and the fuzz invariant — which
+already had the manager attempting `disputeMilestone` among its random actions —
+still holds that a manager's balance never rises.
+
+**What it costs.** A malicious manager can freeze a job by escalating it. That
+is bounded the same way every other manager power is: the client can revoke at
+any moment, escrow is per-job, and the frozen funds go to an arbiter rather than
+anywhere near the manager. Weighed against a guaranteed stuck job on every
+client-funded Autopilot escrow that exhausts its revisions, the trade is worth
+making — and it is the client's own agent, appointed by them, in either case.
+
+The client keeps dispute rights exactly as before. This adds a second party who
+may escalate; it removes nothing.

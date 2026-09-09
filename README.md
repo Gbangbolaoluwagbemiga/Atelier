@@ -281,7 +281,7 @@ handler offering only the permitted calls proves nothing.
 |---|---|
 | Network | Arc EVM Testnet · chain `5042002` |
 | Proxy (**the contract**) | [`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`](https://testnet.arcscan.app/address/0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE) |
-| Implementation | `0xb06a1C819e69fbC995E0dAaFDeC796AC68e02cB7` · `3.2.1-selfdealing` |
+| Implementation | `0x416f136e7414acab91fa64b32fe51e9ea6f56b26` · `3.3.0-manager-escalation` |
 | Yield controller | [`0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC`](https://testnet.arcscan.app/address/0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC) |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
@@ -327,7 +327,7 @@ stake, which is on the roadmap rather than claimed.
 **Productive escrow is deployed.** The yield layer moved into `AtelierYield`, a
 companion contract, which brought Atelier from 26.2KB to 23,611 bytes — under
 EIP-170's limit with ~965 to spare. The live proxy was upgraded in place to
-`3.2.1-selfdealing` with the escrow counter intact, which is what the UUPS work
+`3.3.0-manager-escalation` with the escrow counter intact, which is what the UUPS work
 was for.
 
 **The Uniswap v4 leg is written and proven on a fork.** `UniswapV4StableAdapter`

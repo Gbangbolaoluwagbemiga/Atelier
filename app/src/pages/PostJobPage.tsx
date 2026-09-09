@@ -217,8 +217,9 @@ export default function PostJobPage() {
           Your USDC sits in the same on-chain escrow, funded by your wallet and
           held by the same contract. Autopilot can pay the freelancer — it can
           never pay itself, move your funds anywhere else, or settle a dispute.
-          Raising a dispute and calling in a human arbiter stays yours alone, in
-          both modes.
+          It can call in a human arbiter when it runs out of revision rounds, and
+          so can you or the freelancer at any point; who wins one is never the
+          agent's to decide.
         </p>
       </motion.section>
     </div>
