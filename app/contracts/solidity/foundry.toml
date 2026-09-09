@@ -2,6 +2,10 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+# remappings.txt is explicit rather than inferred. v4-core vendors its own copy
+# of OpenZeppelin, and forge's auto-remapping began resolving @openzeppelin/
+# into that nested copy -- which has no upgradeable contracts, so the whole
+# project stopped compiling the moment v4-core was installed.
 via_ir = true
 optimizer = true
 # Tuned for SIZE, not gas. Adding productive escrow pushed the runtime past

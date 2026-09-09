@@ -8,9 +8,16 @@ import "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /**
  * @notice The minimum of Uniswap v4's PoolManager this adapter needs.
- * @dev Declared here rather than importing v4-core. v4-core pulls a large
- *      dependency tree for types this contract never constructs, and an escrow
- *      holding other people's money should have the smallest build it can.
+ * @dev Declared here rather than importing v4-core, which is now vendored in
+ *      lib/ for when the liquidity path is written.
+ *
+ *      Worth recording, because it looked like a blocker and is not: v4-core
+ *      builds itself with evm_version = "cancun" for transient storage, while
+ *      this project is pinned to "shanghai" because Arc EVM is not guaranteed
+ *      to have MCOPY/TSTORE. That constraint applies to PoolManager's own
+ *      implementation, not to a contract that merely imports its interfaces and
+ *      types -- those compile clean under shanghai, verified against the
+ *      vendored copy. So the real integration is not blocked by the EVM target.
  */
 interface IPoolManager {
     function unlock(bytes calldata data) external returns (bytes memory);
