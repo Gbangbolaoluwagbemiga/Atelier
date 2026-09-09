@@ -18,6 +18,16 @@ import { Bot, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useJobManager } from "@/hooks/use-job-manager";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AUTOPILOT_CONFIGURED } from "@/lib/atelier/agent-api";
 import { toastError } from "@/lib/atelier/errors";
 
@@ -25,21 +35,51 @@ function shortAddress(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
+/**
+ * The acceptance criteria written into the escrow at funding time.
+ *
+ * A job posted through Autopilot puts them there; a job created by hand puts
+ * only the client's free text. That difference decides whether the agent reads
+ * back criteria the client approved or invents its own, so it has to be visible
+ * before the client signs, not discovered afterwards.
+ */
+function criteriaIn(description: string | undefined): string[] {
+  if (!description) return [];
+  const marker = description.indexOf("Acceptance criteria:");
+  if (marker === -1) return [];
+  return description
+    .slice(marker)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("•"))
+    .map((line) => line.replace(/^•\s*/, ""));
+}
+
 export function AutopilotControl({
   escrowId,
   /** Hide entirely when the connected wallet is not this job's client. */
   isClient,
+  projectDescription,
+  milestones,
 }: {
   escrowId: number;
   isClient: boolean;
+  /** What is actually stored on-chain — the only thing the agent can read. */
+  projectDescription?: string;
+  milestones?: Array<{ description: string; amount: string }>;
 }) {
   const { manager, loaded, busy, delegate, revoke } = useJobManager(escrowId);
   const { toast } = useToast();
   const [pending, setPending] = useState<"delegate" | "revoke" | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
+  const criteria = criteriaIn(projectDescription);
+
+  // Below every hook, so the guard cannot change how many run.
   if (!isClient) return null;
 
   const onDelegate = async () => {
+    setConfirming(false);
     setPending("delegate");
     try {
       await delegate();
@@ -121,7 +161,7 @@ export function AutopilotControl({
 
         <Button
           variant={onAutopilot ? "outline" : "default"}
-          onClick={onAutopilot ? onRevoke : onDelegate}
+          onClick={onAutopilot ? onRevoke : () => setConfirming(true)}
           disabled={busy || (!onAutopilot && !AUTOPILOT_CONFIGURED)}
           className={
             onAutopilot
@@ -147,6 +187,81 @@ export function AutopilotControl({
           Autopilot is not configured for this deployment.
         </p>
       )}
+
+      {/*
+        Show what the agent will actually work from, before the signature.
+        Handing over is one transaction that names an address; everything the
+        agent then does, it decides from what is already stored on-chain. A
+        client who has not seen that is approving a standard they have not read.
+      */}
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hand this job to Autopilot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It will hire, review and release payment against what is written
+              below — the only thing it can read. You keep the money, the dispute
+              right, and the ability to take the job back at any moment.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 text-sm max-h-[45vh] overflow-y-auto">
+            {milestones && milestones.length > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1.5">
+                  It pays out in these stages
+                </div>
+                <ul className="space-y-1">
+                  {milestones.map((m, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span className="font-mono text-xs shrink-0 actor-text">
+                        ${(Number(m.amount) / 1e6).toFixed(2)}
+                      </span>
+                      <span className="text-muted-foreground">{m.description}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1.5">
+                It approves or rejects against
+              </div>
+              {criteria.length > 0 ? (
+                <ul className="space-y-1 text-muted-foreground">
+                  {criteria.map((c, i) => (
+                    <li key={i}>• {c}</li>
+                  ))}
+                </ul>
+              ) : (
+                /*
+                 * The honest case, and the reason this dialog exists. A job
+                 * created by hand stores only free text, so there are no agreed
+                 * criteria for the agent to read and it will derive its own
+                 * from the description. Say so rather than letting the client
+                 * find out when work is rejected against a standard they never
+                 * wrote.
+                 */
+                <p className="text-muted-foreground">
+                  This job has no acceptance criteria written into it — jobs
+                  posted through Autopilot store them, jobs created by hand do
+                  not. The agent will work them out from your description, so it
+                  may judge against wording you have not seen. You can take the
+                  job back at any point.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not yet</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void onDelegate()}>
+              Hand it over
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

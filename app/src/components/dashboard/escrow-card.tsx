@@ -428,6 +428,8 @@ export function EscrowCard({
                     <AutopilotControl
                       escrowId={Number(escrow.id)}
                       isClient={escrow.isClient === true}
+                      projectDescription={escrow.projectDescription}
+                      milestones={escrow.milestones}
                     />
                   )}
 

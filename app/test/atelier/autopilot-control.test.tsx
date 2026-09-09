@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 /**
  * AutopilotControl is the client's answer to "who is running this job, and how
@@ -137,5 +138,59 @@ describe("the two states", () => {
     expect(
       screen.getByRole("button", { name: /hand to autopilot/i }),
     ).toBeDisabled();
+  });
+});
+
+/**
+ * Handing over is one transaction that names an address. Everything the agent
+ * then does, it decides from what is already on-chain — so the client has to
+ * see that before signing, not discover it when work is rejected.
+ */
+describe("what the client is shown before handing over", () => {
+  const WITH_CRITERIA =
+    "A logo for a coffee roastery.\n\nAcceptance criteria:\n• Delivered in SVG and PNG\n• Transparent background";
+
+  it("does not delegate on the first click", async () => {
+    render(<AutopilotControl escrowId={1} isClient={true} projectDescription={WITH_CRITERIA} />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    expect(delegate).not.toHaveBeenCalled();
+  });
+
+  it("shows the criteria the agent will judge against", async () => {
+    render(<AutopilotControl escrowId={1} isClient={true} projectDescription={WITH_CRITERIA} />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    expect(screen.getByText(/Delivered in SVG and PNG/)).toBeInTheDocument();
+    expect(screen.getByText(/Transparent background/)).toBeInTheDocument();
+  });
+
+  it("shows the stages it will pay out in", async () => {
+    render(
+      <AutopilotControl
+        escrowId={1}
+        isClient={true}
+        projectDescription={WITH_CRITERIA}
+        milestones={[{ description: "Initial concepts", amount: "1000000" }]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    expect(screen.getByText("$1.00")).toBeInTheDocument();
+    expect(screen.getByText("Initial concepts")).toBeInTheDocument();
+  });
+
+  /* The case this dialog exists for. A hand-created job stores only free text,
+     so the agent derives criteria the client never wrote. */
+  it("warns when the job carries no criteria for the agent to read", async () => {
+    render(
+      <AutopilotControl escrowId={1} isClient={true} projectDescription="Just make me a logo." />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    expect(screen.getByText(/no acceptance criteria written into it/i)).toBeInTheDocument();
+  });
+
+  it("delegates only after the client confirms", async () => {
+    render(<AutopilotControl escrowId={1} isClient={true} projectDescription={WITH_CRITERIA} />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+    expect(delegate).toHaveBeenCalledOnce();
   });
 });
