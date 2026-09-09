@@ -101,11 +101,28 @@ export async function adoptDelegatedJobs(): Promise<number> {
   }
 
   const ids = await delegatedTo(signer.address as `0x${string}`);
-  if (ids.length === 0) return 0;
 
-  const known = new Set(store.listTasks(500).map((t) => String(t.escrowId)));
+  const tasks = store.listTasks(500);
+  const known = new Set(tasks.map((t) => String(t.escrowId)));
   const client = getPublicClient();
   let adopted = 0;
+
+  /*
+   * Hand back anything the client has taken off Autopilot.
+   *
+   * Revoking sets jobManager to zero, and the contract refuses our next call
+   * straight away — but the task row stayed, so Browse Jobs kept showing
+   * "AUTOPILOT MANAGED" on a job the agent was locked out of. Only rows this
+   * sweep created are dropped; a job commissioned through the API is not ours
+   * to forget.
+   */
+  const stillOurs = new Set(ids.map(String));
+  for (const t of tasks) {
+    if (!t.id.startsWith("delegated-")) continue;
+    if (stillOurs.has(String(t.escrowId))) continue;
+    store.deleteTask(t.id);
+    console.log(`[adopt] escrow ${t.escrowId} was taken back by its client — released`);
+  }
 
   for (const id of ids) {
     if (known.has(String(id))) continue;
@@ -131,6 +148,38 @@ export async function adoptDelegatedJobs(): Promise<number> {
     let briefJson: string;
     try {
       const { brief } = await generateBrief(source);
+
+      /*
+       * Every number comes from the escrow, never from the description.
+       *
+       * The description keeps the client's original instruction, and a client
+       * routinely edits the milestones before funding — "Budget $50" in the
+       * prose against 5 USDC actually locked. Regenerating from the text
+       * reproduced the sentence, so the bot advertised a $50 job paying $10
+       * and $40 when the contract held 5, split 1 and 4. A freelancer applying
+       * to that is being told a price nobody can pay them.
+       *
+       * The chain is the only honest source for what a job is worth, and the
+       * milestone text on it is what the client actually approved. The model's
+       * output is kept only for the acceptance criteria it structured.
+       */
+      const onChain = (await client.readContract({
+        address: config.atelierAddress,
+        abi,
+        functionName: "getMilestones",
+        args: [id],
+      })) as readonly { amount: bigint; requirements: string; description: string }[];
+
+      const decimals = 1e6; // USDC
+      brief.milestones = onChain.map((m) => ({
+        description: m.requirements || m.description,
+        amount: Number(m.amount) / decimals,
+      }));
+      brief.budget = brief.milestones.reduce((sum, m) => sum + m.amount, 0);
+
+      const secondsLeft = Number(esc.deadline) - Math.floor(Date.now() / 1000);
+      brief.durationDays = Math.max(1, Math.ceil(secondsLeft / 86_400));
+
       briefJson = JSON.stringify(brief);
     } catch (err) {
       console.error(`[adopt] escrow ${id}: could not rebuild the brief —`, err instanceof Error ? err.message : err);

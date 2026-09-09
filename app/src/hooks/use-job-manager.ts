@@ -7,8 +7,8 @@
  * management and the daemon has not polled since — the contract is right.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { useWriteContract } from "wagmi";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePublicClient, useWriteContract } from "wagmi";
 import { useWeb3 } from "@/contexts/web3-context";
 import { contractService } from "@/lib/web3/contract-service";
 import { humanizeError } from "@/lib/atelier/errors";
@@ -34,6 +34,30 @@ export interface JobManagerState {
 export function useJobManager(escrowId: number | null): JobManagerState {
   const { wallet } = useWeb3();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
+
+  /* Held in a ref so settle() can call the current refresh without the two
+     depending on each other and rebuilding on every render. */
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
+
+  /**
+   * Wait for the transaction to be mined before believing anything about it.
+   *
+   * writeContractAsync resolves when a transaction is SUBMITTED, so refreshing
+   * straight afterwards read the chain as it was before the call landed. The
+   * UI then reported the opposite of what had just happened -- "you are running
+   * this job again" while the agent was still the manager on-chain, or the
+   * reverse after delegating -- and the only way to find out which was true was
+   * to reload.
+   */
+  const settle = useCallback(
+    async (hash: `0x${string}`) => {
+      if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
+      await refreshRef.current();
+      return hash;
+    },
+    [publicClient],
+  );
 
   const [manager, setManager] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -50,6 +74,8 @@ export function useJobManager(escrowId: number | null): JobManagerState {
     setManager(current);
     setLoaded(true);
   }, [escrowId]);
+
+  refreshRef.current = refresh;
 
   useEffect(() => {
     /* Reset before refetching. Without this, switching from an Autopilot job to
@@ -81,8 +107,7 @@ export function useJobManager(escrowId: number | null): JobManagerState {
         { escrow_id: escrowId, manager: address },
         writeContractAsync,
       );
-      await refresh();
-      return hash;
+      return await settle(hash);
     } catch (e) {
       const message = humanizeError(e);
       setError(message);
@@ -90,7 +115,7 @@ export function useJobManager(escrowId: number | null): JobManagerState {
     } finally {
       setBusy(false);
     }
-  }, [escrowId, wallet.address, writeContractAsync, refresh]);
+  }, [escrowId, wallet.address, writeContractAsync, settle]);
 
   const revoke = useCallback(async () => {
     if (escrowId === null) throw new Error("No job selected.");
@@ -101,8 +126,7 @@ export function useJobManager(escrowId: number | null): JobManagerState {
         escrowId,
         writeContractAsync,
       );
-      await refresh();
-      return hash;
+      return await settle(hash);
     } catch (e) {
       const message = humanizeError(e);
       setError(message);
@@ -110,7 +134,7 @@ export function useJobManager(escrowId: number | null): JobManagerState {
     } finally {
       setBusy(false);
     }
-  }, [escrowId, writeContractAsync, refresh]);
+  }, [escrowId, writeContractAsync, settle]);
 
   return { manager, loaded, busy, error, delegate, revoke, refresh };
 }

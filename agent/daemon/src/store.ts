@@ -311,6 +311,18 @@ export function insertTask(task: Omit<TaskRow, "createdAt">): void {
   );
 }
 
+/**
+ * Forget a task entirely.
+ *
+ * Used when a client revokes Autopilot on a job we had adopted: the contract
+ * stops accepting our calls immediately, so keeping the row would leave the
+ * board badging a job the agent is no longer allowed to touch.
+ */
+export function deleteTask(id: string): void {
+  db.prepare(`DELETE FROM decisions WHERE task_id = ?`).run(id);
+  db.prepare(`DELETE FROM tasks WHERE id = ?`).run(id);
+}
+
 export function updateTaskStatus(id: string, status: string, escrowId?: string): void {
   if (escrowId) {
     db.prepare(`UPDATE tasks SET status = ?, escrow_id = ? WHERE id = ?`).run(status, escrowId, id);
