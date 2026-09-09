@@ -6,9 +6,7 @@
     "codegen": "graph codegen",
     "build": "graph build",
     "auth": "graph auth",
-    "deploy": "graph deploy atelier --node https://subgraphs.thegraph.com/deploy --ipfs https://ipfs.thegraph.com",
-    "deploy:studio": "graph deploy atelier",
-    "deploy:goldsky": "goldsky subgraph deploy atelier/v1 --path ."
+    "deploy:studio": "graph deploy --studio atelier"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "^0.81.0",
