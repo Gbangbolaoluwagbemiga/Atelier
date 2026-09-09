@@ -17,6 +17,7 @@ import { config, arcTestnet, rpcUrl } from "./config.js";
 import { AgentClient, type AgentEvent } from "./agent/AgentClient.js";
 import { createAtelierGateway } from "./circle/gateway.js";
 import { listWhitelistedTokens } from "./web3/tokens.js";
+import { adoptDelegatedJobs } from "./agent/adoptDelegated.js";
 import { createAtelierPaywall, ORDER_FEE_USDC } from "./circle/x402-seller.js";
 import * as atelier from "./web3/atelier.js";
 import { graphQuery, isGraphConfigured } from "./graph/client.js";
@@ -1932,6 +1933,15 @@ async function pollOnce() {
   await sweepStrandedEscrows();
   await sweepOverdueCommissions();
   await reconcileTaskStatuses();
+  /*
+   * Jobs handed to us in the app arrive here, not through /api/instruct.
+   * Without this the delegation was real on-chain and completely inert: the
+   * poller below iterates its own task table, so a client watched an agent
+   * that had never heard of their job.
+   */
+  await adoptDelegatedJobs().catch((err) =>
+    console.error("[adopt] sweep failed:", err instanceof Error ? err.message : err),
+  );
   /*
    * Deliberately NOT gated on the subgraph any more.
    *
