@@ -1917,7 +1917,18 @@ async function pollOnce() {
   await sweepStrandedEscrows();
   await sweepOverdueCommissions();
   await reconcileTaskStatuses();
-  if (!isGraphConfigured()) return;
+  /*
+   * Deliberately NOT gated on the subgraph any more.
+   *
+   * This returned early whenever GRAPH_URL was unset, which meant the entire
+   * hire loop -- scoring, hiring, review, payment -- was silently disabled
+   * until an indexer had been deployed. Nothing was logged, because nothing
+   * was attempted: the daemon looked healthy and jobs just never moved.
+   *
+   * Every query below concerns a single escrow, and graphQuery answers those
+   * from the chain when there is no subgraph. So the poller runs either way,
+   * and the subgraph is what makes it fast rather than what makes it work.
+   */
   // Everything the poller does downstream costs an LLM call. While the model is
   // rate-limited there is nothing useful to do, and trying anyway is what kept
   // the budget pinned at zero.

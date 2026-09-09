@@ -17,7 +17,7 @@ import { generateBrief } from "./BriefGenerator.js";
 import { pickBestApplicant } from "./ApplicationScorer.js";
 import { reviewWork, buildRevisionRequest, shouldEscalateToHuman, type WorkReviewResult } from "./WorkReviewer.js";
 import type { AcceptanceBrief, AgentDecision, Application } from "../web3/types.js";
-import { graphQuery, isGraphConfigured } from "../graph/client.js";
+import { graphQuery } from "../graph/client.js";
 import { GET_JOB_APPLICATIONS, type GQLApplication } from "../graph/queries.js";
 import * as atelier from "../web3/atelier.js";
 import type { AtelierGateway } from "../circle/gateway.js";
@@ -117,7 +117,10 @@ export class AgentClient {
 
   // ── STEP 2: poll applications, comparative-score, hire ───────────────────
   async reviewApplications(escrowId: bigint, brief: AcceptanceBrief): Promise<Application | null> {
-    if (!isGraphConfigured()) throw new Error("Subgraph not configured (GRAPH_URL)");
+    // No subgraph check here on purpose. graphQuery answers a single-escrow
+    // read from the chain when GRAPH_URL is unset, and this guard turned that
+    // fallback into dead code: scoring threw before ever calling it, so no
+    // deployment without an indexer could hire anyone.
 
     this.emit("applications_fetched", "Fetching applications from subgraph...");
     const result = await graphQuery<{ escrow: { applications: GQLApplication[] } | null }>(GET_JOB_APPLICATIONS, {
