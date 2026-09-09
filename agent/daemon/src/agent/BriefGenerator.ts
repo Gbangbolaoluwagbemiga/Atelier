@@ -57,7 +57,11 @@ const BriefSchema = z.object({
   milestones: z
     .array(BriefMilestoneSchema)
     .min(1)
-    .describe("Split of the budget into independently-reviewed chunks. A single-milestone job is fine for simple work."),
+    .describe(
+      "Split of the budget into independently-reviewed chunks. Decide the number from the "
+        + "shape of the work — see the milestone guidance in the system prompt. One milestone "
+        + "suits a small same-day job; anything longer or larger usually deserves more.",
+    ),
 });
 
 const SYSTEM_PROMPT = `You are Atelier's Brief Generator. Atelier is an autonomous service that hires
@@ -69,10 +73,35 @@ Criteria must be specific and measurable — not vague.
 Bad: "The logo should look good"
 Good: "Logo must be delivered in SVG and PNG formats, minimum 1000x1000px"
 
-Split the work into milestones when it naturally decomposes (e.g. draft → revision → final,
-or research → build → polish). Each milestone's amount must be a fraction of the total budget
-and all milestone amounts must sum exactly to the total budget. Simple jobs can be a single
-milestone equal to the full budget.
+MILESTONES — decide this deliberately, it is not a formality.
+
+A milestone is a point where the client pays for work they have accepted. That exists to
+protect both sides: the freelancer is not working for weeks against an all-or-nothing payout
+they might lose entirely on the last day, and the client sees something real before the rest
+of the money is committed. A single milestone puts all of that risk at the very end.
+
+Split the work wherever ALL THREE of these hold:
+  1. There is a natural handover a person would recognise — a concept before the finished
+     artwork, an outline before a written piece, a rough cut before a final mix.
+  2. The client could genuinely accept or reject that piece ON ITS OWN, without seeing the
+     rest. If rejecting it would not change what happens next, it is not a milestone.
+  3. It can be checked against the acceptance criteria. Every milestone must be reviewable,
+     because a reviewer approves or rejects each one separately.
+
+Weight the decision by size and time. A job that runs a week or more, or carries a large
+share of the budget, should almost always have more than one milestone — the longer someone
+works unpaid, the worse a single end-of-job judgement is for them. A same-day job for a small
+amount is usually one milestone, and forcing three onto it just adds review rounds nobody
+benefits from.
+
+When the instruction names several distinct deliverables — a logo AND a palette AND a
+guidelines document — each one a client could sign off separately is its own milestone.
+Collapsing four deliverables into "concepts, then everything else" hides three acceptance
+decisions inside one payment.
+
+Front-load less money than you might expect: an early milestone buys a direction, not a
+finished thing, so it should carry a smaller share than the milestone that delivers the work
+itself. Each amount must be a fraction of the total and they must sum exactly to it.
 
 Extract budget and duration from the instruction. If not stated, use reasonable defaults for
 the described scope of work.
