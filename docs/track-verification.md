@@ -1,5 +1,15 @@
 # Track verification — the three open questions, answered
 
+> **Superseded on the eligibility question. See [`tracks.md`](tracks.md) for what
+> Atelier actually submits for.**
+>
+> This page was written on 2026-09-06, while the project was still expected to
+> enter under Continuity. That decision was reversed: Atelier is registered from
+> scratch, so every Continuity-only prize is out and the From Scratch pools are
+> in. The rows below that assume Continuity are wrong and are marked. Everything
+> else here — what Goldsky costs us, what Arc does and does not have — was
+> checked against the sponsors' own pages and still holds.
+
 **Checked 2026-09-06** against the live ETHOnline 2026 prize page and each
 sponsor's own documentation.
 
@@ -35,9 +45,9 @@ The Graph is offering **$15,000 across three $5,000 tracks**, not one:
 
 | Track | Prize | Fit |
 |---|---|---|
-| Best Use of Composable/Standardized Products | $5,000 | Plausible — needs two Graph products composed, or a standardized schema |
-| Best AI Tooling (From Scratch) | $5,000 | Not eligible — we are Continuity |
-| **Best AI Tooling (Continuity)** | **$5,000** | **Our target.** Patron's agent already polls the subgraph to score applicants and release payment |
+| Best Use of Composable/Standardized Products | $5,000 | Not claimed — we ship one purpose-built subgraph, compose no second Graph product, and implement no standardized schema |
+| **Best AI Tooling (From Scratch)** | **$5,000** | **Our target** — reversed since this was written; we are registered from scratch. The agent reads the subgraph to score applicants and release payment |
+| Best AI Tooling (Continuity) | $5,000 | ~~Our target~~ — not eligible, we are not a Continuity project |
 
 **Action:** migrate Goldsky → Subgraph Studio. This is now the highest-value
 single task on the board — it is the difference between $5,000 addressable and

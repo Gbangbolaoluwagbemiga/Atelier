@@ -181,28 +181,82 @@ start and sign everything yourself.
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph clients["Who hires"]
+        human["Human client<br/>own wallet"]
+        agentclient["AI agent client<br/>pays per job over x402"]
+    end
+
+    subgraph surfaces["Where a freelancer meets the work"]
+        web["app/ — React + Vite<br/>Browse Jobs · Post a Job · My Jobs"]
+        tg["@The_Atelierbot<br/>Telegram, no wallet needed"]
+    end
+
+    subgraph services["Off-chain services"]
+        api["backend/ — Express<br/>uploads · messaging · EIP-2771 relayer"]
+        daemon["agent/daemon — Autopilot<br/>BriefGenerator · ApplicationScorer · WorkReviewer"]
+    end
+
+    subgraph circle["Circle"]
+        mpc["Programmable Wallets (MPC)<br/>agent treasury + a wallet per freelancer"]
+        gw["Gateway / x402<br/>agent-to-service payment"]
+    end
+
+    subgraph arc["Arc — chain 5042002, USDC is the native currency"]
+        escrow["Atelier.sol (UUPS proxy)<br/>milestone escrow · jobManager · arbitration"]
+        yield["AtelierYield<br/>investable ceiling · circuit breaker"]
+        uni["UniswapV4StableAdapter<br/>single-sided stable LP"]
+    end
+
+    graph_["The Graph — Subgraph Studio<br/>escrows · milestones · applications · manager events"]
+
+    human --> web
+    agentclient -- "x402" --> daemon
+    web -- "wagmi / viem" --> escrow
+    web --> api
+    tg --> daemon
+    daemon -- "hire · approve · reject · escalate<br/>as jobManager, never as payee" --> escrow
+    daemon --> mpc
+    daemon --> gw
+    mpc -- "signs for managed freelancers" --> escrow
+    escrow --> yield
+    yield -. "not yet attached — v4 needs a cancun chain" .-> uni
+    escrow -- "events" --> graph_
+    graph_ -- "who applied, what state" --> daemon
+    graph_ --> web
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  app/  — Atelier (React + Vite + TypeScript)                     │
-│    Browse Jobs · Get Hired · Post a Job · My Jobs · Analytics    │
-│    Wallet users sign for themselves · managed workers do not     │
-└────────────┬──────────────────────────────┬──────────────────────┘
-             │                              │
-             │ wagmi / viem                 │ REST
-             ▼                              ▼
-┌────────────────────────────┐  ┌──────────────────────────────────┐
-│  Atelier.sol (UUPS proxy)  │  │  agent/daemon — Autopilot        │
-│  Arc EVM · chain 5042002   │  │    BriefGenerator                │
-│                            │◄─┤    ApplicationScorer             │
-│  milestone escrow          │  │    WorkReviewer                  │
-│  jobManager delegation     │  │    Circle MPC wallets            │
-│  productive escrow         │  │    x402 seller + buyer           │
-│  multi-arbiter disputes    │  │    Telegram bot · SQLite · SSE   │
-└────────────────────────────┘  └──────────────────────────────────┘
-             ▲                              │
-             └──────── The Graph ───────────┘
-                  the agent reads chain
-                  state to hire and pay
+
+**The money only ever moves one way.** Autopilot can hire, approve, reject and
+escalate, and there is no path by which value reaches it — enforced in the
+contract at two points, fuzz-tested at 128,000 calls, and documented in
+[ADR 0001](docs/adr/0001-autopilot-delegation.md).
+
+### The multi-step settlement, end to end
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant E as Atelier.sol (Arc)
+    participant A as Autopilot
+    participant G as The Graph
+    participant F as Freelancer
+
+    C->>E: createEscrow — full budget locked in USDC
+    C->>E: setJobManager(agent)
+    Note over E,A: one transaction grants a role.<br/>it carries no instructions.
+    A->>G: which escrows name me as manager?
+    A->>E: read brief, milestones, criteria from the escrow
+    F->>E: applyToJob (gasless — Circle MPC wallet)
+    A->>G: read every applicant together
+    A->>E: acceptFreelancer — scored, not first-come
+    F->>E: submitMilestone
+    A->>E: approveMilestone → USDC to the freelancer
+    Note over A,E: paid per milestone against criteria<br/>the client approved, not on completion
+    alt revisions exhausted
+        A->>E: disputeMilestone → a human arbiter decides
+        Note over A: the agent hands the decision away.<br/>it can never settle one.
+    end
 ```
 
 **Why the agent is a separate service.** It runs 24/7, holds keys server-side,
@@ -388,7 +442,8 @@ escrow and agent code as boilerplate — named in full in
 | [`FEEDBACK.md`](FEEDBACK.md) | Uniswap integration feedback |
 | [`ATTRIBUTION.md`](ATTRIBUTION.md) | What this is built on |
 | [`docs/adr/0001-autopilot-delegation.md`](docs/adr/0001-autopilot-delegation.md) | Why the job-manager role exists |
-| [`docs/track-verification.md`](docs/track-verification.md) | Sponsor requirements, verified |
+| [`docs/tracks.md`](docs/tracks.md) | **What we submit for, and the line that proves each claim** |
+| [`docs/track-verification.md`](docs/track-verification.md) | Sponsor requirements, verified (superseded on eligibility) |
 
 ## License
 
