@@ -15,6 +15,7 @@ import {
   RatingSubmitted,
   JobManagerSet,
   JobManagerRevoked,
+  Atelier,
 } from "../generated/Atelier/Atelier"
 import { Escrow, Milestone, Evidence, Application, Rating, ManagerEvent } from "../generated/schema"
 
@@ -31,8 +32,24 @@ export function handleEscrowCreated(event: EscrowCreated): void {
   entity.status = 0 // Pending
   entity.workStarted = false
   entity.isOpenJob = event.params.isOpenJob
-  entity.projectTitle = ""
-  entity.projectDescription = ""
+  /*
+   * Read the title and description from the contract, not the event.
+   *
+   * EscrowCreated carries no strings, so these were hardcoded empty and every
+   * indexed job came back untitled — a board rendered from this subgraph would
+   * have shown a list of blanks. try_ rather than a direct call: a revert here
+   * would kill indexing for every escrow, and a missing title is worth far less
+   * than a working index.
+   */
+  let contract = Atelier.bind(event.address)
+  let onChain = contract.try_getEscrow(event.params.escrowId)
+  if (!onChain.reverted) {
+    entity.projectTitle = onChain.value.projectTitle
+    entity.projectDescription = onChain.value.projectDescription
+  } else {
+    entity.projectTitle = ""
+    entity.projectDescription = ""
+  }
   // Convert Address[] → Bytes[] element by element (AS doesn't allow direct cast)
   let rawArbiters = event.params.arbiters
   let arbiterBytes = new Array<Bytes>(rawArbiters.length)
