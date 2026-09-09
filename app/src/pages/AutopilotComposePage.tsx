@@ -31,10 +31,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useWriteContract } from "wagmi";
 import { useCreateEscrow } from "@/hooks/use-escrows";
+import { contractService } from "@/lib/web3/contract-service";
 import { toastError } from "@/lib/atelier/errors";
 import {
   AUTOPILOT_CONFIGURED,
+  fetchAutopilotAddress,
   fetchLimits,
   fetchWhitelistedTokens,
   previewBrief,
@@ -54,6 +57,7 @@ export default function AutopilotComposePage() {
   const { toast } = useToast();
   const { wallet } = useWeb3();
   const createEscrow = useCreateEscrow();
+  const { writeContractAsync } = useWriteContract();
 
   const [instruction, setInstruction] = useState("");
   /* Which tokens the escrow will actually accept. Read from the chain rather
@@ -160,7 +164,7 @@ export default function AutopilotComposePage() {
         .filter(Boolean)
         .join("\n\n");
 
-      await createEscrow.mutateAsync({
+      const created = await createEscrow.mutateAsync({
         depositor: wallet.address,
         arbiters: [],
         required_confirmations: 1,
@@ -184,8 +188,34 @@ export default function AutopilotComposePage() {
         project_description: description,
       });
 
+      /*
+       * Hand the job to Autopilot, which is the entire point of this page.
+       *
+       * Without this the escrow was created and nothing else happened: an
+       * "Autopilot" job came out byte-identical to a manual one, My Jobs said
+       * "You are running this job", and the agent never looked at it. The mode
+       * the client chose existed only in which page they had been on.
+       *
+       * It has to be a second transaction — the escrow must exist before it can
+       * have a manager — and the address comes from the daemon rather than a
+       * build-time constant, so a redeployed agent cannot be delegated to a
+       * stale key.
+       */
+      const escrowId = Number(created.escrowId);
+      if (!Number.isFinite(escrowId)) {
+        throw new Error(
+          "The job was funded, but its id could not be read back, so Autopilot was not given it. Hand it over from My Jobs.",
+        );
+      }
+
+      const { address: agentAddress } = await fetchAutopilotAddress();
+      await contractService.setJobManager(
+        { escrow_id: escrowId, manager: agentAddress },
+        writeContractAsync,
+      );
+
       toast({
-        title: "Posted and funded",
+        title: "Posted, funded, and handed to Autopilot",
         description:
           "Autopilot is collecting applications. Watch it work from My Jobs.",
       });

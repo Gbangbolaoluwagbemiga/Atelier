@@ -1,5 +1,5 @@
 /**
- * Seed the LOCAL Patron daemon with demo activity, so the Autopilot surfaces in
+ * Seed the LOCAL Atelier daemon with demo activity, so the Autopilot surfaces in
  * Atelier have something to render while you click around.
  *
  *   node scripts/seed-local-demo.mjs [escrowId ...]
@@ -17,7 +17,7 @@
  * number in the submission has to be readable off-chain or off the subgraph.
  * Reasonings below are written to be obviously synthetic if one ever leaks.
  *
- * Undo with:  rm agent/daemon/data/patron.db   (then restart the daemon)
+ * Undo with:  rm agent/daemon/data/atelier.db   (then restart the daemon)
  */
 
 import { DatabaseSync } from "node:sqlite";
@@ -27,7 +27,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const DB = resolve(here, "../agent/daemon/data/patron.db");
+const DB = resolve(here, "../agent/daemon/data/atelier.db");
 
 if (!existsSync(DB)) {
   console.error(
@@ -39,7 +39,16 @@ if (!existsSync(DB)) {
 /* Escrow ids to attach the demo jobs to. Pass your own so the log lines up with
    escrows your wallet can actually open in My Jobs. */
 const escrowIds = process.argv.slice(2);
-if (escrowIds.length === 0) escrowIds.push("1", "2");
+/*
+ * Default to a high range, not 1 and 2.
+ *
+ * Real escrow ids start at 1, so seeding there put a fake task on the same id
+ * as a genuine job the moment a fresh contract was deployed. The reconciler
+ * then fought the poller over which status escrow 2 had, and deleting the demo
+ * rows was the only way to tell them apart. Ids up here will not collide with
+ * anything a testnet deployment reaches.
+ */
+if (escrowIds.length === 0) escrowIds.push("9001", "9002");
 
 const db = new DatabaseSync(DB);
 const now = Date.now();
@@ -107,4 +116,4 @@ escrowIds.forEach((escrowId, i) => {
 
 console.log(`\nSeeded ${escrowIds.length} demo jobs, ${decisionCount} decisions.`);
 console.log("Restart is not needed — the daemon reads SQLite per request.");
-console.log("Undo: rm agent/daemon/data/patron.db");
+console.log("Undo: rm agent/daemon/data/atelier.db");

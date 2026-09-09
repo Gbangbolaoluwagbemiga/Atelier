@@ -696,6 +696,22 @@ export default function JobsPage() {
 
   /* Only a genuine load blocks the page now. A missing wallet does not — see
      the fetch effect above. */
+  /*
+   * /jobs/:jobId opens that job's dialog directly, for links the agent sends
+   * off-site. Fires once, after the board loads, so closing the dialog sticks.
+   *
+   * Must sit here, with the other hooks and above the `loading` return. It was
+   * originally placed inside the job map, which called a hook per row and only
+   * on the renders that got that far — React refuses to render at all in that
+   * situation, so Browse Jobs went blank rather than merely misbehaving.
+   */
+  useEffect(() => {
+    if (deepLinkConsumed || !deepLinkedJobId || jobs.length === 0) return;
+    const match = jobs.find((j) => j.id === deepLinkedJobId);
+    setDeepLinkConsumed(true);
+    if (match) setSelectedJob(match);
+  }, [deepLinkedJobId, jobs, deepLinkConsumed]);
+
   if (loading) {
     return <JobsLoading isConnected />;
   }
@@ -772,14 +788,7 @@ export default function JobsPage() {
               </div>
               {filteredJobs.map((job, index) => {
                 const jobHasApplied = hasApplied[job.id] || false;
-                useEffect(() => {
-    if (deepLinkConsumed || !deepLinkedJobId || jobs.length === 0) return;
-    const match = jobs.find((j) => j.id === deepLinkedJobId);
-    setDeepLinkConsumed(true);
-    if (match) setSelectedJob(match);
-  }, [deepLinkedJobId, jobs, deepLinkConsumed]);
-
-  return (
+                return (
                   <JobCard
                     key={job.id}
                     job={job}
