@@ -134,9 +134,21 @@ export async function adoptDelegatedJobs(): Promise<number> {
       args: [id],
     })) as RawEscrow;
 
-    // Only jobs still waiting for a freelancer are worth adopting. A finished
-    // or cancelled escrow has nothing left for an agent to decide.
-    if (esc.status !== 0) continue;
+    /*
+     * Pending and InProgress, not just Pending.
+     *
+     * setJobManager accepts a job at any stage, so a client can hand over one
+     * that already has a freelancer working -- "you handle the reviews from
+     * here" is a reasonable thing to want, and the contract allows it. Adopting
+     * only Pending meant that delegation was accepted on-chain and then ignored:
+     * the app said Autopilot was running the job and nothing ever happened,
+     * which is the same inert hand-off this sweep exists to prevent.
+     *
+     * Anything past InProgress is settled and has nothing left to decide.
+     */
+    const PENDING = 0;
+    const IN_PROGRESS = 1;
+    if (esc.status !== PENDING && esc.status !== IN_PROGRESS) continue;
 
     /*
      * The client already approved a brief in the app, and it was written into
@@ -191,7 +203,9 @@ export async function adoptDelegatedJobs(): Promise<number> {
       escrowId: String(id),
       instruction: source,
       clientType: "human",
-      status: "posted",
+      // A job with a freelancer already on it skips the hiring branch and goes
+      // straight to reviewing what they submit.
+      status: esc.status === IN_PROGRESS ? "active" : "posted",
       briefJson,
       clientAddress: esc.depositor,
     });
