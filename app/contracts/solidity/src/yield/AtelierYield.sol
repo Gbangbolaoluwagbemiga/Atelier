@@ -96,8 +96,21 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
     address public immutable escrow;
 
     mapping(address => IYieldAdapter) public yieldAdapter;
-    /** Fraction of an escrow's remainder never deployed, in basis points. */
-    uint256 public yieldBufferBP = 2000;
+    /**
+     * Fraction of an escrow's remainder never deployed, in basis points.
+     *
+     * Ten percent, on top of the largest unpaid milestone rather than instead
+     * of it. The milestone reserve is what makes a payout instant — the next
+     * claim, whatever its size, is always already in cash — and this is the
+     * margin on top for everything that is not the next claim.
+     *
+     * It was twenty. Halving it puts more of a large escrow to work without
+     * touching the guarantee: on a 10 USDC job split 4/3/3 the cash reserve
+     * goes from 6 to 5, and the 4 that any single approval could ask for stays
+     * where it is either way. The floor in setYieldBuffer is this number, so it
+     * cannot be tuned lower without changing the code that says why.
+     */
+    uint256 public yieldBufferBP = 1000;
     mapping(uint256 => bool) public yieldOptIn;
 
     /**

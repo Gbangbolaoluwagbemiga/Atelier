@@ -92,7 +92,7 @@ export function PostDisputeChoice({ escrowId, isClient, status, milestones, onDo
   const reopen = async () => {
     setBusy("reopen");
     try {
-      await contractService.reopenAfterDispute(escrowId, writeContractAsync);
+      await contractService.reopenJob(escrowId, writeContractAsync);
       toast({
         title: "Back on the board",
         description:

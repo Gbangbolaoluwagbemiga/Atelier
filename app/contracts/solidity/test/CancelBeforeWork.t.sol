@@ -157,3 +157,154 @@ contract CancelBeforeWorkTest is JobManagerBase {
         assertGt(yield_.escrowDeployed(id), 0, "work started and nothing was deployed");
     }
 }
+
+/**
+ * A NAMED FREELANCER'S RIGHT TO SAY NO.
+ *
+ * Direct assignment puts somebody's name on a job they never agreed to. Their
+ * only exits were to ignore it — leaving the client waiting on someone who was
+ * never coming — or to start work they did not want. Neither of those is
+ * consent, and one of them is how a client's money ends up locked for a
+ * fortnight.
+ */
+contract DeclineAssignmentTest is JobManagerBase {
+    function _assignedAtCreation() internal returns (uint256 id) {
+        address[] memory arbiters = new address[](1);
+        arbiters[0] = arbiter;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = M1;
+        amounts[1] = M2;
+        string[] memory descs = new string[](2);
+        descs[0] = "First milestone";
+        descs[1] = "Second milestone";
+        vm.prank(client);
+        id = sf.createEscrow(
+            worker, address(usdc), BUDGET, 30, arbiters, 1, amounts, descs, "Logo", "A logo"
+        );
+    }
+
+    function test_theNamedFreelancerCanHandTheJobBack() public {
+        uint256 id = _assignedAtCreation();
+
+        vm.prank(worker);
+        sf.declineAssignment(id);
+
+        Atelier.Escrow memory esc = sf.getEscrow(id);
+        assertEq(esc.beneficiary, address(0), "still named on a job they declined");
+    }
+
+    /**
+     * A decline does not decide what happens next. The money stays put and the
+     * job waits, because the client is the one who knows whether they want to
+     * meet the freelancer's terms, take anyone, or have their deposit back.
+     */
+    function test_aDeclineLeavesTheJobWaitingOnTheClient() public {
+        uint256 id = _assignedAtCreation();
+        uint256 held = usdc.balanceOf(address(sf));
+
+        vm.prank(worker);
+        sf.declineAssignment(id);
+
+        Atelier.Escrow memory esc = sf.getEscrow(id);
+        assertFalse(esc.isOpenJob, "put itself on the board without being asked");
+        assertEq(usdc.balanceOf(address(sf)), held, "money moved on a decline");
+        assertEq(uint8(esc.status), uint8(Atelier.EscrowStatus.Pending));
+    }
+
+    /* ─────────── the client's three answers ─────────── */
+
+    /**
+     * ONE: meet their terms and ask them again.
+     *
+     * The decline records them as an applicant, so the client can name them
+     * without making them apply for a job they were already offered. Whatever
+     * the reason was — a budget, a deadline — the client fixes it and re-offers.
+     */
+    function test_theClientCanTopUpAndNameTheSameFreelancerAgain() public {
+        uint256 id = _assignedAtCreation();
+        vm.prank(worker);
+        sf.declineAssignment(id);
+
+        vm.prank(client);
+        sf.acceptFreelancer(id, worker);
+
+        assertEq(sf.getEscrow(id).beneficiary, worker, "could not re-offer the job");
+    }
+
+    /// TWO: put it on the board and let anyone apply.
+    function test_theClientCanOpenItToEveryone() public {
+        uint256 id = _assignedAtCreation();
+        vm.prank(worker);
+        sf.declineAssignment(id);
+
+        vm.prank(client);
+        sf.reopenJob(id);
+        assertTrue(sf.getEscrow(id).isOpenJob, "did not go back on the board");
+
+        _apply(id, outsider);
+        vm.prank(client);
+        sf.acceptFreelancer(id, outsider);
+        assertEq(sf.getEscrow(id).beneficiary, outsider, "the reopened job could not be filled");
+    }
+
+    /// THREE: take the money back.
+    function test_theClientCanTakeTheirMoneyBack() public {
+        uint256 id = _assignedAtCreation();
+        vm.prank(worker);
+        sf.declineAssignment(id);
+
+        uint256 before = usdc.balanceOf(client);
+        vm.prank(client);
+        sf.cancelJob(id);
+        assertGt(usdc.balanceOf(client), before, "no refund after a decline");
+    }
+
+    /* Only the client picks among the three. */
+    function test_aStrangerCannotOpenTheJob() public {
+        uint256 id = _assignedAtCreation();
+        vm.prank(worker);
+        sf.declineAssignment(id);
+
+        vm.prank(outsider);
+        vm.expectRevert(Atelier.Unauthorized.selector);
+        sf.reopenJob(id);
+    }
+
+    /* ─────────── who may, and when ─────────── */
+
+    function test_onlyTheNamedFreelancerMayDecline() public {
+        uint256 id = _assignedAtCreation();
+        vm.prank(outsider);
+        vm.expectRevert(Atelier.Unauthorized.selector);
+        sf.declineAssignment(id);
+    }
+
+    /* The client has cancelJob; declining on their behalf would let them strip a
+       freelancer off a job while pretending the freelancer chose to leave. */
+    function test_theClientCannotDeclineForThem() public {
+        uint256 id = _assignedAtCreation();
+        vm.prank(client);
+        vm.expectRevert(Atelier.Unauthorized.selector);
+        sf.declineAssignment(id);
+    }
+
+    function test_youCannotDeclineWorkYouHaveAlreadyStarted() public {
+        uint256 id = _assignedAtCreation();
+        vm.prank(worker);
+        sf.startWork(id);
+
+        vm.prank(worker);
+        vm.expectRevert(Atelier.WorkAlreadyStarted.selector);
+        sf.declineAssignment(id);
+    }
+
+    function test_decliningTwiceIsNotPossible() public {
+        uint256 id = _assignedAtCreation();
+        vm.prank(worker);
+        sf.declineAssignment(id);
+
+        vm.prank(worker);
+        vm.expectRevert(Atelier.Unauthorized.selector);
+        sf.declineAssignment(id);
+    }
+}

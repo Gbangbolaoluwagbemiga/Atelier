@@ -36,7 +36,9 @@ const CALLED_BY_THE_UI = [
   "getBadge",
   // the client's exits
   "withdrawJobFunds",
-  "reopenAfterDispute",
+  "reopenJob",
+  "declineAssignment",
+  "cancelJob",
   // autopilot
   "setJobManager",
   "revokeJobManager",

@@ -22,19 +22,26 @@ contract AtelierV2 is Atelier {
         return "2.1.0-future";
     }
 
-    function setFutureSetting(uint256 v) external onlyOwner {
+    /*
+     * One entry point, not three.
+     *
+     * This fixture inherits the whole of Atelier, so it is always within a few
+     * hundred bytes of EIP-170 of it — and it went over twice, each time
+     * blocking a real feature for the sake of a mock. Every function here is
+     * bytecode on top of a contract that is already nearly full, so there is
+     * one, doing both things the tests need: write the new slot, and key the
+     * new mapping off an escrow that existed before the upgrade.
+     *
+     * `onlyOwner` is gone with it. What is under test is storage layout
+     * surviving an upgrade, and access control on a mock's setter proves
+     * nothing about that.
+     */
+    function setFutureSetting(uint256 v) external {
         futureSetting = v;
-    }
-
-    function markFuture(uint256 escrowId) external {
-        /* Reads storage that existed BEFORE the upgrade, so the flag can only be
-           set for an escrow that survived it — which is the property under test.
-           This used to decode the whole escrow struct through an external call;
-           the tuple decode alone cost enough bytecode to push this fixture past
-           EIP-170 whenever Atelier itself grew, which is a silly reason for a
-           real feature to be blocked. */
-        if (escrowId == 0 || escrowId >= nextEscrowId) revert InvalidMilestone();
-        futureFlag[escrowId] = true;
+        // Reads pre-upgrade storage, which is the property under test. No
+        // branch and no revert: both pull in bytecode this fixture cannot
+        // afford on top of a parent that is 148 bytes from the limit.
+        futureFlag[v] = v != 0 && v < nextEscrowId;
     }
 }
 
@@ -323,9 +330,10 @@ contract AtelierUpgradeTest is JobManagerBase {
         v2.setFutureSetting(2000);
         assertEq(v2.futureSetting(), 2000);
 
-        assertFalse(v2.futureFlag(id));
+
+        assertFalse(v2.futureFlag(id), "new mapping starts clean");
         vm.prank(client);
-        v2.markFuture(id);
+        v2.setFutureSetting(id);
         assertTrue(v2.futureFlag(id), "new mapping keyed off existing escrows");
 
         // And none of it disturbed what was already there.

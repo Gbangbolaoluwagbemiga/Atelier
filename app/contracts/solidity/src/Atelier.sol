@@ -380,7 +380,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.5.0-reopen-after-dispute";
+        return "3.6.0-decline-and-reclaim";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -746,11 +746,25 @@ contract Atelier is
      * paid, and delivered-but-unapproved work stays with the milestone it
      * belongs to.
      */
-    function reopenAfterDispute(uint256 escrowId) external whenNotPaused {
+    function reopenJob(uint256 escrowId) external whenNotPaused {
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
-        if (esc.status != EscrowStatus.InProgress || disputeVoteCounts[escrowId] == 0)
-            revert CannotCancelAssignedJob();
+        /*
+         * Two ways a job comes back to the board, and they end in the same
+         * state, so they share the body.
+         *
+         *   after arbitration — the job broke and there is work left
+         *   after a decline   — the named freelancer handed it back
+         *
+         * The second is one of the three answers to a decline; the other two,
+         * naming somebody and taking the money back, are acceptFreelancer and
+         * cancelJob. It lives here rather than in a function of its own because
+         * the runtime has 44 bytes of EIP-170 left and this body already exists.
+         */
+        bool declined = esc.status == EscrowStatus.Pending && esc.beneficiary == address(0);
+        bool arbitrated =
+            esc.status == EscrowStatus.InProgress && disputeVoteCounts[escrowId] > 0;
+        if (!declined && !arbitrated) revert CannotCancelAssignedJob();
 
         Milestone[] storage ms = escrowMilestones[escrowId];
         bool unfinished;
@@ -827,7 +841,15 @@ contract Atelier is
     function acceptFreelancer(uint256 escrowId, address freelancer) external whenNotPaused {
         Escrow storage esc = _requireEscrow(escrowId);
         _onlyDepositorOrManager(esc, escrowId);
-        if (!esc.isOpenJob) revert NotAnOpenJob();
+        /*
+         * "Nobody is on this job" rather than "this job is open".
+         *
+         * The two agree on every open job — an open one has no beneficiary
+         * until this function gives it one. They differ on a job that was
+         * declined, which has no beneficiary and is not open, and which the
+         * client must be able to fill without first pushing it to the board.
+         */
+        if (esc.beneficiary != address(0)) revert NotAnOpenJob();
         if (!hasApplied[escrowId][freelancer]) revert FreelancerNotApplied();
         if (freelancer == address(0)) revert InvalidAddress();
 
@@ -942,6 +964,51 @@ contract Atelier is
      *      - Cancellations 11+: 15% penalty
      *      Additional penalty based on number of applications received
      */
+    /**
+     * @notice Hand back a job you were named on, before you start it.
+     *
+     * A directly assigned escrow puts someone's name on a job they never
+     * agreed to. Their only ways out were to ignore it — leaving the client's
+     * money locked and the client waiting on someone who was never coming — or
+     * to start work they did not want. Neither is consent.
+     *
+     * Declining turns the escrow into an open job: the money stays exactly
+     * where it is, the client keeps their brief and their milestones, and
+     * anybody can now apply. That is better for both sides than a refund,
+     * because the client usually wants the work done rather than their deposit
+     * back.
+     *
+     * @dev The reason is deliberately NOT a parameter. Calldata is cheap but
+     *      the runtime is 420 bytes from EIP-170, and a freelancer's "I'm
+     *      booked until March" belongs in the message thread where the client
+     *      can reply to it, not in an event nobody reads. The UI sends it there.
+     */
+    function declineAssignment(uint256 escrowId) external nonReentrant whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.beneficiary) revert Unauthorized();
+        if (esc.workStarted) revert WorkAlreadyStarted();
+        if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
+
+        /*
+         * The decline does not decide what happens next — the client does.
+         *
+         * Putting the job straight back on the board took that choice away.
+         * A client who named someone specific may want to fix whatever the
+         * problem was and ask them again, may want anyone at all, or may want
+         * their money back; only they know which. So this leaves the escrow in
+         * the one state that means "declined, waiting on the client":
+         * Pending, funded, with no beneficiary and not yet open.
+         *
+         * Recording the decliner as an applicant is what makes the first of
+         * those three possible. It costs nothing — the mapping already exists —
+         * and it means `acceptFreelancer` can name them again without their
+         * having to go through an application for a job they were offered.
+         */
+        hasApplied[escrowId][msg.sender] = true;
+        esc.beneficiary = address(0);
+        emit JobReopened(escrowId, msg.sender);
+    }
+
     function cancelJob(uint256 escrowId) external nonReentrant whenNotPaused {
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();

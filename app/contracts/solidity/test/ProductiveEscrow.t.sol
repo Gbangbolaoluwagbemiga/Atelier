@@ -33,7 +33,9 @@ contract ProductiveEscrowTest is JobManagerBase {
         yield_ = new AtelierYield(address(sf));
         venue = new MockYieldAdapter(address(usdc), address(yield_));
         yield_.setYieldAdapter(address(usdc), address(venue));
-        yield_.setYieldBuffer(2000);
+        // No override: these run against the buffer that actually ships, so a
+        // change to the default shows up here rather than passing unnoticed
+        // under a number only the tests use.
         sf.setYieldController(address(yield_)); // 20%
     }
 
@@ -54,6 +56,18 @@ contract ProductiveEscrowTest is JobManagerBase {
         vm.prank(outsider);
         vm.expectRevert(Atelier.Unauthorized.selector);
         yield_.setYieldOptIn(id, true);
+    }
+
+    /**
+     * The number that actually ships.
+     *
+     * Every other test here would pass at any buffer, because they assert
+     * relationships rather than amounts. This one asserts the amount, so that
+     * changing the default is a deliberate act with a test to update rather
+     * than a silent change in how much of somebody's escrow is lent out.
+     */
+    function test_theShippedBufferIsTenPercent() public view {
+        assertEq(yield_.yieldBufferBP(), 1000, "the default buffer moved");
     }
 
     function test_bufferCannotBeSetToNothing() public {
@@ -90,19 +104,25 @@ contract ProductiveEscrowTest is JobManagerBase {
      * The cap keeps the largest single unpaid milestone in cash, so any one
      * approval is always payable without the venue.
      *
-     * Budget 900, milestones 300 and 600, buffer 20%:
-     *   reserve = 600 (largest) + 180 (buffer) = 780
-     *   deployable = 900 - 780 = 120
+     * Budget 900, milestones 300 and 600, buffer 10%:
+     *   reserve = 600 (largest) + 90 (buffer) = 690
+     *   deployable = 900 - 690 = 210
+     *
+     * The 600 is the part that matters and it does not move with the buffer.
+     * Halving the buffer from 20% put another 90 to work and changed nothing
+     * about whether the next claim is payable in cash — which is the whole
+     * reason the reserve is derived from the milestone rather than being a
+     * percentage.
      */
     function test_capKeepsTheLargestMilestoneInCash() public {
         uint256 id = _assignedJob(true);
 
-        assertEq(yield_.investableAmount(id), 120e6, "cap is not the safe amount");
+        assertEq(yield_.investableAmount(id), 210e6, "cap is not the safe amount");
 
         yield_.investIdle(id);
         uint256 deployed = yield_.escrowDeployed(id);
 
-        assertEq(deployed, 120e6);
+        assertEq(deployed, 210e6);
         assertGe(BUDGET - deployed, M2, "cash cannot cover the largest milestone");
     }
 

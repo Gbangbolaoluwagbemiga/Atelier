@@ -26,6 +26,7 @@ import { AutopilotControl } from "@/components/atelier/autopilot-control";
 import { JobDecisionLog } from "@/components/atelier/job-decision-log";
 import { PostDisputeChoice } from "@/components/atelier/post-dispute-choice";
 import { YieldOptIn } from "@/components/atelier/yield-opt-in";
+import { DeclinedChoice } from "@/components/atelier/declined-choice";
 
 
 interface EscrowCardProps {
@@ -437,6 +438,17 @@ export function EscrowCard({
                       milestones={escrow.milestones}
                     />
                   )}
+
+                {/* The freelancer handed it back. Renders nothing unless the
+                    escrow is in the one state that means exactly that. */}
+                <DeclinedChoice
+                  escrowId={Number(escrow.id)}
+                  isClient={escrow.isClient === true}
+                  status={escrow.status}
+                  beneficiary={escrow.beneficiary}
+                  isOpenJob={escrow.isOpenJob}
+                  onDone={() => window.dispatchEvent(new CustomEvent("escrowUpdated"))}
+                />
 
                 {/* After an arbiter rules, the rest of the job is the client's
                     call: take back what nobody started, or hand it on. Renders

@@ -792,11 +792,27 @@ export class ContractService {
    * previous freelancer submitted stays on-chain, so whoever picks it up can
    * read the history before taking it on.
    */
-  async reopenAfterDispute(escrowId: number, write: WagmiWrite): Promise<`0x${string}`> {
+  async reopenJob(escrowId: number, write: WagmiWrite): Promise<`0x${string}`> {
     return write({
       address: this.addr,
       abi: AtelierABI.abi,
-      functionName: "reopenAfterDispute",
+      functionName: "reopenJob",
+      args: [BigInt(escrowId)],
+    });
+  }
+
+  /**
+   * Hand back a job you were named on, before starting it.
+   *
+   * The reason travels through the message thread, not through here — the
+   * contract takes no string, because the runtime is 148 bytes from EIP-170 and
+   * a client cannot reply to an event.
+   */
+  async declineAssignment(escrowId: number, write: WagmiWrite): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: AtelierABI.abi,
+      functionName: "declineAssignment",
       args: [BigInt(escrowId)],
     });
   }

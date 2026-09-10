@@ -37,8 +37,21 @@ vi.mock("@/components/atelier/job-decision-log", () => ({ JobDecisionLog: () => 
 // Same reason as the two above: it opens a wagmi write, and this suite renders
 // the card without a WagmiProvider because it is testing prop plumbing, not chain calls.
 vi.mock("@/components/atelier/post-dispute-choice", () => ({ PostDisputeChoice: () => null }));
-// Reaches for wagmi, which has no provider here. Covered in yield-opt-in.test.tsx.
 vi.mock("@/components/atelier/yield-opt-in", () => ({ YieldOptIn: () => null }));
+
+/*
+ * Mock wagmi itself rather than stubbing each child that reaches for it.
+ *
+ * This file has broken twice now for the same reason: a new child of EscrowCard
+ * calls useWriteContract, there is no provider here, and the whole card fails to
+ * render — taking down two tests about milestone requirements that have nothing
+ * to do with the new child. Stubbing children one at a time only defers the
+ * next one.
+ */
+vi.mock("wagmi", () => ({
+  useWriteContract: () => ({ writeContractAsync: vi.fn() }),
+  useAccount: () => ({ address: undefined, isConnected: false }),
+}));
 vi.mock("@/components/chat/chat-dialog", () => ({
   ChatDialog: ({ otherAddress }: { otherAddress: string }) => (
     <div data-testid="chat-dialog" data-other={otherAddress} />

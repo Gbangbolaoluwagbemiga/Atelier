@@ -164,7 +164,7 @@ contract ReopenAfterDisputeTest is JobManagerBase {
         _resolve(id);
 
         vm.prank(client);
-        sf.reopenAfterDispute(id);
+        sf.reopenJob(id);
 
         Atelier.Escrow memory esc = sf.getEscrow(id);
         assertTrue(esc.isOpenJob, "not back on the board");
@@ -179,7 +179,7 @@ contract ReopenAfterDisputeTest is JobManagerBase {
         _resolve(id);
 
         vm.prank(client);
-        sf.reopenAfterDispute(id);
+        sf.reopenJob(id);
 
         Atelier.Milestone[] memory ms = sf.getMilestones(id);
         assertGt(ms[0].submittedAt, 0, "the previous submission was erased");
@@ -194,7 +194,7 @@ contract ReopenAfterDisputeTest is JobManagerBase {
         _resolve(id);
 
         vm.prank(client);
-        sf.reopenAfterDispute(id);
+        sf.reopenJob(id);
 
         assertEq(sf.getMilestones(id)[1].amount, M2, "the remaining budget went missing");
     }
@@ -205,7 +205,7 @@ contract ReopenAfterDisputeTest is JobManagerBase {
         _resolve(id);
 
         vm.prank(client);
-        sf.reopenAfterDispute(id);
+        sf.reopenJob(id);
 
         address newcomer = address(0xFEE15A);
         _apply(id, newcomer);
@@ -236,7 +236,7 @@ contract ReopenAfterDisputeTest is JobManagerBase {
 
         vm.prank(client);
         vm.expectRevert(Atelier.CannotCancelAssignedJob.selector);
-        sf.reopenAfterDispute(id);
+        sf.reopenJob(id);
     }
 
     function test_cannotReopenWhenEveryMilestoneIsAlreadyDelivered() public {
@@ -246,7 +246,7 @@ contract ReopenAfterDisputeTest is JobManagerBase {
 
         vm.prank(client);
         vm.expectRevert(Atelier.NothingLeftToFinish.selector);
-        sf.reopenAfterDispute(id);
+        sf.reopenJob(id);
     }
 
     function test_onlyTheClientMayReopen() public {
@@ -255,6 +255,6 @@ contract ReopenAfterDisputeTest is JobManagerBase {
 
         vm.prank(worker);
         vm.expectRevert(Atelier.Unauthorized.selector);
-        sf.reopenAfterDispute(id);
+        sf.reopenJob(id);
     }
 }

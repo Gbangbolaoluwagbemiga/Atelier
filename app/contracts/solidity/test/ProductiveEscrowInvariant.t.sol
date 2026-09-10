@@ -106,7 +106,7 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
         yield_ = new AtelierYield(address(sf));
         venue = new MockYieldAdapter(address(usdc), address(yield_));
         yield_.setYieldAdapter(address(usdc), address(venue));
-        yield_.setYieldBuffer(2000);
+        // The shipped default, so the fuzzer attacks what production runs.
         sf.setYieldController(address(yield_));
 
         jobId = _createOpenJob();

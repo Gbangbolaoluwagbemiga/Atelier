@@ -13,7 +13,7 @@ import userEvent from "@testing-library/user-event";
  */
 
 const withdrawJobFunds = vi.fn().mockResolvedValue("0xhash");
-const reopenAfterDispute = vi.fn().mockResolvedValue("0xhash");
+const reopenJob = vi.fn().mockResolvedValue("0xhash");
 
 vi.mock("wagmi", () => ({
   useWriteContract: () => ({ writeContractAsync: vi.fn() }),
@@ -23,7 +23,7 @@ vi.mock("@/contexts/web3-context", () => ({
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/web3/contract-service", () => ({
-  contractService: { withdrawJobFunds, reopenAfterDispute },
+  contractService: { withdrawJobFunds, reopenJob },
 }));
 
 const { PostDisputeChoice } = await import("@/components/atelier/post-dispute-choice");
@@ -57,7 +57,7 @@ function panel(props: Partial<Parameters<typeof PostDisputeChoice>[0]> = {}) {
 
 beforeEach(() => {
   withdrawJobFunds.mockClear();
-  reopenAfterDispute.mockClear();
+  reopenJob.mockClear();
 });
 
 describe("when the choice is offered", () => {
@@ -121,7 +121,7 @@ describe("what each button does", () => {
     panel();
     await userEvent.click(screen.getByRole("button", { name: /let someone else finish it/i }));
 
-    expect(reopenAfterDispute).toHaveBeenCalledWith(4, expect.anything());
+    expect(reopenJob).toHaveBeenCalledWith(4, expect.anything());
     expect(withdrawJobFunds).not.toHaveBeenCalled();
   });
 

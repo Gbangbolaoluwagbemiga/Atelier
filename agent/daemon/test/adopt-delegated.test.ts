@@ -206,6 +206,38 @@ describe("giving a job back", () => {
     await adoptDelegatedJobs();
     expect(deleteTask).not.toHaveBeenCalled();
   });
+
+  /*
+   * Revocation is not the only way a job stops being work. jobManager stays set
+   * on a cancelled escrow forever, so the sweep above never noticed — and the
+   * agent went on advertising `delegated-4`, status "posted", for a job that had
+   * been cancelled and that the chain refused every call on.
+   */
+  it("releases a job the client has cancelled, even though we still manage it", async () => {
+    chainSays({ esc: { status: 6 } });
+    listTasks.mockReturnValue([{ id: "delegated-7", escrowId: "7" }]);
+    await adoptDelegatedJobs();
+    expect(deleteTask).toHaveBeenCalledWith("delegated-7");
+  });
+
+  it("releases a job that has completed", async () => {
+    chainSays({ esc: { status: 2 } });
+    listTasks.mockReturnValue([{ id: "delegated-7", escrowId: "7" }]);
+    await adoptDelegatedJobs();
+    expect(deleteTask).toHaveBeenCalledWith("delegated-7");
+  });
+
+  /* A failed read is not evidence that a job ended. */
+  it("keeps the task when the escrow cannot be read", async () => {
+    chainSays();
+    readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      if (functionName === "jobManager") return AGENT;
+      throw new Error("rpc down");
+    });
+    listTasks.mockReturnValue([{ id: "delegated-7", escrowId: "7" }]);
+    await adoptDelegatedJobs();
+    expect(deleteTask).not.toHaveBeenCalled();
+  });
 });
 
 describe("when there is no agent wallet", () => {

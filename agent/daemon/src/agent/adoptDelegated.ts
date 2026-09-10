@@ -124,6 +124,38 @@ export async function adoptDelegatedJobs(): Promise<number> {
     console.log(`[adopt] escrow ${t.escrowId} was taken back by its client — released`);
   }
 
+  /*
+   * And anything that has since ended.
+   *
+   * Revocation is not the only way a delegated job stops being work: a client
+   * can cancel it, an arbiter can settle it, it can simply complete. The sweep
+   * above only notices revocation, because it compares against who manages the
+   * escrow — and jobManager stays set on a cancelled job forever.
+   *
+   * So the agent went on advertising a task for an escrow nobody could act on:
+   * `delegated-4`, status "posted", on a job that had been cancelled. Harmless
+   * to the chain, which refuses every call, and misleading everywhere a human
+   * reads the agent's state.
+   */
+  for (const t of tasks) {
+    if (!t.id.startsWith("delegated-")) continue;
+    if (!stillOurs.has(String(t.escrowId))) continue; // handled above
+    try {
+      const esc = (await client.readContract({
+        address: config.atelierAddress,
+        abi,
+        functionName: "getEscrow",
+        args: [BigInt(t.escrowId!)],
+      })) as RawEscrow;
+      if (esc.status !== 0 && esc.status !== 1) {
+        store.deleteTask(t.id);
+        console.log(`[adopt] escrow ${t.escrowId} has ended (status ${esc.status}) — released`);
+      }
+    } catch {
+      // A failed read is not evidence the job ended. Leave it alone.
+    }
+  }
+
   for (const id of ids) {
     if (known.has(String(id))) continue;
 

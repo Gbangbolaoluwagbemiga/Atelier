@@ -1,4 +1,5 @@
 import { encodeJobId } from "@/lib/id-codec";
+import { DeclineAssignment } from "@/components/atelier/decline-assignment";
 import { useState, useEffect } from "react";
 import { useWriteContract, usePublicClient, useSignMessage } from "wagmi";
 import {
@@ -2599,6 +2600,18 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                 </>
                               )}
                             </Button>
+                          )}
+                          {/* Beside Start Work, not instead of it: the two are
+                              the same decision seen from either side, and a
+                              freelancer who was named on a job they never
+                              agreed to needs the second one to exist at all. */}
+                          {escrow.status === "pending" && (
+                            <DeclineAssignment
+                              escrowId={Number(escrow.id)}
+                              clientAddress={escrow.payer}
+                              jobTitle={escrow.projectTitle}
+                              onDone={() => window.dispatchEvent(new CustomEvent("escrowUpdated"))}
+                            />
                           )}
                           {escrow.status === "active" && (
                             <Badge className="bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100">
