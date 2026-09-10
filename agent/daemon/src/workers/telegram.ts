@@ -203,7 +203,7 @@ function closesIn(ts: number): string {
   return `judged in ~${hrs}h`;
 }
 
-function matchesFilter(q: { title: string; criteria: string[]; budget: number }, filter: string): boolean {
+function matchesFilter(q: { title: string; criteria: string[]; budget: number; category?: string | null }, filter: string): boolean {
   if (!filter) return true;
   const f = filter.toLowerCase().trim();
 
@@ -211,7 +211,9 @@ function matchesFilter(q: { title: string; criteria: string[]; budget: number },
   const min = f.match(/^\$?(\d+(?:\.\d+)?)\+?$/);
   if (min?.[1]) return q.budget >= Number(min[1]);
 
-  const haystack = `${q.title} ${q.criteria.join(" ")}`.toLowerCase();
+  // Category included so "/jobs design" narrows the board the same way the
+  // web filter does, rather than only matching jobs that say "design" in prose.
+  const haystack = `${q.title} ${q.criteria.join(" ")} ${q.category ?? ""}`.toLowerCase();
   // Every word must appear, so "logo png" narrows rather than widens.
   return f.split(/\s+/).every((word) => haystack.includes(word));
 }
@@ -230,7 +232,7 @@ async function showJobs(chatId: number, tgUserId: number, filter = "", page = 0)
         `Nothing matches “${esc(filter)}”.`,
         "",
         `Looking for one job in particular? Use its number: <code>/job ${all[0]?.escrowId ?? 38}</code>`,
-        `Filtering by word: <code>/jobs logo</code> · by budget: <code>/jobs 5</code>`,
+        `Filtering: <code>/jobs design</code> · by word: <code>/jobs logo</code> · by budget: <code>/jobs 5</code>`,
         `Or /jobs on its own to see all ${all.length}.`,
       ].join("\n"),
     );
@@ -256,6 +258,9 @@ async function showJobs(chatId: number, tgUserId: number, filter = "", page = 0)
       `<b>${q.title}</b>   <code>#${q.escrowId}</code>`,
       `💰 <b>$${q.budget} USDC</b>  ·  ⏱ ${q.durationDays} day${q.durationDays !== 1 ? "s" : ""} to deliver`,
       `🔒 already locked in escrow  ·  📥 ${closesIn(q.closesAt)}`,
+      // Only when it is known. A job posted before categories existed should
+      // say nothing rather than be labelled with a guess.
+      q.category ? `🏷 ${esc(q.category)}` : "",
       "",
       "   <b>What they need:</b>",
       crit,

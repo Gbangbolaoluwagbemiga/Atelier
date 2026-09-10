@@ -35,6 +35,7 @@ import { useWriteContract } from "wagmi";
 import { useCreateEscrow } from "@/hooks/use-escrows";
 import { contractService } from "@/lib/web3/contract-service";
 import { toastError } from "@/lib/atelier/errors";
+import { CATEGORIES, categoryMarker, type CategoryId } from "@/lib/atelier/categories";
 import {
   AUTOPILOT_CONFIGURED,
   fetchAutopilotAddress,
@@ -63,6 +64,9 @@ export default function AutopilotComposePage() {
   /* Which tokens the escrow will actually accept. Read from the chain rather
      than assumed: the contract rejects anything not whitelisted, and an admin
      can delist one between page loads. */
+  /* What kind of work this is. Written into the description as a marker the
+     subgraph lifts into a queryable field — see lib/atelier/categories.ts. */
+  const [category, setCategory] = useState<CategoryId>("design");
   const [limits, setLimits] = useState<AgentLimits | null>(null);
   const [tokens, setTokens] = useState<WhitelistedToken[] | null>(null);
   const [payToken, setPayToken] = useState<string>("");
@@ -155,6 +159,8 @@ export default function AutopilotComposePage() {
     setFunding(true);
     try {
       const description = [
+        // First line, so it is trivial to strip and impossible to miss.
+        categoryMarker(category),
         trimmed,
         brief.deliverableFormat ? `Deliverable: ${brief.deliverableFormat}` : "",
         brief.criteria.length
@@ -344,6 +350,21 @@ export default function AutopilotComposePage() {
                 arbiter takes over. Three is the floor — fewer escalates people
                 who were visibly getting closer.
               </p>
+
+              <Field label="Kind of work">
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as CategoryId)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  aria-label="Kind of work"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
 
               <Field label="Paid in">
                 {tokens === null ? (

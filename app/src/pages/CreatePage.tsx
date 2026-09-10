@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ARC_TESTNET } from "@/lib/web3/config";
 
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { categoryMarker, type CategoryId } from "@/lib/atelier/categories";
 import { ProjectDetailsStep } from "@/components/create/project-details-step";
 import { MilestonesStep } from "@/components/create/milestones-step";
 import { ReviewStep } from "@/components/create/review-step";
@@ -150,6 +151,10 @@ export default function CreateEscrowPage() {
           .filter(Boolean)
           .join("\n\n")
       : "",
+    /* What kind of work this is. Written into the description as a marker the
+       subgraph lifts into a queryable field, so the board can be filtered
+       without spending a contract upgrade on a browsing aid. */
+    category: "design" as CategoryId,
     duration: autopilotBrief?.durationDays ? String(autopilotBrief.durationDays) : "",
     totalBudget: autopilotBrief?.budget ? String(autopilotBrief.budget) : "",
     beneficiary: prefillFreelancer,
@@ -348,7 +353,9 @@ export default function CreateEscrowPage() {
         total_amount: totalAmountWei.toString(),
         duration: Number(formData.duration) * 86400,
         project_title: formData.projectTitle,
-        project_description: formData.projectDescription,
+        // The marker leads the description so the subgraph can lift it into a
+        // queryable field, and the UI strips it before anyone reads it.
+        project_description: `${categoryMarker(formData.category ?? "design")}\n${formData.projectDescription}`,
       });
 
       toast({ 

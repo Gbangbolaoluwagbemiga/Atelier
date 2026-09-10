@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AutopilotBadge } from "@/components/atelier/autopilot-badge";
 import { motion } from "framer-motion";
-import { Clock, AlertCircle, History, Star } from "lucide-react";
+import { Clock, AlertCircle, History, Star, Tag } from "lucide-react";
+import { categoryLabel, categoryOf, withoutMarker } from "@/lib/atelier/categories";
 import type { Escrow } from "@/lib/web3/types";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
@@ -41,6 +42,8 @@ export function JobCard({
   const hasHistory = (job.milestones ?? []).some(
     (m) => (m.resolvedAt ?? 0) > 0 || m.status === "resolved",
   );
+
+  const category = categoryLabel(categoryOf(job.projectDescription));
 
   const [clientRating, setClientRating] = useState<{ average: number; count: number } | null>(null);
 
@@ -90,6 +93,12 @@ export function JobCard({
               {/* Says what changes for the freelancer — criteria-based review
                   inside a known window — rather than labelling the client a
                   machine. See autopilot-badge.tsx. */}
+              {category && (
+                <Badge variant="outline" className="gap-1.5" data-testid="category-badge">
+                  <Tag className="h-3 w-3" aria-hidden="true" />
+                  {category}
+                </Badge>
+              )}
               {isAutopilot && <AutopilotBadge />}
               {/*
                 A job that has been through arbitration and put back on the
@@ -111,7 +120,7 @@ export function JobCard({
             </div>
 
             <p className="text-muted-foreground mb-4 break-words overflow-hidden">
-              {job.projectDescription || "No description available"}
+              {withoutMarker(job.projectDescription) || "No description available"}
             </p>
 
             <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">

@@ -13,6 +13,12 @@ type Escrow @entity {
   isOpenJob: Boolean!
   projectTitle: String!
   projectDescription: String!
+  # Lifted out of the description at index time rather than stored on-chain.
+  # A category changes nothing about how money moves, so it was not worth a
+  # contract upgrade and a storage slot — but a freelancer browsing the board
+  # wants to filter by it, and that filter belongs in the index.
+  # Null for every escrow created before categories existed.
+  category: String
   arbiters: [Bytes!]!
   requiredConfirmations: BigInt!
 

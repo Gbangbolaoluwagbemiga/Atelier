@@ -17,6 +17,7 @@ import {
 } from "@/contexts/notification-context";
 import type { Escrow } from "@/lib/web3/types";
 import { Briefcase } from "lucide-react";
+import { CATEGORIES, categoryOf } from "@/lib/atelier/categories";
 import { JobsHeader } from "@/components/jobs/jobs-header";
 import { JobsStats } from "@/components/jobs/jobs-stats";
 import { JobCard } from "@/components/jobs/job-card";
@@ -46,6 +47,10 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  /* Browsing by kind of work. "all" includes jobs posted before categories
+     existed, which carry no marker — filtering those out would silently hide
+     most of the board. */
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "pending" | "active" | "completed" | "disputed"
   >("all");
@@ -683,6 +688,8 @@ export default function JobsPage() {
     // Status filter - normalize both sides for comparison
     const jobStatus = normalizeJobStatus(job.status);
     const matchesStatus = statusFilter === "all" || jobStatus === statusFilter;
+    const matchesCategory =
+      categoryFilter === "all" || categoryOf(job.projectDescription) === categoryFilter;
 
     // Don't show cancelled jobs
     const isNotCancelled = jobStatus !== "cancelled";
@@ -691,7 +698,7 @@ export default function JobsPage() {
     const isNotExpired = !(jobStatus === "pending" && job.duration === 0 && (job.deadlineAt ?? 0) > 0);
 
     // Show all jobs including user's own jobs (apply button will be disabled for own jobs)
-    return matchesSearch && matchesStatus && isNotCancelled && isNotExpired;
+    return matchesSearch && matchesStatus && matchesCategory && isNotCancelled && isNotExpired;
   });
 
   /* Only a genuine load blocks the page now. A missing wallet does not — see
@@ -755,6 +762,25 @@ export default function JobsPage() {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex-1">
+            <Label htmlFor="category-filter" className="mb-2 block">
+              Filter by Kind of Work
+            </Label>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger id="category-filter" className="w-full">
+                <SelectValue placeholder="All Kinds" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Kinds</SelectItem>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

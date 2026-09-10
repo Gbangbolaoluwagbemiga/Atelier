@@ -534,6 +534,28 @@ export class JobManagerSet__Params {
   }
 }
 
+export class JobReopened extends ethereum.Event {
+  get params(): JobReopened__Params {
+    return new JobReopened__Params(this);
+  }
+}
+
+export class JobReopened__Params {
+  _event: JobReopened;
+
+  constructor(event: JobReopened) {
+    this._event = event;
+  }
+
+  get escrowId(): BigInt {
+    return this._event.parameters[0].value.toBigInt();
+  }
+
+  get previousFreelancer(): Address {
+    return this._event.parameters[1].value.toAddress();
+  }
+}
+
 export class MilestoneApproved extends ethereum.Event {
   get params(): MilestoneApproved__Params {
     return new MilestoneApproved__Params(this);
@@ -3170,6 +3192,36 @@ export class RenounceOwnershipCall__Outputs {
   _call: RenounceOwnershipCall;
 
   constructor(call: RenounceOwnershipCall) {
+    this._call = call;
+  }
+}
+
+export class ReopenAfterDisputeCall extends ethereum.Call {
+  get inputs(): ReopenAfterDisputeCall__Inputs {
+    return new ReopenAfterDisputeCall__Inputs(this);
+  }
+
+  get outputs(): ReopenAfterDisputeCall__Outputs {
+    return new ReopenAfterDisputeCall__Outputs(this);
+  }
+}
+
+export class ReopenAfterDisputeCall__Inputs {
+  _call: ReopenAfterDisputeCall;
+
+  constructor(call: ReopenAfterDisputeCall) {
+    this._call = call;
+  }
+
+  get escrowId(): BigInt {
+    return this._call.inputValues[0].value.toBigInt();
+  }
+}
+
+export class ReopenAfterDisputeCall__Outputs {
+  _call: ReopenAfterDisputeCall;
+
+  constructor(call: ReopenAfterDisputeCall) {
     this._call = call;
   }
 }

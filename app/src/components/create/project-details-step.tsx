@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CATEGORIES, type CategoryId } from "@/lib/atelier/categories";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Sparkles } from "lucide-react";
@@ -30,6 +31,7 @@ interface ProjectDetailsStepProps {
   formData: {
     projectTitle: string;
     projectDescription: string;
+    category?: CategoryId;
     duration: string;
     totalBudget: string;
     beneficiary: string;
@@ -126,6 +128,27 @@ export function ProjectDetailsStep({
             {errors?.projectTitle && (
               <p className="text-red-500 text-sm mt-1">{errors.projectTitle}</p>
             )}
+          </div>
+
+          <div>
+            <Label htmlFor="category" className="mb-2 block">
+              Kind of work *
+            </Label>
+            <select
+              id="category"
+              value={formData.category ?? "design"}
+              onChange={(e) => onUpdate({ category: e.target.value as CategoryId })}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label} — {c.hint}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              What freelancers filter the board by.
+            </p>
           </div>
 
           <div>

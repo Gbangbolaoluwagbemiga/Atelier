@@ -18,6 +18,7 @@ import * as store from "../store.js";
 import * as atelier from "../web3/atelier.js";
 import { createSignerFor } from "../circle/circleSigner.js";
 import { config } from "../config.js";
+import { categoryLabel, categoryOf } from "../categories.js";
 import { dripGas, provisionWorkerWallet, workerBalance, withdrawTo } from "./wallets.js";
 
 /**
@@ -100,6 +101,8 @@ export interface Quest {
   budget: number;
   durationDays: number;
   criteria: string[];
+  /** What kind of work this is, or null for jobs posted before categories. */
+  category: string | null;
   /** How the budget is split, so a worker can see they're paid in stages. */
   milestones: { description: string; amount: number }[];
   /** When applications close and the agent judges them together. */
@@ -124,6 +127,9 @@ export function openQuests(): Quest[] {
         budget: brief.budget as number,
         durationDays: brief.durationDays as number,
         criteria: (brief.criteria ?? []) as string[],
+        // Read from the instruction the escrow was created with, so a Telegram
+        // freelancer sees the same label the web board shows.
+        category: categoryLabel(categoryOf(t.instruction)),
         milestones: (brief.milestones ?? []) as { description: string; amount: number }[],
         closesAt: t.createdAt + windowMinutes * 60_000,
       };

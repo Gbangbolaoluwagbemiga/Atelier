@@ -19,6 +19,27 @@ import {
 } from "../generated/Atelier/Atelier"
 import { Escrow, Milestone, Evidence, Application, Rating, ManagerEvent } from "../generated/schema"
 
+/**
+ * Pull "[category:design]" out of a job's description.
+ *
+ * The category is written as a marker rather than a contract field: it changes
+ * nothing about how money moves, and the escrow had no room for a storage slot
+ * spent on a browsing aid. Lifting it here is what makes it queryable.
+ *
+ * Returns null when there is no marker. Every escrow created before categories
+ * existed is uncategorised, and guessing one from the prose would be worse than
+ * leaving it blank — a freelancer filtering for design work should not be shown
+ * a job that merely mentions a logo.
+ */
+function extractCategory(description: string): string | null {
+  let open = description.indexOf("[category:")
+  if (open == -1) return null
+  let close = description.indexOf("]", open)
+  if (close == -1) return null
+  let id = description.slice(open + 10, close)
+  return id.length > 0 ? id : null
+}
+
 export function handleEscrowCreated(event: EscrowCreated): void {
   let entity = new Escrow(event.params.escrowId.toString())
   entity.escrowId = event.params.escrowId
@@ -46,9 +67,11 @@ export function handleEscrowCreated(event: EscrowCreated): void {
   if (!onChain.reverted) {
     entity.projectTitle = onChain.value.projectTitle
     entity.projectDescription = onChain.value.projectDescription
+    entity.category = extractCategory(onChain.value.projectDescription)
   } else {
     entity.projectTitle = ""
     entity.projectDescription = ""
+    entity.category = null
   }
   // Convert Address[] → Bytes[] element by element (AS doesn't allow direct cast)
   let rawArbiters = event.params.arbiters
