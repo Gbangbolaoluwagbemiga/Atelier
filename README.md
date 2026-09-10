@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-342%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-391%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -320,19 +320,21 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**342 tests.** The contract suite went from zero.
+**391 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
 | Contract | **107** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
 | Frontend | **144** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield switch |
 | Backend | **43** | Route handlers, and what they do when the database is unreachable |
+| Daemon | **49** | Who the agent tells, who it hires, which jobs it picks up |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 ```bash
 (cd app/contracts/solidity && forge test)   # 107
 (cd app && npm test)                        # 144
 (cd backend && npx vitest run)              # 43
+(cd agent/daemon && npm test)               # 49
 (cd app && npm run e2e)                     # 48 — needs all three services up
 ```
 
@@ -474,8 +476,8 @@ what makes the loop fast rather than what makes it work.
 - [x] Deploy the subgraph to Subgraph Studio — live at `atelier/v0.0.3`, indexing Arc
 - [x] Deploy the yield controller carrying the 60/40 split, and attach a venue — live, escrow #5 is earning
 - [ ] Arc mainnet deployment, and attach the v4 adapter to a live pool there
-- [ ] Automated tests for the daemon, which today has none
-- [ ] Notifications raised by the agent, not only by a browser that happens to be open
+- [ ] Broaden the daemon's test suite past the hire loop and the notifier
+- [x] Notifications raised by the agent, not only by a browser that happens to be open
 - [ ] Identity or stake, so two colluding wallets cannot rate each other
 
 ---
@@ -493,6 +495,7 @@ escrow and agent code as boilerplate — named in full in
 |---|---|
 | [`RUNNING.md`](RUNNING.md) | Running all three services locally |
 | [`DEPLOY.md`](DEPLOY.md) | Contract, subgraph and Google OAuth setup |
+| [`docs/supabase-setup.md`](docs/supabase-setup.md) | Recreating the database, in five steps |
 | [`FEEDBACK.md`](FEEDBACK.md) | Uniswap integration feedback |
 | [`ATTRIBUTION.md`](ATTRIBUTION.md) | What this is built on |
 | [`docs/adr/0001-autopilot-delegation.md`](docs/adr/0001-autopilot-delegation.md) | Why the job-manager role exists |
