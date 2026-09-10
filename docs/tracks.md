@@ -152,6 +152,18 @@ back. Providing two-sided liquidity would put a freelancer's principal through a
 swap, and a swap can lose money. The range sits entirely to one side of the
 price, and `configurePool` rejects a range that straddles it.
 
+*Where the reserve number comes from.* The usual objection to a vault lending
+somebody else's escrow is that it is a rule engine wearing a hat — a few
+thresholds a person picked. That was true of our first version, and a fuzzer
+broke it in a few thousand calls: it kept a flat 20% buffer, and milestones are
+not 20% of an escrow, so it could not pay a 50% milestone with the venue down.
+The cap is now **derived** — the largest claim that could arrive next, read from
+the escrow's own milestones, with the percentage on top rather than instead. A
+threshold is an opinion about risk; a derived reserve answers "what is the worst
+thing that can be asked of me next", and it keeps holding when the escrow's
+shape changes. See [`AtelierYield.sol`](../app/contracts/solidity/src/yield/AtelierYield.sol),
+`investableCeiling`, and section 4 of [`FEEDBACK.md`](../FEEDBACK.md).
+
 *Why it is not attached to the live escrow.* Uniswap v4 is not on Arc testnet,
 and it cannot be: `PoolManager` takes its lock with `TSTORE`, so it needs a
 cancun chain. Arc mainnet opens 2026-09-16. The adapter is therefore written,

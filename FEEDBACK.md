@@ -15,7 +15,8 @@ paying a freelancer.
 |---|---|
 | Adapter interface | [`src/yield/IYieldAdapter.sol`](app/contracts/solidity/src/yield/IYieldAdapter.sol) |
 | Uniswap v4 adapter | [`src/yield/UniswapV4StableAdapter.sol`](app/contracts/solidity/src/yield/UniswapV4StableAdapter.sol) |
-| Escrow-side policy | [`src/SecureFlow.sol`](app/contracts/solidity/src/SecureFlow.sol) — `investableCeiling`, `investIdle`, `_rebalanceYield`, `_ensureLiquid` |
+| Escrow-side policy | [`src/yield/AtelierYield.sol`](app/contracts/solidity/src/yield/AtelierYield.sol) — `investableCeiling`, `investableAmount`, `ensureLiquid`, `onObligationChanged` |
+| Escrow-side wiring | [`src/Atelier.sol`](app/contracts/solidity/src/Atelier.sol) — `releaseToYield`, `_rebalanceYield`, `_ensureLiquid` |
 | Tests | [`test/ProductiveEscrow.t.sol`](app/contracts/solidity/test/ProductiveEscrow.t.sol), [`test/ProductiveEscrowInvariant.t.sol`](app/contracts/solidity/test/ProductiveEscrowInvariant.t.sol) |
 
 ---
@@ -91,7 +92,63 @@ where we spent most of our time.
 the exact-withdrawal problem handled explicitly. It is the shape most protocols
 integrating v4 for yield will need.
 
-## 4. What went well
+## 4. Where the numbers come from, since that is the usual objection
+
+The obvious criticism of a vault that lends out somebody else's escrow is that
+it is a rule engine wearing a hat: a few thresholds someone picked, presented as
+policy. That criticism would have been correct about our first version, and a
+fuzzer is what proved it.
+
+**Version one** deployed everything except a flat 20% buffer. It read as
+prudent. It was wrong within a few thousand fuzz calls, and the reason is
+embarrassing in hindsight: **milestones are not 20% of an escrow.** A 20% buffer
+cannot pay a 50% milestone when the venue is down. The number was chosen by a
+person and answered no question the contract could ask.
+
+**Version two derives the reserve instead of choosing it.** The cap is the
+largest claim that could arrive next, read from the escrow's own milestones —
+[`AtelierYield.sol`](app/contracts/solidity/src/yield/AtelierYield.sol),
+`investableCeiling`:
+
+- An **open job** is refundable in full at any instant, so none of it is lendable
+  — the ceiling is zero, not a fraction.
+- Once a freelancer is hired, claims arrive **one milestone at a time**, so the
+  largest unpaid milestone stays in cash. That figure is contract state, not a
+  parameter.
+- The percentage buffer sits *on top* of that, not instead of it.
+
+The distinction matters more than it sounds. A threshold is an opinion about
+risk; a derived reserve is an answer to "what is the worst thing that can be
+asked of me next". The second one keeps holding when the escrow's shape changes,
+and it is why `_rebalanceYield` runs on every obligation change rather than on a
+timer.
+
+**The invariant we could honestly keep**, after the fuzzer took the stronger one
+away: *cash plus deployed capital never falls below what is owed.* A failing
+venue can delay a payout; it cannot lose the money. We wanted to claim that a
+failing venue could never even delay one, and that claim was false.
+
+### Where this goes next
+
+Worth saying plainly, because "how does this evolve" is a fair question of any
+adapter:
+
+1. **Attach it to a live pool on Arc mainnet.** The adapter is written and
+   fork-proven; what is missing is a v4 deployment on the chain the escrows live
+   on. `deposit()` reverts until a pool is named, deliberately.
+2. **Multiple venues behind the same interface.** `IYieldAdapter` exists so the
+   escrow never knows which venue it is talking to; a second adapter is a new
+   file, not a new escrow.
+3. **The ceiling generalises past escrow.** Any contract that owes money on a
+   schedule — vesting, streaming payroll, insurance float — has a "largest
+   imminent claim" and can use the same reserve rule. That is the part we think
+   is reusable, more than the adapter itself.
+
+What we are **not** doing is writing a hook. Atelier is a liquidity provider
+with a known exit date, not a swap venue, and a hook here would be a buzzword
+attached to a product that does not need one.
+
+## 5. What went well
 
 - **Stable-stable pools are the right primitive for this.** Near-zero divergence
   loss is what made it defensible to put escrowed money anywhere at all. On a
@@ -102,7 +159,7 @@ integrating v4 for yield will need.
 - **Deploy addresses being deterministic across chains** made writing the
   multi-chain probe above trivial.
 
-## 5. The thing we got wrong, and what it says about integrating
+## 6. The thing we got wrong, and what it says about integrating
 
 Worth recording because it is a lesson about yield integrations generally, not
 about Uniswap.
