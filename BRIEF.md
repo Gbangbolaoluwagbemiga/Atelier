@@ -1,5 +1,18 @@
 # Atelier — ETHOnline 2026 Build Brief
 
+> **This is the original plan, kept for the record. Where it disagrees with what
+> shipped, what shipped wins.**
+>
+> It was written before the build, describes a two-repository workspace that no
+> longer exists, and names directories (`secureflow/`, `patron/`) that were
+> merged into this one. It is still here because two ADRs cite its reasoning,
+> and because a plan that was wrong in places is more honest to keep than to
+> quietly delete.
+>
+> For what Atelier actually submits for, and the file and line behind every
+> claim, read [`docs/tracks.md`](docs/tracks.md). For what it is built on, read
+> [`ATTRIBUTION.md`](ATTRIBUTION.md).
+
 **Read this entire file before writing any code.** This workspace is a fresh build that merges two
 existing, live products into one. Both are already here — read them before changing anything.
 
@@ -7,8 +20,14 @@ existing, live products into one. Both are already here — read them before cha
 
 ## Stakes
 
-ETHGlobal **ETHOnline 2026**, Sept 4 → 16 (async). Entered on the **Continuity track**: SecureFlow
-and Patron both existed before the event, so **only work done during the event is judged.**
+ETHGlobal **ETHOnline 2026**, Sept 4 → 16 (async).
+
+**Superseded: Atelier is entered from scratch, not on the Continuity track.** This
+paragraph originally said the opposite, and leaving it would have had the repo
+claiming both at once. Every Continuity-only prize is marked ineligible rather
+than claimed — see [`docs/tracks.md`](docs/tracks.md). Atelier is a new product
+built during the event on our own prior open-source code, which
+[`ATTRIBUTION.md`](ATTRIBUTION.md) names in full.
 
 Targeting ~$19.7k across 10 sponsor tracks. Full portfolio, pillar breakdown and cut lines live in
 `../../Arc/Secureflow/SecureFlow-scaffold/ETHONLINE.md` — that is the campaign plan; this file is

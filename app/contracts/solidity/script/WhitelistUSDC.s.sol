@@ -7,7 +7,7 @@ import "../src/Atelier.sol";
 /**
  * Whitelist USDC on a deployment.
  *
- *   SECUREFLOW_ADDRESS=<PROXY> forge script script/WhitelistUSDC.s.sol \
+ *   ATELIER_ADDRESS=<PROXY> forge script script/WhitelistUSDC.s.sol \
  *     --rpc-url arc_testnet --broadcast
  *
  * Without this, createEscrow reverts with TokenNotWhitelisted for every job —
@@ -25,7 +25,15 @@ contract WhitelistUSDCScript is Script {
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address payable atelierAddress = payable(vm.envAddress("SECUREFLOW_ADDRESS"));
+        /*
+         * ATELIER_ADDRESS, with the pre-rename name still accepted.
+         *
+         * A deploy script that suddenly cannot find its address is a bad way to
+         * discover a rename — this one runs rarely, from a shell whose history
+         * still has the old spelling in it.
+         */
+        address payable atelierAddress =
+            payable(vm.envOr("ATELIER_ADDRESS", vm.envAddress("SECUREFLOW_ADDRESS")));
 
         vm.startBroadcast(deployerPrivateKey);
         Atelier(atelierAddress).whitelistToken(USDC);

@@ -47,7 +47,7 @@ rather than a leap of faith.
 Every management function on the deployed contract checks the depositor:
 
 ```solidity
-// SecureFlow.sol
+// SecureFlow.sol  — pre-rename; this file is now src/Atelier.sol
 function approveMilestone(uint256 escrowId, uint256 milestoneIndex) external … {
     Escrow storage esc = _requireEscrow(escrowId);
     if (esc.depositor != msg.sender) revert Unauthorized();
@@ -63,7 +63,7 @@ shared treasury, and `createEscrow` is then called with Atelier's own Circle
 Agent Wallet as the signer:
 
 ```ts
-// agent/daemon/src/web3/secureflow.ts
+// agent/daemon/src/web3/secureflow.ts  — pre-rename; now web3/atelier.ts
 account: signer.address,   // Atelier's wallet — not the human's
 ```
 

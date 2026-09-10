@@ -54,7 +54,7 @@ changes on every upgrade, the proxy never does. Everything points at the proxy.
 1. **Whitelist USDC**, or nobody can create an escrow:
 
 ```bash
-SECUREFLOW_ADDRESS=<PROXY> forge script script/WhitelistUSDC.s.sol \
+ATELIER_ADDRESS=<PROXY> forge script script/WhitelistUSDC.s.sol \
   --rpc-url arc_testnet --broadcast
 ```
 
@@ -69,11 +69,11 @@ cast send <PROXY> "authorizeArbiter(address)" <YOUR_ADDRESS> \
 3. **Point the app at it** — `app/.env`:
 
 ```env
-VITE_SECUREFLOW_CONTRACT_ADDRESS=<PROXY>
+VITE_ATELIER_CONTRACT_ADDRESS=<PROXY>
 ```
 
    and `backend/.env` (`CONTRACT_ADDRESS`), and
-   `agent/daemon/.env` (`SECUREFLOW_CONTRACT_ADDRESS`).
+   `agent/daemon/.env` (`ATELIER_CONTRACT_ADDRESS`).
 
 4. **Sync the ABI** so the frontend can encode the new functions:
 

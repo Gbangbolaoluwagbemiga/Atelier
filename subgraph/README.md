@@ -1,4 +1,4 @@
-# SecureFlow subgraph
+# Atelier subgraph
 
 Indexes the escrow contract on Arc. Consumed by Atelier's frontend and — more
 importantly for the pitch — by Atelier's agent, which polls it to decide who to
@@ -83,5 +83,5 @@ npm run build
 ```
 
 The ABI is read straight from the Foundry artifact at
-`../contracts/solidity/out/SecureFlow.sol/SecureFlow.json`, so run `forge build`
+`../contracts/solidity/out/Atelier.sol/Atelier.json`, so run `forge build`
 first if the contract changed.

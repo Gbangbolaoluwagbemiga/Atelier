@@ -50,7 +50,7 @@ test.describe("routes resolve", () => {
   }
 });
 
-test.describe("legacy SecureFlow paths still work", () => {
+test.describe("paths from the pre-rename app still work", () => {
   /**
    * The deployed app, the README and real users' bookmarks all point at these.
    * Breaking them to tidy a routing table would be a self-inflicted regression

@@ -3,7 +3,7 @@ import { test, expect, request } from "@playwright/test";
 /**
  * THE SERVICES, DIRECTLY.
  *
- * Atelier runs on two backends — SecureFlow's Express API and Patron's daemon —
+ * Atelier runs on two backends — the Express API and the Autopilot daemon —
  * and the frontend talks to both. These check each one is actually up and
  * answering the shapes the app encodes against, so a failure here says "the
  * daemon is down" rather than making a UI test lie about why it failed.
@@ -16,7 +16,7 @@ const BACKEND = process.env.E2E_BACKEND_URL ?? "http://localhost:8787";
 const DAEMON = process.env.E2E_DAEMON_URL ?? "http://localhost:8080";
 const APP_ORIGIN = process.env.E2E_BASE_URL ?? "http://localhost:5174";
 
-test.describe("SecureFlow backend", () => {
+test.describe("the Express API", () => {
   test("is up", async () => {
     const api = await request.newContext();
     const res = await api.get(`${BACKEND}/health`);

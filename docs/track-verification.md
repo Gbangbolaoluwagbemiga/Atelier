@@ -32,7 +32,7 @@ The AI Tooling (Continuity) track, verbatim:
 > an API key from **Subgraph Studio**, or streaming Substreams via **The Graph
 > Market**. Mocked, local-only, or static datasets do not qualify."
 
-SecureFlow and Patron both read from **Goldsky**, which is a third-party host and
+The two source projects both read from **Goldsky**, which is a third-party host and
 is not named. On the page's own language it does not satisfy the requirement.
 
 **But the fix is available.** Arc *is* on The Graph's supported-networks list, so
