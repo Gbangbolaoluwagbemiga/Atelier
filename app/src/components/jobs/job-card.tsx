@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AutopilotBadge } from "@/components/atelier/autopilot-badge";
 import { motion } from "framer-motion";
-import { Clock, AlertCircle, History, Lock, Star, Tag } from "lucide-react";
+import { Clock, AlertCircle, History, Sprout, Star, Tag } from "lucide-react";
 import { categoryLabel, categoryOf, withoutMarker } from "@/lib/atelier/categories";
 import type { Escrow } from "@/lib/web3/types";
 import { ContractService } from "@/lib/web3/contract-service";
@@ -46,6 +46,7 @@ export function JobCard({
   const category = categoryLabel(categoryOf(job.projectDescription));
 
   const [clientRating, setClientRating] = useState<{ average: number; count: number } | null>(null);
+  const [earning, setEarning] = useState(false);
 
   useEffect(() => {
     if (!job.payer) return;
@@ -54,6 +55,18 @@ export function JobCard({
       .then((r: any) => { if (r.count > 0) setClientRating({ average: r.averageX100 / 100, count: r.count }); })
       .catch(() => {});
   }, [job.payer]);
+
+  /* Whether this escrow is actually out earning. Read per card, like the rating
+     above, and failing to false: a badge promising a bonus that never arrives
+     is worse than no badge. */
+  useEffect(() => {
+    let live = true;
+    new ContractService(CONTRACTS.ATELIER_ESCROW)
+      .isEarningYield(Number(job.id))
+      .then((yes) => { if (live) setEarning(yes); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [job.id]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -100,20 +113,22 @@ export function JobCard({
                 </Badge>
               )}
               {/*
-                The single most important fact for a freelancer deciding whether
-                to spend an hour writing an application: the money is already
-                in the contract. An unfunded job never reaches this board, so
-                this is always true here — and saying it is the difference
-                between applying and wondering.
+                This job's escrow is deployed and earning, and the freelancer
+                takes the larger share of what it earns. Worth a badge because
+                it is a reason to pick this job over an identical one — but a
+                small one, since it is a bonus on top of the fee, not the fee.
               */}
-              <Badge
-                variant="outline"
-                className="gap-1.5 border-[var(--actor-border)]"
-                data-testid="funded-badge"
-              >
-                <Lock className="h-3 w-3" aria-hidden="true" />
-                Funded — held in escrow
-              </Badge>
+              {earning && (
+                <Badge
+                  variant="outline"
+                  className="gap-1 border-[var(--actor-border)] text-[11px] px-2 py-0"
+                  title="This job's escrow is invested while you work. You get the larger share of what it earns, on top of the budget."
+                  data-testid="earning-badge"
+                >
+                  <Sprout className="h-3 w-3" aria-hidden="true" />
+                  Earning
+                </Badge>
+              )}
               {isAutopilot && <AutopilotBadge />}
               {/*
                 A job that has been through arbitration and put back on the

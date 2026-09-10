@@ -504,6 +504,40 @@ export class ContractService {
     } catch { return { averageX100: 0, count: 0 }; }
   }
 
+  /**
+   * Is this escrow's idle capital actually deployed and earning right now?
+   *
+   * Two reads because the escrow only knows who its yield controller is; the
+   * controller is what knows how much of a given job is out working. Fails to
+   * false — a badge that over-claims earnings a freelancer then does not see
+   * is worse than no badge.
+   */
+  async isEarningYield(escrowId: number): Promise<boolean> {
+    try {
+      const controller = (await this.contract.read.yieldController([])) as Address;
+      if (!controller || controller === "0x0000000000000000000000000000000000000000") return false;
+
+      const deployed = (await this.client.readContract({
+        address: controller,
+        abi: [
+          {
+            type: "function",
+            name: "escrowDeployed",
+            stateMutability: "view",
+            inputs: [{ type: "uint256" }],
+            outputs: [{ type: "uint256" }],
+          },
+        ],
+        functionName: "escrowDeployed",
+        args: [BigInt(escrowId)],
+      })) as bigint;
+
+      return deployed > 0n;
+    } catch {
+      return false;
+    }
+  }
+
   /** Rating a specific rater gave in an escrow. */
   async getRating(escrowId: number, rater?: string): Promise<unknown> {
     if (!rater) return null;
