@@ -506,6 +506,7 @@ escrow and agent code as boilerplate — named in full in
 | [`RUNNING.md`](RUNNING.md) | Running all three services locally |
 | [`DEPLOY.md`](DEPLOY.md) | Contract, subgraph and Google OAuth setup |
 | [`docs/supabase-setup.md`](docs/supabase-setup.md) | Recreating the database, in five steps |
+| [`docs/daemon-hosting.md`](docs/daemon-hosting.md) | Putting Autopilot on an always-on host |
 | [`FEEDBACK.md`](FEEDBACK.md) | Uniswap integration feedback |
 | [`ATTRIBUTION.md`](ATTRIBUTION.md) | What this is built on |
 | [`docs/adr/0001-autopilot-delegation.md`](docs/adr/0001-autopilot-delegation.md) | Why the job-manager role exists |
