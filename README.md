@@ -344,6 +344,21 @@ handler offering only the permitted calls proves nothing.
 | Yield controller | [`0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC`](https://testnet.arcscan.app/address/0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC) |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
+### Live services
+
+| | |
+|---|---|
+| Subgraph | [`atelier/v0.0.3`](https://api.studio.thegraph.com/query/1759977/atelier/v0.0.3) on Subgraph Studio, indexing Arc |
+| API | `https://atelier-production-be62.up.railway.app` — Railway |
+| Web app | Vercel |
+| Autopilot daemon | **Not hosted yet.** It runs locally |
+
+The daemon is the one piece that cannot go on a serverless host: it holds SQLite
+on disk, polls every fifteen seconds, and keeps a Telegram long-poll open for
+twenty-five seconds at a time. Until it is on an always-on host, the deployed
+site can browse jobs, post them and settle them — everything that talks to Arc
+directly — while Autopilot and the managed-worker door only work locally.
+
 **The proxy address is the contract.** The implementation changes on every
 upgrade; the proxy never does.
 

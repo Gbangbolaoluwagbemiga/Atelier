@@ -51,17 +51,17 @@ found it — the story is in the README.
 ### 🏆 Launch on Arc Testnet & Push to Mainnet — $3,500
 
 Live on Arc testnet now, upgradeable in place, with the mainnet path already
-exercised: the proxy has been upgraded three times without losing an escrow.
+exercised: the proxy has been upgraded five times without losing an escrow.
 
 | | |
 |---|---|
 | Proxy (the address that matters) | `0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE` |
-| Implementation | `3.3.0-manager-escalation` |
+| Implementation | `3.5.0-reopen-after-dispute` |
 | Yield controller | `0xDAfc2e3bAB38ad6b286f96D7b10435d8eF3493dC` |
 | Escrows settled | Real jobs, funded and hired by the agent |
 
 **Outstanding:** deployment to Arc mainnet by 30 September. The contract is
-mainnet-ready — UUPS, 86 Foundry tests, a storage gap with append-only
+mainnet-ready — UUPS, 99 Foundry tests, a storage gap with append-only
 discipline, and an upgrade script whose first act is to assert the escrow
 counter did not move.
 
@@ -84,7 +84,7 @@ Same reason.
 | What they asked for | Where it is |
 |---|---|
 | The Graph load-bearing | The agent asks the subgraph who applied before it can score anyone — [`AgentClient.ts:126`](../agent/daemon/src/agent/AgentClient.ts#L126). Remove it and the hire loop has no input |
-| Live data from a Graph provider | Subgraph Studio, deployed on Arc: `atelier/v0.0.2`. Not mocked, not local |
+| Live data from a Graph provider | Subgraph Studio, deployed on Arc: [`atelier/v0.0.3`](https://api.studio.thegraph.com/query/1759977/atelier/v0.0.3). Not mocked, not local |
 | Meaningful work with the data — reasoning, decisions, automation | The query result is the input to a hiring decision that moves USDC. The agent reads every applicant *together*, ranks them, hires one, and releases payment. The full reasoning is published per job in the decision log |
 | Open source, README, public repo | This repository |
 
@@ -92,6 +92,16 @@ Same reason.
 an autonomous agent, not a dashboard. The subgraph is what it perceives with —
 job state, who applied, what they wrote, which milestone is outstanding — and
 the output is money moving to a person.
+
+**The index does work, not just mirroring.** Two fields exist only because the
+mapping computes them at index time. `projectTitle` is not in the
+`EscrowCreated` event at all, so the handler reads it back off the contract —
+without that, every indexed job is untitled. And `category` is lifted out of a
+marker in the job's description rather than stored on-chain, because a category
+changes nothing about how money moves and the escrow is 415 bytes short of
+EIP-170. Spending an upgrade and a storage slot on a browsing aid would have
+been the wrong trade; putting the extraction in the index was the right one —
+[`mapping.ts`](../subgraph/src/mapping.ts).
 
 **Degrading honestly.** If the subgraph is unreachable, single-escrow reads fall
 back to the chain — [`chain-fallback.ts`](../agent/daemon/src/graph/chain-fallback.ts).
@@ -159,11 +169,17 @@ Continuity-track only.
 
 | | Status |
 |---|---|
-| Working frontend and backend | Done — three services, all running |
+| Working frontend and backend | Done — web app on Vercel, API on Railway |
 | Architecture diagram | Done — [README](../README.md#architecture), plus the settlement sequence |
 | Public GitHub repo | Done |
 | `FEEDBACK.md` | Done |
-| Live subgraph on Subgraph Studio | Done — `atelier/v0.0.2` |
+| Live subgraph on Subgraph Studio | Done — `atelier/v0.0.3`, indexing Arc |
+| Autopilot daemon hosted | **Outstanding** — runs locally; needs an always-on host, not serverless |
 | Uniswap Developer Feedback Form | **Outstanding** — must link to `FEEDBACK.md` |
 | Demo video, 2–4 minutes | **Outstanding** |
 | Arc mainnet deploy by 30 September | **Outstanding** |
+
+The daemon being unhosted is the one that costs points rather than tidiness: the
+Circle Agent Stack prize is about an agent that transacts, and a judge clicking
+the deployed link should see it transact. Railway already hosts the API, so the
+same platform can take it.
