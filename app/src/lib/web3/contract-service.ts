@@ -525,112 +525,27 @@ export class ContractService {
   }
 
   /**
-   * Is this escrow's idle capital actually deployed and earning right now?
+   * Does this job's escrow earn while the work is done?
    *
-   * Two reads because the escrow only knows who its yield controller is; the
-   * controller is what knows how much of a given job is out working. Fails to
-   * false — a badge that over-claims earnings a freelancer then does not see
-   * is worse than no badge.
+   * Reads the OPT-IN, not the amount currently deployed. Those differ for the
+   * whole time that matters most: an open job deploys nothing, because it is
+   * refundable on demand until somebody is hired — so a badge driven by the
+   * deployed amount was invisible on exactly the jobs a freelancer was reading
+   * before deciding whether to apply.
+   *
+   * The opt-in is the honest signal because the contract makes it a promise:
+   * it is fixed once anyone is hired, so a job showing the tag today still
+   * pays a share on delivery day.
+   *
+   * Fails to false. A tag promising a bonus that never arrives is worse than
+   * no tag.
    */
   async isEarningYield(escrowId: number): Promise<boolean> {
     try {
-      const controller = (await this.contract.read.yieldController([])) as Address;
-      if (!controller || controller === "0x0000000000000000000000000000000000000000") return false;
-
-      const deployed = (await this.client.readContract({
-        address: controller,
-        abi: [
-          {
-            type: "function",
-            name: "escrowDeployed",
-            stateMutability: "view",
-            inputs: [{ type: "uint256" }],
-            outputs: [{ type: "uint256" }],
-          },
-        ],
-        functionName: "escrowDeployed",
-        args: [BigInt(escrowId)],
-      })) as bigint;
-
-      return deployed > 0n;
+      return (await this.getYieldStatus(escrowId)).optedIn;
     } catch {
       return false;
     }
-  }
-
-  /**
-   * Everything the yield panel needs, in one place.
-   *
-   * `available` is the honest gate: the escrow names a controller, that
-   * controller has an adapter for this escrow's token, and so opting in can
-   * actually lead somewhere. Without it the UI would offer a switch that
-   * silently does nothing — which is how the Earning badge came to be
-   * invisible on every job for a fortnight without anyone noticing.
-   */
-  async getYieldStatus(escrowId: number): Promise<{
-    available: boolean;
-    optedIn: boolean;
-    deployed: bigint;
-    freelancerShareBP: number;
-  }> {
-    const off = { available: false, optedIn: false, deployed: 0n, freelancerShareBP: 0 };
-    try {
-      const controller = (await this.contract.read.yieldController([])) as Address;
-      if (!controller || controller === ZERO_ADDRESS) return off;
-
-      const token = (await this.contract.read.getEscrow([BigInt(escrowId)])) as any;
-      const adapter = (await this.client.readContract({
-        address: controller,
-        abi: YIELD_ABI,
-        functionName: "yieldAdapter",
-        args: [token.token as Address],
-      })) as Address;
-      if (!adapter || adapter === ZERO_ADDRESS) return off;
-
-      const [optedIn, deployed, share] = await Promise.all([
-        this.client.readContract({
-          address: controller, abi: YIELD_ABI,
-          functionName: "yieldOptIn", args: [BigInt(escrowId)],
-        }) as Promise<boolean>,
-        this.client.readContract({
-          address: controller, abi: YIELD_ABI,
-          functionName: "escrowDeployed", args: [BigInt(escrowId)],
-        }) as Promise<bigint>,
-        // Older controllers predate the split and have no such function; the
-        // switch still works there, so a missing share is not a reason to hide it.
-        (this.client.readContract({
-          address: controller, abi: YIELD_ABI,
-          functionName: "freelancerShareBP", args: [],
-        }) as Promise<bigint>).catch(() => 0n),
-      ]);
-
-      return {
-        available: true,
-        optedIn,
-        deployed,
-        freelancerShareBP: Number(share),
-      };
-    } catch {
-      return off;
-    }
-  }
-
-  /** The depositor's call and only theirs — it is their capital at risk. */
-  async setYieldOptIn(
-    escrowId: number,
-    optedIn: boolean,
-    write: WagmiWrite,
-  ): Promise<`0x${string}`> {
-    const controller = (await this.contract.read.yieldController([])) as Address;
-    if (!controller || controller === ZERO_ADDRESS) {
-      throw new Error("This escrow has no yield controller set.");
-    }
-    return write({
-      address: controller,
-      abi: YIELD_ABI,
-      functionName: "setYieldOptIn",
-      args: [BigInt(escrowId), optedIn],
-    });
   }
 
   /** Rating a specific rater gave in an escrow. */

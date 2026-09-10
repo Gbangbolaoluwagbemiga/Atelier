@@ -127,9 +127,17 @@ contract SponsoredVaultTest is JobManagerBase {
     }
 
     /// The tag on the job card is driven by this number, so it has to move.
+    /// The number the 🌱 tag on a job card reads. It has to actually move.
     function test_escrowDeployedGoesAboveZero_whichIsWhatTheTagReads() public {
         uint256 id = _createOpenJob();
         assertEq(yield_.escrowDeployed(id), 0, "deployed before anyone was hired");
+
+        vm.prank(client);
+        yield_.setYieldOptIn(id, true);
+
+        // Opted in, but an open job is refundable on demand, so still nothing.
+        yield_.investIdle(id);
+        assertEq(yield_.escrowDeployed(id), 0, "deployed while still cancellable");
 
         _apply(id, worker);
         vm.prank(client);
@@ -137,14 +145,31 @@ contract SponsoredVaultTest is JobManagerBase {
         vm.prank(worker);
         sf.startWork(id);
 
-        // Still nothing: opting in is the client's call and has not happened.
         yield_.investIdle(id);
-        assertEq(yield_.escrowDeployed(id), 0, "deployed without being asked");
+        assertGt(yield_.escrowDeployed(id), 0, "opted in, hired, and deployed nothing");
+    }
+
+    /**
+     * A job posted without the choice can never acquire it.
+     *
+     * This is the point of the lock: a freelancer took the job on the terms
+     * shown on the board, and "this escrow earns you a share" cannot appear
+     * afterwards any more than it can disappear.
+     */
+    function test_aJobPostedWithoutYieldCanNeverGainIt() public {
+        uint256 id = _createOpenJob();
+        _apply(id, worker);
+        vm.prank(client);
+        sf.acceptFreelancer(id, worker);
+        vm.prank(worker);
+        sf.startWork(id);
 
         vm.prank(client);
+        vm.expectRevert(AtelierYield.TooLateToChoose.selector);
         yield_.setYieldOptIn(id, true);
+
         yield_.investIdle(id);
-        assertGt(yield_.escrowDeployed(id), 0, "opted in and still deployed nothing");
+        assertEq(yield_.escrowDeployed(id), 0, "deployed on a job that never opted in");
     }
 
     /* ─────────── helpers ─────────── */
@@ -159,13 +184,14 @@ contract SponsoredVaultTest is JobManagerBase {
 
     function _earningJob() internal returns (uint256 id) {
         id = _createOpenJob();
+        // Answered at posting time, which is the only order the contract allows.
+        vm.prank(client);
+        yield_.setYieldOptIn(id, true);
         _apply(id, worker);
         vm.prank(client);
         sf.acceptFreelancer(id, worker);
         vm.prank(worker);
         sf.startWork(id);
-        vm.prank(client);
-        yield_.setYieldOptIn(id, true);
         yield_.investIdle(id);
     }
 

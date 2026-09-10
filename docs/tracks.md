@@ -57,9 +57,9 @@ exercised: the proxy has been upgraded five times without losing an escrow.
 |---|---|
 | Proxy (the address that matters) | `0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE` |
 | Implementation | `3.5.0-reopen-after-dispute` |
-| Yield controller | `0x65415c60E09a8BFE6dcF103F689ED1cC8CB71921` — carries the 60/40 split |
-| Testnet yield venue | `0x1510035d0913986836926F801867139295D960A8` — `SponsoredVault`, sponsored not earned, and it says so |
-| Escrow earning right now | #5 — 4 USDC of a 10 USDC budget deployed |
+| Yield controller | `0xA07f578857c52674493953F7CAF119e9D29e36B7` — the 60/40 split, fixed at posting time |
+| Testnet yield venue | `0xf24b9C761210DE1240e45870B249278A21116F92` — `SponsoredVault`, sponsored not earned, and it says so |
+| The yield term | Chosen once while posting; the contract refuses to change it after a hire |
 | Escrows settled | Real jobs, funded and hired by the agent |
 
 **Outstanding:** deployment to Arc mainnet by 30 September. The contract is

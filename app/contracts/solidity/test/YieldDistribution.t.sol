@@ -37,6 +37,12 @@ contract YieldDistributionTest is JobManagerBase {
     /// A funded job with a freelancer hired, opted in, capital deployed.
     function _earningJob() internal returns (uint256 id) {
         id = _createOpenJob();
+
+        // Before anyone is hired: after that it is a term the freelancer took
+        // the job on, and the contract refuses to let it change.
+        vm.prank(client);
+        yield_.setYieldOptIn(id, true);
+
         _apply(id, worker);
 
         vm.prank(client);
@@ -44,9 +50,6 @@ contract YieldDistributionTest is JobManagerBase {
 
         vm.prank(worker);
         sf.startWork(id);
-
-        vm.prank(client);
-        yield_.setYieldOptIn(id, true);
 
         yield_.investIdle(id);
     }

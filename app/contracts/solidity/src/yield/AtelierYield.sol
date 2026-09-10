@@ -90,6 +90,8 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
     error UnknownEscrow();
     error JobNotFinished();
     error Unauthorized();
+    error ChoiceAlreadyMade();
+    error TooLateToChoose();
 
     address public immutable escrow;
 
@@ -97,6 +99,16 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
     /** Fraction of an escrow's remainder never deployed, in basis points. */
     uint256 public yieldBufferBP = 2000;
     mapping(uint256 => bool) public yieldOptIn;
+
+    /**
+     * Whether this escrow's yield question has been answered.
+     *
+     * Separate from `yieldOptIn` because "no" and "not yet asked" are different
+     * states and a single bool cannot hold both — without this, opting out
+     * would be indistinguishable from never having decided, and the lock below
+     * could never tell a first answer from a second one.
+     */
+    mapping(uint256 => bool) public yieldChoiceMade;
     mapping(address => uint256) public deployedAssets;
     mapping(uint256 => uint256) public escrowDeployed;
 
@@ -173,9 +185,43 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
         yieldBufferBP = bp;
     }
 
-    /** @dev The depositor's call and only theirs: it is their capital at risk. */
+    /**
+     * @notice Decide, once, whether this escrow works while it waits.
+     *
+     * THE DEPOSITOR'S CALL, AND ONLY AT THE START
+     *
+     * It is their capital at risk, so the answer is theirs. But it is answered
+     * ONCE, before anyone is hired, and can never be changed afterwards — not
+     * by the client, not by an Autopilot manager, not by us.
+     *
+     * WHY IT IS NOT A SWITCH
+     *
+     * The yield share is a term of the job. A freelancer reads "this escrow
+     * earns while you work, and 60% of what it earns is yours" on the board and
+     * applies partly because of it. A client who could switch that off after
+     * hiring would be changing the deal after the other side had accepted it,
+     * and the freelancer would have no recourse and probably no idea.
+     *
+     * Making it immutable removes the question entirely. Nobody has to trust
+     * anybody about it, and the tag on a job card means the same thing on the
+     * day the work is delivered as it did on the day it was posted.
+     *
+     * The window is "before a freelancer is accepted" rather than "in the same
+     * block as creation" so that a failed first attempt can be retried, and so
+     * a client who thought about it overnight can still say yes. Nobody has
+     * been promised anything yet at that point.
+     */
     function setYieldOptIn(uint256 escrowId, bool optedIn) external {
-        if (msg.sender != IAtelierEscrows(escrow).getEscrow(escrowId).depositor) revert Unauthorized();
+        IAtelierEscrows.Escrow memory esc = IAtelierEscrows(escrow).getEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+        if (yieldChoiceMade[escrowId]) revert ChoiceAlreadyMade();
+
+        // Someone hired, or work already begun, means terms somebody accepted.
+        if (esc.beneficiary != address(0) || esc.status != IAtelierEscrows.EscrowStatus.Pending) {
+            revert TooLateToChoose();
+        }
+
+        yieldChoiceMade[escrowId] = true;
         yieldOptIn[escrowId] = optedIn;
         emit YieldOptInChanged(escrowId, optedIn);
     }

@@ -1,6 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { YieldChoice } from "@/components/create/yield-choice";
 import { AlertTriangle, Clock, DollarSign, User } from "lucide-react";
 import { WHITELISTED_TOKENS } from "./project-details-step";
+
+/** 2.5%, as the contract charges it. */
+const PLATFORM_FEE_BP = 250;
 
 interface Milestone {
   description: string;
@@ -18,8 +22,10 @@ interface ReviewStepProps {
     useNativeToken: boolean;
     isOpenJob: boolean;
     milestones: Milestone[];
+    yieldOptIn: boolean;
   };
   onConfirm: () => void;
+  onYieldChange: (next: boolean) => void;
   isSubmitting: boolean;
   isContractPaused: boolean;
   isOnCorrectNetwork?: boolean;
@@ -29,6 +35,7 @@ interface ReviewStepProps {
 export function ReviewStep({
   formData,
   onConfirm,
+  onYieldChange,
   isSubmitting,
   isContractPaused,
   isOnCorrectNetwork = true,
@@ -130,6 +137,12 @@ export function ReviewStep({
                 ⚠️ Milestone amounts don't match project budget
               </p>
             )}
+            {formData.yieldOptIn && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Platform fee</span>
+                <span>covered by what the escrow earns</span>
+              </div>
+            )}
             {hasInsufficientBalance && (
               <p className="text-sm text-destructive mt-3 flex items-center gap-1">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -137,6 +150,17 @@ export function ReviewStep({
               </p>
             )}
           </div>
+        </div>
+
+        {/* Asked here because this is the last screen before signing, and
+            because the contract will not let it be asked again. */}
+        <div className="border-t pt-6">
+          <YieldChoice
+            value={formData.yieldOptIn}
+            onChange={onYieldChange}
+            fee={budget * PLATFORM_FEE_BP / 10000}
+            disabled={isSubmitting}
+          />
         </div>
 
         <div className="flex gap-4">

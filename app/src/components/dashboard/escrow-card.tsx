@@ -435,15 +435,10 @@ export function EscrowCard({
                     />
                   )}
 
-                {/* Whether this escrow earns while it waits. Renders nothing
-                    unless a controller and a venue both exist, so a client
-                    never sees a switch that cannot do anything. */}
-                <YieldOptIn
-                  escrowId={Number(escrow.id)}
-                  isClient={escrow.isClient === true}
-                  status={escrow.status}
-                  onDone={() => window.dispatchEvent(new CustomEvent("escrowUpdated"))}
-                />
+                {/* What this escrow does while it waits — a statement of a term
+                    agreed at posting, not a control. Renders nothing on a job
+                    that does not earn. */}
+                <YieldOptIn escrowId={Number(escrow.id)} status={escrow.status} />
 
                 {/* After an arbiter rules, the rest of the job is the client's
                     call: take back what nobody started, or hand it on. Renders

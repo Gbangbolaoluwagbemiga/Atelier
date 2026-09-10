@@ -110,13 +110,14 @@ contract ProductiveEscrowInvariantTest is JobManagerBase {
         sf.setYieldController(address(yield_));
 
         jobId = _createOpenJob();
+        // Before hiring: the choice is final once a freelancer is on the job.
+        vm.prank(client);
+        yield_.setYieldOptIn(jobId, true);
         _apply(jobId, worker);
         vm.prank(client);
         sf.acceptFreelancer(jobId, worker);
         vm.prank(worker);
         sf.startWork(jobId);
-        vm.prank(client);
-        yield_.setYieldOptIn(jobId, true);
 
         handler = new YieldHandler(sf, usdc, venue, yield_, client, worker, arbiter, jobId);
         targetContract(address(handler));

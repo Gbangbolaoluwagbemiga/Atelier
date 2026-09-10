@@ -67,20 +67,20 @@ beforeEach(() => {
 });
 
 describe("the Earning badge", () => {
-  it("appears when this escrow's capital is actually deployed", async () => {
+  it("appears on a job whose escrow earns, before anyone is hired", async () => {
     isEarningYield.mockResolvedValue(true);
     card();
     expect(await screen.findByTestId("earning-badge")).toHaveTextContent(/earning/i);
   });
 
-  it("stays off when nothing is deployed", async () => {
+  it("stays off on a job posted without it", async () => {
     card();
     await waitFor(() => expect(isEarningYield).toHaveBeenCalled());
     expect(screen.queryByTestId("earning-badge")).not.toBeInTheDocument();
   });
 
-  /* A read that fails must not be read as "yes". This is the live case today:
-     no adapter is configured, so the call returns nothing useful. */
+  /* A read that fails must not be read as "yes" — a tag promising a bonus that
+     never arrives costs a freelancer money they were counting on. */
   it("stays off when the chain read fails", async () => {
     isEarningYield.mockRejectedValue(new Error("network"));
     card();

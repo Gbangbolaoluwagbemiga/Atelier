@@ -36,6 +36,32 @@ contract DeployYieldTestnetScript is Script {
         address token = vm.envAddress("YIELD_TOKEN");
         uint256 sponsorAmount = vm.envOr("SPONSOR_AMOUNT", uint256(0));
 
+        /*
+         * REFUSE TO SWAP A CONTROLLER THAT IS STILL HOLDING MONEY.
+         *
+         * AtelierYield is not upgradeable, so replacing it means pointing the
+         * escrow at a fresh contract — and the outgoing one keeps its
+         * `escrowDeployed` book and its position in the venue. The escrow can
+         * then only be told about obligations by the NEW controller, which
+         * knows nothing of that capital, and the old one can never be triggered
+         * again because `onObligationChanged` is onlyEscrow.
+         *
+         * The result is an escrow holding less cash than it owes, with the
+         * difference parked in a vault nothing can reach. That happened once,
+         * for 4 USDC, and was repaid out of pocket. It cost nobody but us
+         * because the affected escrow was our own; at any real size it would
+         * have been a freelancer not getting paid.
+         *
+         * So: unwind first, swap second. Approving the last milestone on every
+         * opted-in escrow does it, and this refuses to run until it has been.
+         */
+        address current = address(Atelier(proxy).yieldController());
+        if (current != address(0)) {
+            address heldToken = token;
+            uint256 stillOut = AtelierYield(payable(current)).deployedAssets(heldToken);
+            require(stillOut == 0, "old controller still has capital deployed; unwind it first");
+        }
+
         vm.startBroadcast(pk);
 
         AtelierYield controller = new AtelierYield(proxy);

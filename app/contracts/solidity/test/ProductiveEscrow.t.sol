@@ -47,10 +47,6 @@ contract ProductiveEscrowTest is JobManagerBase {
         vm.prank(client);
         yield_.setYieldOptIn(id, true);
         assertTrue(yield_.yieldOptIn(id));
-
-        vm.prank(client);
-        yield_.setYieldOptIn(id, false);
-        assertFalse(yield_.yieldOptIn(id));
     }
 
     function test_onlyTheDepositorMayOptIn() public {
@@ -99,9 +95,7 @@ contract ProductiveEscrowTest is JobManagerBase {
      *   deployable = 900 - 780 = 120
      */
     function test_capKeepsTheLargestMilestoneInCash() public {
-        uint256 id = _assignedJob();
-        vm.prank(client);
-        yield_.setYieldOptIn(id, true);
+        uint256 id = _assignedJob(true);
 
         assertEq(yield_.investableAmount(id), 120e6, "cap is not the safe amount");
 
@@ -113,9 +107,7 @@ contract ProductiveEscrowTest is JobManagerBase {
     }
 
     function test_investingTwiceDoesNotStackPastTheCap() public {
-        uint256 id = _assignedJob();
-        vm.prank(client);
-        yield_.setYieldOptIn(id, true);
+        uint256 id = _assignedJob(true);
 
         yield_.investIdle(id);
         uint256 first = yield_.escrowDeployed(id);
@@ -130,9 +122,7 @@ contract ProductiveEscrowTest is JobManagerBase {
      * milestone, so nothing further is safe to deploy.
      */
     function test_capTightensAsTheEscrowDrainsDown() public {
-        uint256 id = _assignedJob();
-        vm.prank(client);
-        yield_.setYieldOptIn(id, true);
+        uint256 id = _assignedJob(true);
         yield_.investIdle(id);
 
         _submit(id, 0);
@@ -146,7 +136,23 @@ contract ProductiveEscrowTest is JobManagerBase {
 
     /// A job with a freelancer assigned and work started.
     function _assignedJob() internal returns (uint256 id) {
+        return _assignedJob(false);
+    }
+
+    /**
+     * The same, with the yield question answered up front.
+     *
+     * It has to be answered before anybody is hired, because after that it is a
+     * term the freelancer accepted — see setYieldOptIn. Every fixture below
+     * therefore opts in at posting time, which is also the only order a client
+     * can actually perform.
+     */
+    function _assignedJob(bool withYield) internal returns (uint256 id) {
         id = _createOpenJob();
+        if (withYield) {
+            vm.prank(client);
+            yield_.setYieldOptIn(id, true);
+        }
         _apply(id, worker);
         vm.prank(client);
         sf.acceptFreelancer(id, worker);
@@ -156,9 +162,7 @@ contract ProductiveEscrowTest is JobManagerBase {
 
     /// A live job with capital actually deployed and a milestone ready.
     function _fundedAndDeployed() internal returns (uint256 id) {
-        id = _assignedJob();
-        vm.prank(client);
-        yield_.setYieldOptIn(id, true);
+        id = _assignedJob(true);
 
         yield_.investIdle(id);
         assertGt(yield_.escrowDeployed(id), 0, "fixture deployed nothing");
@@ -271,9 +275,7 @@ contract ProductiveEscrowTest is JobManagerBase {
     /* ─────────────── Accounting ─────────────── */
 
     function test_yieldIsReportedOnlyWhenItIsReal() public {
-        uint256 id = _assignedJob();
-        vm.prank(client);
-        yield_.setYieldOptIn(id, true);
+        uint256 id = _assignedJob(true);
         yield_.investIdle(id);
 
         assertEq(yield_.yieldEarned(address(usdc)), 0, "reported yield before any accrued");
@@ -288,9 +290,7 @@ contract ProductiveEscrowTest is JobManagerBase {
     }
 
     function test_disconnectingAVenueStopsNewDeploymentsOnly() public {
-        uint256 id = _assignedJob();
-        vm.prank(client);
-        yield_.setYieldOptIn(id, true);
+        uint256 id = _assignedJob(true);
         yield_.investIdle(id);
         uint256 deployed = yield_.deployedAssets(address(usdc));
         assertGt(deployed, 0);
