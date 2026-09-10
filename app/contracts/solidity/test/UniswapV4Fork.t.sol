@@ -56,7 +56,10 @@ contract UniswapV4ForkTest is Test {
     int24 tickLower;
     int24 tickUpper;
 
-    address escrow = makeAddr("escrow");
+    /* The vault is AtelierYield in production, not the escrow — see the
+       adapter's `vault` field. Named accordingly here so the test does not
+       teach the wrong thing. */
+    address vault = makeAddr("vault");
     UniswapV4StableAdapter adapter;
 
     function _onFork() internal view returns (bool) {
@@ -66,7 +69,7 @@ contract UniswapV4ForkTest is Test {
     function setUp() public {
         if (!_onFork()) return;
 
-        adapter = new UniswapV4StableAdapter(escrow, USDC, USDT, POOL_MANAGER);
+        adapter = new UniswapV4StableAdapter(vault, USDC, USDT, POOL_MANAGER);
 
         PoolKey memory key = PoolKey({
             currency0: Currency.wrap(USDC),
@@ -88,10 +91,10 @@ contract UniswapV4ForkTest is Test {
         adapter.configurePool(FEE, TICK_SPACING, address(0), tickLower, tickUpper);
     }
 
-    /// Fund the escrow and let the adapter pull from it, the way Atelier does.
-    function _fundEscrow(uint256 amount) internal {
-        deal(USDC, escrow, amount);
-        vm.prank(escrow);
+    /// Fund the vault and let the adapter pull from it, the way AtelierYield does.
+    function _fundVault(uint256 amount) internal {
+        deal(USDC, vault, amount);
+        vm.prank(vault);
         IERC20(USDC).approve(address(adapter), type(uint256).max);
     }
 
@@ -113,9 +116,9 @@ contract UniswapV4ForkTest is Test {
     /// The headline: real liquidity minted in a real PoolManager.
     function test_fork_depositMintsLiquidityInThePool() public {
         if (!_onFork()) return;
-        _fundEscrow(1_000e6);
+        _fundVault(1_000e6);
 
-        vm.prank(escrow);
+        vm.prank(vault);
         adapter.deposit(1_000e6);
 
         assertGt(adapter.liquidity(), 0, "no liquidity was minted");
@@ -128,27 +131,27 @@ contract UniswapV4ForkTest is Test {
     /// And the round trip: the escrow gets its money back, to the wei.
     function test_fork_withdrawReturnsExactlyWhatWasAsked() public {
         if (!_onFork()) return;
-        _fundEscrow(1_000e6);
+        _fundVault(1_000e6);
 
-        vm.prank(escrow);
+        vm.prank(vault);
         adapter.deposit(1_000e6);
 
-        uint256 escrowBefore = IERC20(USDC).balanceOf(escrow);
+        uint256 vaultBefore = IERC20(USDC).balanceOf(vault);
 
-        vm.prank(escrow);
+        vm.prank(vault);
         uint256 got = adapter.withdraw(400e6);
 
         assertEq(got, 400e6, "withdraw did not return the amount it claimed");
-        assertEq(IERC20(USDC).balanceOf(escrow) - escrowBefore, 400e6, "escrow was not paid exactly");
+        assertEq(IERC20(USDC).balanceOf(vault) - vaultBefore, 400e6, "vault was not paid exactly");
         assertLt(adapter.liquidity(), type(uint128).max, "liquidity accounting broke");
     }
 
     /// The whole position can be unwound, not just a slice of it.
     function test_fork_canWithdrawEverythingItAccountsFor() public {
         if (!_onFork()) return;
-        _fundEscrow(1_000e6);
+        _fundVault(1_000e6);
 
-        vm.prank(escrow);
+        vm.prank(vault);
         adapter.deposit(1_000e6);
 
         // Rounding on the way in and out means the recoverable amount is a hair
@@ -156,7 +159,7 @@ contract UniswapV4ForkTest is Test {
         uint256 available = adapter.maxWithdrawable();
         assertGt(available, 990e6, "lost more than rounding to the pool");
 
-        vm.prank(escrow);
+        vm.prank(vault);
         uint256 got = adapter.withdraw(available > 1_000e6 ? 1_000e6 : available);
         assertGt(got, 990e6, "could not unwind the position");
     }
@@ -164,12 +167,12 @@ contract UniswapV4ForkTest is Test {
     /// A shortfall must revert rather than quietly under-pay.
     function test_fork_withdrawRevertsRatherThanUnderPaying() public {
         if (!_onFork()) return;
-        _fundEscrow(100e6);
+        _fundVault(100e6);
 
-        vm.prank(escrow);
+        vm.prank(vault);
         adapter.deposit(100e6);
 
-        vm.prank(escrow);
+        vm.prank(vault);
         vm.expectRevert();
         adapter.withdraw(10_000e6); // far more than the position holds
     }
@@ -179,7 +182,7 @@ contract UniswapV4ForkTest is Test {
         if (!_onFork()) return;
 
         vm.prank(makeAddr("stranger"));
-        vm.expectRevert(UniswapV4StableAdapter.NotEscrow.selector);
+        vm.expectRevert(UniswapV4StableAdapter.NotVault.selector);
         adapter.deposit(1_000e6);
     }
 
@@ -196,7 +199,7 @@ contract UniswapV4ForkTest is Test {
     function test_fork_rejectsARangeThatIsNotSingleSided() public {
         if (!_onFork()) return;
 
-        UniswapV4StableAdapter fresh = new UniswapV4StableAdapter(escrow, USDC, USDT, POOL_MANAGER);
+        UniswapV4StableAdapter fresh = new UniswapV4StableAdapter(vault, USDC, USDT, POOL_MANAGER);
         vm.expectRevert(UniswapV4StableAdapter.RangeNotSingleSided.selector);
         fresh.configurePool(FEE, TICK_SPACING, address(0), tickLower - 100, tickUpper); // straddles the price
     }
@@ -205,10 +208,10 @@ contract UniswapV4ForkTest is Test {
     function test_fork_failsClosedBeforeConfiguration() public {
         if (!_onFork()) return;
 
-        UniswapV4StableAdapter fresh = new UniswapV4StableAdapter(escrow, USDC, USDT, POOL_MANAGER);
+        UniswapV4StableAdapter fresh = new UniswapV4StableAdapter(vault, USDC, USDT, POOL_MANAGER);
         assertEq(fresh.maxWithdrawable(), 0, "claimed liquidity before being configured");
 
-        vm.prank(escrow);
+        vm.prank(vault);
         vm.expectRevert(UniswapV4StableAdapter.NotConfigured.selector);
         fresh.deposit(1_000e6);
     }
@@ -217,7 +220,7 @@ contract UniswapV4ForkTest is Test {
     function test_fork_rejectsAPairThatIsNotTwoDistinctTokens() public {
         if (!_onFork()) return;
         vm.expectRevert(UniswapV4StableAdapter.PairNotStable.selector);
-        new UniswapV4StableAdapter(escrow, USDC, USDC, POOL_MANAGER);
+        new UniswapV4StableAdapter(vault, USDC, USDC, POOL_MANAGER);
     }
 
     /// The pair is fixed at construction so an audited address cannot be repointed.

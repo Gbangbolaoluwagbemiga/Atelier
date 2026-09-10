@@ -80,7 +80,7 @@ contract UniswapV4StableAdapter is IYieldAdapter, IUnlockCallback, Ownable2Step 
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
 
-    error NotEscrow();
+    error NotVault();
     error NotConfigured();
     error PairNotStable();
     error ShortfallOnWithdraw(uint256 requested, uint256 recovered);
@@ -89,8 +89,15 @@ contract UniswapV4StableAdapter is IYieldAdapter, IUnlockCallback, Ownable2Step 
     error RangeNotSingleSided();
     error NothingToWithdraw();
 
-    /// The escrow this adapter serves. Immutable: an adapter serves one vault.
-    address public immutable escrow;
+    /**
+     * The vault this adapter serves — AtelierYield, not the escrow behind it.
+     *
+     * Named carefully because getting it wrong is a wasted mainnet deploy: the
+     * controller is what calls deposit and withdraw, so it is what onlyVault
+     * must admit and what withdrawn assets must be sent to. Pass the escrow's
+     * address here and every call fails closed with NotVault.
+     */
+    address public immutable vault;
 
     /// The asset the escrow deposits and expects back, 1:1.
     address public immutable override asset;
@@ -127,19 +134,19 @@ contract UniswapV4StableAdapter is IYieldAdapter, IUnlockCallback, Ownable2Step 
         Remove
     }
 
-    modifier onlyEscrow() {
-        if (msg.sender != escrow) revert NotEscrow();
+    modifier onlyVault() {
+        if (msg.sender != vault) revert NotVault();
         _;
     }
 
-    constructor(address _escrow, address _asset, address _pairedStable, address _poolManager) Ownable(msg.sender) {
-        if (_escrow == address(0) || _asset == address(0) || _poolManager == address(0)) revert NotConfigured();
+    constructor(address _vault, address _asset, address _pairedStable, address _poolManager) Ownable(msg.sender) {
+        if (_vault == address(0) || _asset == address(0) || _poolManager == address(0)) revert NotConfigured();
         // Both legs must be stables. Enforced structurally rather than by
         // convention, because "we will only ever use it for USDC" is not a
         // guarantee, it is an intention.
         if (_asset == _pairedStable) revert PairNotStable();
 
-        escrow = _escrow;
+        vault = _vault;
         asset = _asset;
         pairedStable = _pairedStable;
         poolManager = IPoolManager(_poolManager);
@@ -227,7 +234,7 @@ contract UniswapV4StableAdapter is IYieldAdapter, IUnlockCallback, Ownable2Step 
 
     /* ── Escrow-facing surface ────────────────────────────────────────────── */
 
-    function deposit(uint256 assets) external payable override onlyEscrow {
+    function deposit(uint256 assets) external payable override onlyVault {
         if (!configured) revert NotConfigured();
 
         IERC20(asset).safeTransferFrom(msg.sender, address(this), assets);
@@ -254,7 +261,7 @@ contract UniswapV4StableAdapter is IYieldAdapter, IUnlockCallback, Ownable2Step 
      *      quietly returns less is worse than one that reverts, because the
      *      escrow's breaker can survive a revert and cannot detect a lie.
      */
-    function withdraw(uint256 assets) external override onlyEscrow returns (uint256) {
+    function withdraw(uint256 assets) external override onlyVault returns (uint256) {
         if (!configured) revert NotConfigured();
         if (assets == 0) revert NothingToWithdraw();
 
@@ -277,7 +284,7 @@ contract UniswapV4StableAdapter is IYieldAdapter, IUnlockCallback, Ownable2Step 
         if (recovered < assets) revert ShortfallOnWithdraw(assets, recovered);
 
         principalDeposited = assets > principalDeposited ? 0 : principalDeposited - assets;
-        IERC20(asset).safeTransfer(escrow, assets);
+        IERC20(asset).safeTransfer(vault, assets);
 
         emit Withdrawn(assets, recovered);
         return assets;

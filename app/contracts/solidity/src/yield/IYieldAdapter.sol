@@ -44,6 +44,13 @@ interface IYieldAdapter {
      *         than assumed so a caller can assert it and catch an implementation
      *         that lies.
      */
+    /**
+     * @dev Withdrawn assets MUST be sent to msg.sender — the vault that called,
+     *      not the escrow behind it. AtelierYield forwards them on itself, so an
+     *      adapter that pays the escrow directly leaves the vault trying to
+     *      forward money it never received. The two implementations disagreed
+     *      about this once; saying it here is what stops them disagreeing again.
+     */
     function withdraw(uint256 assets) external returns (uint256 withdrawn);
 
     /**
