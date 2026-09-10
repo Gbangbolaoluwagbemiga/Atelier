@@ -37,7 +37,16 @@ function NavLink({
 }: {
   item: NavItem;
   current: boolean;
-  badge?: boolean;
+  /**
+   * Why the dot is lit, or nothing for no dot.
+   *
+   * A string rather than a boolean because a dot with no stated meaning gets
+   * read as whatever the reader is thinking about — the same person asked why
+   * it was on when their jobs were finished, and then why it was off when they
+   * had just posted one. It has always meant "somebody is waiting on a decision
+   * from you", which is neither of those.
+   */
+  badge?: string | false;
   onNavigate?: () => void;
   className?: string;
 }) {
@@ -58,8 +67,10 @@ function NavLink({
       {item.label}
       {badge && (
         <span
-          aria-label="needs your attention"
+          aria-label={badge}
+          title={badge}
           className="absolute top-1 right-0 h-2 w-2 rounded-full bg-accent"
+          data-testid="nav-badge"
         />
       )}
     </Link>
@@ -93,8 +104,11 @@ export function Navbar() {
    * was waiting. It is a state of My Jobs, not a place, so it is a dot on My
    * Jobs now — one fewer thing in the bar, and it points where the work is.
    */
-  const badgeFor = (item: NavItem) =>
-    item.to === "/my-jobs" && isJobCreator && hasPendingApprovals;
+  const badgeFor = (item: NavItem): string | false =>
+    item.to === "/my-jobs" &&
+    isJobCreator &&
+    hasPendingApprovals &&
+    "Someone has applied to one of your jobs and is waiting on your decision.";
 
   useEffect(() => {
     document.body.style.overflow = mobileMenuOpen ? "hidden" : "unset";
