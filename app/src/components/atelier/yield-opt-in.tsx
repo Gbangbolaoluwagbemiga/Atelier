@@ -41,7 +41,7 @@ export function YieldOptIn({
     let live = true;
     new ContractService(CONTRACTS.ATELIER_ESCROW)
       .getYieldStatus(escrowId)
-      .then((s) => { if (live) setState(s); })
+      .then((next) => { if (live) setState(next); })
       .catch(() => {});
     return () => { live = false; };
   }, [escrowId]);

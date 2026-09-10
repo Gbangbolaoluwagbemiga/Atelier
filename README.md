@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-462%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-477%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -320,22 +320,27 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**462 tests.** The contract suite went from zero.
+**477 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
 | Contract | **127** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
-| Frontend | **189** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield switch |
+| Frontend | **204** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield switch |
 | Backend | **43** | Route handlers, and what they do when the database is unreachable |
 | Daemon | **55** | Who the agent tells, who it hires, which jobs it picks up |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 ```bash
 (cd app/contracts/solidity && forge test)   # 127
-(cd app && npm test)                        # 189
+(cd app && npm test)                        # 204
 (cd backend && npx vitest run)              # 43
 (cd agent/daemon && npm test)               # 55
 (cd app && npm run e2e)                     # 48 — needs all three services up
+
+# Typecheck the web app with `npm run typecheck`, never `tsc --noEmit`:
+# app/tsconfig.json is a solution file, so --noEmit against it compiles zero
+# files and exits 0. That is how a deleted method reached the browser.
+(cd app && npm run typecheck)
 ```
 
 Eleven of the contract tests are the Uniswap fork suite. They skip without a

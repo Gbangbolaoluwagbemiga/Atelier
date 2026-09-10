@@ -548,6 +548,90 @@ export class ContractService {
     }
   }
 
+  /**
+   * Everything the yield panel and the 🌱 tag need, in one place.
+   *
+   * `optedIn` is what was agreed when the job was posted — the contract fixes
+   * it once anybody is hired, so it is a promise rather than a current setting.
+   * `available` is a different question: whether a venue exists for this token
+   * right now. They are kept apart deliberately, because a job's terms do not
+   * stop being its terms because a venue happens to be unset today.
+   */
+  async getYieldStatus(escrowId: number): Promise<{
+    available: boolean;
+    optedIn: boolean;
+    deployed: bigint;
+    freelancerShareBP: number;
+  }> {
+    const off = { available: false, optedIn: false, deployed: 0n, freelancerShareBP: 0 };
+    try {
+      const controller = (await this.contract.read.yieldController([])) as Address;
+      if (!controller || controller === ZERO_ADDRESS) return off;
+
+      const esc = (await this.contract.read.getEscrow([BigInt(escrowId)])) as {
+        token: string;
+      };
+      const adapter = (await this.client.readContract({
+        address: controller,
+        abi: YIELD_ABI,
+        functionName: "yieldAdapter",
+        args: [esc.token as Address],
+      })) as Address;
+
+      const [optedIn, deployed, share] = await Promise.all([
+        this.client.readContract({
+          address: controller, abi: YIELD_ABI,
+          functionName: "yieldOptIn", args: [BigInt(escrowId)],
+        }) as Promise<boolean>,
+        this.client.readContract({
+          address: controller, abi: YIELD_ABI,
+          functionName: "escrowDeployed", args: [BigInt(escrowId)],
+        }) as Promise<bigint>,
+        // A controller deployed before the split has no such function. The
+        // terms still hold there, so a missing share is not a reason to lie
+        // about whether the escrow earns.
+        (this.client.readContract({
+          address: controller, abi: YIELD_ABI,
+          functionName: "freelancerShareBP", args: [],
+        }) as Promise<bigint>).catch(() => 0n),
+      ]);
+
+      return {
+        available: !!adapter && adapter !== ZERO_ADDRESS,
+        optedIn,
+        deployed,
+        freelancerShareBP: Number(share),
+      };
+    } catch {
+      return off;
+    }
+  }
+
+  /**
+   * Record the client's answer to the fee question. Theirs alone, and once.
+   *
+   * The contract refuses a second answer and refuses any answer at all once a
+   * freelancer is hired — see AtelierYield.setYieldOptIn. This is the surface;
+   * the rule is not enforced here, because a rule enforced in a React component
+   * is not a rule.
+   */
+  async setYieldOptIn(
+    escrowId: number,
+    optedIn: boolean,
+    write: WagmiWrite,
+  ): Promise<`0x${string}`> {
+    const controller = (await this.contract.read.yieldController([])) as Address;
+    if (!controller || controller === ZERO_ADDRESS) {
+      throw new Error("This escrow has no yield controller set.");
+    }
+    return write({
+      address: controller,
+      abi: YIELD_ABI,
+      functionName: "setYieldOptIn",
+      args: [BigInt(escrowId), optedIn],
+    });
+  }
+
   /** Rating a specific rater gave in an escrow. */
   async getRating(escrowId: number, rater?: string): Promise<unknown> {
     if (!rater) return null;
