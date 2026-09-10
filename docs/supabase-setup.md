@@ -61,20 +61,41 @@ You should see `Success. No rows returned`.
 
 ## 3. Copy the two values
 
-<https://supabase.com/dashboard/project/_/settings/api>
+<https://supabase.com/dashboard/project/_/settings/api-keys>
 
 - **Project URL** — `https://<ref>.supabase.co`
-- **`service_role` secret** — under Project API keys, click reveal
+- **Secret key** — under *Secret keys*, `sb_secret_…`, click the eye to reveal
 
-Use `service_role`, not `anon`. The backend is the only thing that talks to this
-database, it authenticates its own callers with `API_SECRET`, and the service
-role bypasses RLS so the policies above are belt-and-braces rather than the
-security boundary.
+Take the **secret** key, not the publishable one. Supabase renamed these: what
+used to be `service_role` is now `sb_secret_…`, and what used to be `anon` is now
+`sb_publishable_…`. (The old pair still exists under the *Legacy anon,
+service_role API keys* tab; either generation works, but a new project should
+use the new one.)
 
-**`service_role` is a full-access key.** It belongs only in Railway's variables
-and your local `backend/.env`. It must never reach the frontend, a `VITE_`
-variable, or a commit — anything prefixed `VITE_` is compiled into the JavaScript
-every visitor downloads.
+| | Old name | Use |
+|---|---|---|
+| `sb_publishable_…` | `anon` | Browser-safe, subject to RLS. **We do not use it** — the frontend never talks to Supabase |
+| `sb_secret_…` | `service_role` | Full access, bypasses RLS. Server-only. **This is the one** |
+
+It goes in `SUPABASE_SERVICE_ROLE_KEY` — the variable keeps the old name, and
+renaming it would be a deploy-time outage for the sake of tidiness.
+
+**Why the secret key and not the publishable one.** The backend is the only
+thing that talks to this database and it authenticates its own callers with
+`API_SECRET`. More pointedly, `notifications` has no RLS enabled at all — so a
+publishable key reaching a browser would let anyone read and write everyone
+else's notifications straight against the REST API. The policies in `setup.sql`
+cover the other three tables; the secret-key-on-the-server rule is what covers
+that one.
+
+**The secret key is a full-access credential.** It belongs only in Railway's
+variables and your local `backend/.env`. It must never reach the frontend, a
+`VITE_` variable, a screenshot, or a commit — anything prefixed `VITE_` is
+compiled into the JavaScript every visitor downloads.
+
+If one is ever exposed, rotate it: the **⋮** menu beside the key in that same
+page. Rotating invalidates the old value immediately, so update Railway in the
+same sitting.
 
 ---
 
