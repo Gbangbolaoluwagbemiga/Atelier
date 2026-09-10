@@ -51,6 +51,7 @@ vi.mock("@/components/atelier/yield-opt-in", () => ({ YieldOptIn: () => null }))
 vi.mock("wagmi", () => ({
   useWriteContract: () => ({ writeContractAsync: vi.fn() }),
   useAccount: () => ({ address: undefined, isConnected: false }),
+  usePublicClient: () => undefined,
 }));
 vi.mock("@/components/chat/chat-dialog", () => ({
   ChatDialog: ({ otherAddress }: { otherAddress: string }) => (

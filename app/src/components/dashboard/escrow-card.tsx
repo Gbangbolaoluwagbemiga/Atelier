@@ -29,6 +29,7 @@ import { YieldOptIn } from "@/components/atelier/yield-opt-in";
 import { DeclinedChoice } from "@/components/atelier/declined-choice";
 import { WaitingOnFreelancer } from "@/components/atelier/waiting-on-freelancer";
 import { AssigneeChip } from "@/components/atelier/assignee-chip";
+import { ApplicantScores } from "@/components/atelier/applicant-scores";
 
 
 interface EscrowCardProps {
@@ -492,6 +493,13 @@ export function EscrowCard({
                   stays available on settled jobs — that is exactly when a
                   client is most likely to want to read back the reasoning.
                 */}
+                {/* What the agent scored each applicant, and why. Renders
+                    nothing on a manual job — there is no agent to have scored
+                    anybody. */}
+                {escrow.isClient && (
+                  <ApplicantScores escrowId={escrow.id} isClient />
+                )}
+
                 {escrow.isClient && (
                   <JobDecisionLog
                     escrowId={escrow.id}

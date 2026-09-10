@@ -147,4 +147,15 @@ export interface Decision {
   txHash?: string;
   /** USDC amount, when this decision paid someone. Rendered as the big figure. */
   amountUsdc?: string;
+  /**
+   * The agent's score out of 100, on a decision that judged somebody.
+   *
+   * The daemon has always sent this and the mapper dropped it, so the number
+   * behind every hire existed on the wire and nowhere a person could read it —
+   * a client could not see why one applicant was picked, and an applicant could
+   * not see why they were not. Telegram told them; the web app did not.
+   */
+  score?: number;
+  /** Who the decision was about — the applicant, on a scoring decision. */
+  subject?: string;
 }

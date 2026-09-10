@@ -1,5 +1,6 @@
 import { encodeJobId } from "@/lib/id-codec";
 import { DeclineAssignment } from "@/components/atelier/decline-assignment";
+import { ApplicantScores } from "@/components/atelier/applicant-scores";
 import { useState, useEffect } from "react";
 import { useWriteContract, usePublicClient, useSignMessage } from "wagmi";
 import {
@@ -2601,6 +2602,18 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                               )}
                             </Button>
                           )}
+                          {/* Their own score, and nothing else's. The client
+                              is choosing between people and sees the whole
+                              ranking; an applicant needs to know how they did
+                              without being shown strangers' rejections. */}
+                          <div className="w-full mb-3">
+                            <ApplicantScores
+                              escrowId={escrow.id}
+                              isClient={false}
+                              viewer={wallet.address ?? undefined}
+                            />
+                          </div>
+
                           {/* Beside Start Work, not instead of it: the two are
                               the same decision seen from either side, and a
                               freelancer who was named on a job they never

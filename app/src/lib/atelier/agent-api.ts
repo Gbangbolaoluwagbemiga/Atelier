@@ -139,6 +139,10 @@ export function toDecision(row: DecisionRow): Decision {
     action: actionLabel(row.type),
     rationale: row.reasoning || undefined,
     at: row.timestamp,
+    // Carried through rather than dropped: these are the only record of why
+    // one applicant was hired and another was not.
+    score: typeof row.score === "number" ? row.score : undefined,
+    subject: row.target || undefined,
   };
 }
 
