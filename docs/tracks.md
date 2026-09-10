@@ -57,8 +57,8 @@ exercised: the proxy has been upgraded five times without losing an escrow.
 |---|---|
 | Proxy (the address that matters) | `0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE` |
 | Implementation | `3.7.0-ghosted-client` |
-| Yield controller | `0x3FAE60Cf9edd0d4B9395FDB7426E1F9De272a770` — the 60/40 split, fixed at posting time |
-| Testnet yield venue | `0x8Ec5FBF65aE03a6AafcA7EF47C0E46B31C6030E1` — `SponsoredVault`, sponsored not earned, and it says so |
+| Yield controller | `0x74b26E1F855212079C9A1E26Ae6D430FA05650FC` — the 60/40 split, fixed at posting time |
+| Testnet yield venue | `0x2A15F4718220735ce9a4529fe42E957c0af44d4B` — `SponsoredVault`, sponsored not earned, and it says so |
 | The yield term | Chosen once while posting; the contract refuses to change it after a hire |
 | Escrows settled | Real jobs, funded and hired by the agent |
 

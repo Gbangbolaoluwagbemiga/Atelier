@@ -368,8 +368,8 @@ handler offering only the permitted calls proves nothing.
 | Network | Arc EVM Testnet · chain `5042002` |
 | Proxy (**the contract**) | [`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`](https://testnet.arcscan.app/address/0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE) |
 | Implementation | `0x0176544b1b6b3f4aa42d3af8b9aa2401ede0b557` · `3.7.0-ghosted-client` |
-| Yield controller | [`0x3FAE60Cf9edd0d4B9395FDB7426E1F9De272a770`](https://testnet.arcscan.app/address/0x3FAE60Cf9edd0d4B9395FDB7426E1F9De272a770) |
-| Testnet venue | [`0x8Ec5FBF65aE03a6AafcA7EF47C0E46B31C6030E1`](https://testnet.arcscan.app/address/0x8Ec5FBF65aE03a6AafcA7EF47C0E46B31C6030E1) — `SponsoredVault`, which earns nothing and says so |
+| Yield controller | [`0x74b26E1F855212079C9A1E26Ae6D430FA05650FC`](https://testnet.arcscan.app/address/0x74b26E1F855212079C9A1E26Ae6D430FA05650FC) |
+| Testnet venue | [`0x2A15F4718220735ce9a4529fe42E957c0af44d4B`](https://testnet.arcscan.app/address/0x2A15F4718220735ce9a4529fe42E957c0af44d4B) — `SponsoredVault`, which earns nothing and says so |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
 ### Live services
@@ -444,7 +444,19 @@ it was posted, and a freelancer does not have to trust anyone for that.
 takes its lock with `TSTORE`, and Arc testnet is not a cancun chain. So the
 testnet venue is [`SponsoredVault`](app/contracts/solidity/src/yield/SponsoredVault.sol),
 which trades nothing and earns nothing — its balance rises only when somebody
-deliberately calls `sponsor()`, and it is currently seeded with 25 USDC from us.
+deliberately calls `sponsor()`. It is seeded with **0.02 USDC**, which is what
+13% APY pays on 4 USDC over a fourteen-day job. It was 25 to begin with, and a
+completed job claimed all of it: 20 USDC of "yield" on a 10 USDC budget, a 200%
+return nobody should believe. The sponsorship is the return, so sizing it is
+the same act as choosing a rate.
+
+**And a property of the waterfall worth knowing before you read a settlement.**
+The client's platform fee is covered before anyone else is paid, and on Arc that
+fee is 2.5% of the budget. A fourteen-day job at any believable rate earns well
+under that, so the yield offsets part of the fee and the freelancer's 60% is
+zero. Their share only becomes reachable when yield exceeds the fee, which
+wants a long job rather than a large one — the fee scales with the budget and
+so does the deployable capital, but the rate does not scale with either.
 Everything around it is real; the return is a sponsorship and is named as one in
 the contract's first paragraph rather than dressed up as trading fees. Mainnet
 gets the v4 adapter against a real pool, and the deploy script refuses to run
@@ -494,7 +506,8 @@ what makes the loop fast rather than what makes it work.
 ## Roadmap
 
 - [x] Deploy the subgraph to Subgraph Studio — live at `atelier/v0.0.3`, indexing Arc
-- [x] Deploy the yield controller carrying the 60/40 split, and attach a venue — live, escrow #6 is earning 4 USDC of a 10 USDC budget
+- [x] Deploy the yield controller carrying the 60/40 split, and attach a venue
+- [ ] Size a job so the freelancer's share is reachable — see Status
 - [ ] Arc mainnet deployment, and attach the v4 adapter to a live pool there
 - [x] Host the Autopilot daemon on an always-on container with a persistent volume
 - [ ] Broaden the daemon's test suite past the four modules that move money
