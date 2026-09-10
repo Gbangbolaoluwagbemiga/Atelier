@@ -93,6 +93,9 @@ function App() {
         {/* ── The original app's paths, kept alive. ── */}
         <Route path="/dashboard" element={<Navigate to="/my-jobs" replace />} />
         <Route path="/work" element={<Navigate to="/my-jobs?tab=working" replace />} />
+        {/* A notification links straight here, and so does anyone who bookmarked
+            the thing they check most often. */}
+        <Route path="/applications" element={<Navigate to="/my-jobs?tab=applications" replace />} />
         <Route path="/freelancer" element={<Navigate to="/my-jobs?tab=working" replace />} />
       </Route>
     </Routes>

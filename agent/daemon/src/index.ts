@@ -324,7 +324,7 @@ async function notifyUnsuccessfulApplicants(escrowId: string, winner: string | n
         [
           winner ? "This one went to someone else." : "Nobody cleared the bar on this one — including you.",
           "",
-          mine?.score != null ? `You scored <b>${mine.score}/100</b> — the bar to be hired is 70.` : "",
+          mine?.score != null ? `You scored <b>${mine.score}/100</b> — the bar to be hired is ${config.hireScoreThreshold}.` : "",
           mine?.reasoning ? `\n<i>${telegram.esc(mine.reasoning)}</i>\n` : "",
           // Where the score actually went is the most useful thing we can hand
           // back: it turns a rejection into instructions.

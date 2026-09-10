@@ -1,4 +1,8 @@
 import { encodeJobId } from "@/lib/id-codec";
+import {
+  positionFilledMessage,
+  unsuccessfulApplicants,
+} from "@/lib/atelier/hire-notifications";
 import { useState, useEffect } from "react";
 import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
@@ -276,26 +280,49 @@ export default function ApprovalsPage() {
         [wallet.address]
       );
 
-      // 3. Notify ALL OTHER freelancers who applied (job was given to someone else)
-      const otherApplicants = selectedJobForApproval.applications.filter(
-        (app) => app.freelancerAddress.toLowerCase() !== selectedFreelancer.freelancerAddress.toLowerCase()
-      );
+      /*
+       * 3. Tell everyone who applied and did not get it.
+       *
+       * Re-read from the chain rather than reusing the list this page loaded.
+       * That list was fetched when the page opened and the escrow has been
+       * live since — somebody who applied five minutes ago is a person this
+       * decision is about, and they were being left out because a render
+       * happened before they existed. If the read fails we fall back to what
+       * we have, because telling most people is better than telling none.
+       */
+      const jobTitle =
+        selectedJobForApproval.projectTitle || encodeJobId(selectedJobForApproval.id);
+      let pool: { freelancerAddress: string }[] = selectedJobForApproval.applications;
+      try {
+        const fresh = await cs.getApplicationDetails(Number(selectedJobForApproval.id));
+        if (fresh.length > 0) pool = fresh.map((a) => ({ freelancerAddress: a.freelancer }));
+      } catch {
+        /* keep the list we already have */
+      }
 
-      for (const applicant of otherApplicants) {
+      const { title, message } = positionFilledMessage(jobTitle);
+      for (const address of unsuccessfulApplicants(
+        pool,
+        selectedFreelancer.freelancerAddress,
+        wallet.address,
+      )) {
         addCrossWalletNotification(
           {
             type: "application",
-            title: "Job Position Filled",
-            message: `The position for "${selectedJobForApproval.projectTitle || `${encodeJobId(selectedJobForApproval.id)}`}" has been filled. Thank you for your application!`,
-            actionUrl: `/browse-jobs`,
+            title,
+            message,
+            /* Where they can see it for themselves, rather than the board they
+               just came from. The list is the authoritative answer; this
+               message is only the nudge towards it. */
+            actionUrl: `/my-jobs?tab=applications`,
             data: {
               jobId: Number(selectedJobForApproval.id),
-              freelancerAddress: applicant.freelancerAddress,
+              freelancerAddress: address,
               action: "position_filled",
               selectedFreelancer: selectedFreelancer.freelancerAddress,
             },
           },
-          applicant.freelancerAddress
+          address
         );
       }
 

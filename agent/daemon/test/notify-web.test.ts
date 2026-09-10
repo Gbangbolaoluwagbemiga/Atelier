@@ -19,7 +19,8 @@ import type { AgentEvent } from "../src/agent/AgentClient.js";
  */
 
 const getEscrow = vi.fn();
-vi.mock("../src/web3/atelier.js", () => ({ getEscrow }));
+const getEscrowApplications = vi.fn();
+vi.mock("../src/web3/atelier.js", () => ({ getEscrow, getEscrowApplications }));
 vi.mock("../src/config.js", () => ({
   config: {
     apiUrl: "https://api.test",
@@ -55,6 +56,8 @@ function event(over: Partial<AgentEvent> = {}): AgentEvent {
 beforeEach(() => {
   getEscrow.mockReset();
   getEscrow.mockResolvedValue({ depositor: CLIENT, beneficiary: WORKER });
+  getEscrowApplications.mockReset();
+  getEscrowApplications.mockResolvedValue([WORKER]);
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 201 })));
 });
 
@@ -73,6 +76,62 @@ describe("a hire", () => {
   it("tells nobody else", async () => {
     const list = await recipientsFor(event());
     expect(new Set(list.map((n) => n.to))).toEqual(new Set([WORKER, CLIENT]));
+  });
+});
+
+/**
+ * They applied, waited, and were told nothing — the job simply went quiet on
+ * them forever. An answer you did not want is still better than silence, and
+ * someone who knows they were not picked can go apply for the next one.
+ */
+describe("the people who did not get it", () => {
+  const LOSER_A = "0x3333333333333333333333333333333333333333";
+  const LOSER_B = "0x4444444444444444444444444444444444444444";
+
+  it("tells every other applicant the job is gone", async () => {
+    getEscrowApplications.mockResolvedValue([WORKER, LOSER_A, LOSER_B]);
+    const list = await recipientsFor(event());
+    const told = list.filter((n) => /went to someone else/i.test(n.title)).map((n) => n.to);
+    expect(new Set(told)).toEqual(new Set([LOSER_A, LOSER_B]));
+  });
+
+  /* A rejection arriving right behind the congratulations is the single worst
+     thing this could do. */
+  it("never sends the winner a rejection", async () => {
+    getEscrowApplications.mockResolvedValue([WORKER, LOSER_A]);
+    const list = await recipientsFor(event());
+    const toWinner = list.filter((n) => n.to === WORKER);
+    expect(toWinner).toHaveLength(1);
+    expect(toWinner[0].title).toMatch(/you got the job/i);
+  });
+
+  it("tells someone once even if they applied twice", async () => {
+    getEscrowApplications.mockResolvedValue([WORKER, LOSER_A, LOSER_A.toUpperCase()]);
+    const list = await recipientsFor(event());
+    expect(list.filter((n) => n.to.toLowerCase() === LOSER_A.toLowerCase())).toHaveLength(1);
+  });
+
+  /* A client can apply to their own board from a second wallet. */
+  it("does not send the client a rejection for their own job", async () => {
+    getEscrowApplications.mockResolvedValue([WORKER, CLIENT]);
+    const list = await recipientsFor(event());
+    expect(list.filter((n) => n.to === CLIENT)).toHaveLength(1);
+    expect(list.find((n) => n.to === CLIENT)?.title).toMatch(/hired/i);
+  });
+
+  it("still tells the winner and client when the applicant list cannot be read", async () => {
+    getEscrowApplications.mockRejectedValue(new Error("rpc down"));
+    const list = await recipientsFor(event());
+    expect(new Set(list.map((n) => n.to))).toEqual(new Set([WORKER, CLIENT]));
+  });
+
+  /* Nobody hired is still an outcome — and this one they can act on, because
+     the job is still open. */
+  it("tells applicants when nobody cleared the bar, and says it is still open", async () => {
+    getEscrowApplications.mockResolvedValue([LOSER_A]);
+    const list = await recipientsFor(event({ type: "no_suitable_applicant", decision: undefined }));
+    const toLoser = list.find((n) => n.to === LOSER_A);
+    expect(toLoser?.message).toMatch(/still open/i);
   });
 });
 

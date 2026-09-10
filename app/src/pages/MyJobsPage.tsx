@@ -10,18 +10,23 @@
  * So: one destination, and the tabs appear only if you actually have both roles.
  *
  *   both roles  → tabs, and it opens on whichever side needs you
- *   one role    → that side, no tabs, no reminder that another mode exists
+ *   freelancer  → Working and Applications, but no Hiring
+ *   client only → that side, no tabs, no reminder that another mode exists
  *   neither     → an explanation and the two ways to start
  *
- * The tab bar is not shown to someone with one role on purpose. A freelancer who
- * has never hired anybody does not need a permanently empty "Hiring" tab
- * teaching them the product has a part they are not using.
+ * A tab someone's role cannot use is never shown. A freelancer who has never
+ * hired anybody does not need a permanently empty "Hiring" tab teaching them
+ * the product has a part they are not using — and a client has nothing to see
+ * under Applications, because they do not apply for anything.
+ *
+ * Applications is a tab and not a nav entry for the same reason Approvals is
+ * not one: it is a state of your jobs, not a separate place. See nav.ts.
  */
 
 import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
-import { Briefcase, Hammer, Loader2 } from "lucide-react";
+import { Briefcase, Hammer, Loader2, Send } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
@@ -33,8 +38,15 @@ import {
 } from "@/components/atelier/page-actions";
 import DashboardPage from "@/pages/DashboardPage";
 import FreelancerPage from "@/pages/FreelancerPage";
+import { MyApplications } from "@/components/atelier/my-applications";
 
-type Side = "hiring" | "working";
+type Side = "hiring" | "working" | "applications";
+
+const SIDES: readonly Side[] = ["hiring", "working", "applications"];
+
+function isSide(v: string | null): v is Side {
+  return SIDES.includes(v as Side);
+}
 
 export default function MyJobsPage() {
   const { wallet } = useWeb3();
@@ -44,6 +56,9 @@ export default function MyJobsPage() {
 
   const loading = freelancerLoading || clientLoading;
   const both = isJobCreator && isFreelancer;
+  /* A freelancer gets tabs even without the hiring side, because Applications
+     is a second thing to look at. A client-only account still gets none. */
+  const tabbed = both || isFreelancer;
 
   /**
    * Which side to open on.
@@ -56,7 +71,14 @@ export default function MyJobsPage() {
    */
   const requested = params.get("tab");
   const side: Side = useMemo(() => {
-    if (requested === "working" || requested === "hiring") return requested;
+    /* A tab you cannot use is not a tab you get sent to, however the link was
+       written — /my-jobs?tab=applications from a client's bookmark should land
+       somewhere real rather than on an empty list. */
+    if (isSide(requested)) {
+      if (requested === "hiring" && !isJobCreator) return "working";
+      if (requested !== "hiring" && !isFreelancer) return "hiring";
+      return requested;
+    }
     if (isJobCreator) return "hiring";
     if (isFreelancer) return "working";
     return "hiring";
@@ -65,11 +87,11 @@ export default function MyJobsPage() {
   /* Keep the URL honest once the roles resolve, so a refresh or a shared link
      lands in the same place rather than re-deciding. */
   useEffect(() => {
-    if (loading || !both) return;
-    if (requested !== "hiring" && requested !== "working") {
+    if (loading || !tabbed) return;
+    if (!isSide(requested)) {
       setParams({ tab: side }, { replace: true });
     }
-  }, [loading, both, requested, side, setParams]);
+  }, [loading, tabbed, requested, side, setParams]);
 
   if (!wallet.isConnected) {
     return (
@@ -98,8 +120,8 @@ export default function MyJobsPage() {
     );
   }
 
-  /* One role: give them that page, with nothing to switch between. */
-  if (!both) {
+  /* Client only: give them that page, with nothing to switch between. */
+  if (!tabbed) {
     return (
       <PageActionsProvider>
         <div className="min-h-screen py-8 sm:py-12">
@@ -126,7 +148,9 @@ export default function MyJobsPage() {
       <div className="container mx-auto px-4">
         <h1 className="font-display text-3xl sm:text-4xl font-bold">My Jobs</h1>
         <p className="text-muted-foreground mt-1.5">
-          You are hiring on some of these and working on others.
+          {both
+            ? "You are hiring on some of these and working on others."
+            : "The jobs you have been hired for, and the ones you are still waiting to hear about."}
         </p>
 
         <Tabs
@@ -141,14 +165,24 @@ export default function MyJobsPage() {
             {/* Scrolls rather than wrapping on a narrow screen — a tab bar that
                 reflows onto two lines pushes the content down and looks broken. */}
             <TabsList className="overflow-x-auto justify-start max-w-full">
-              <TabsTrigger value="hiring" className="gap-2 shrink-0">
-                <Briefcase className="h-4 w-4" aria-hidden="true" />
-                Hiring
-              </TabsTrigger>
-              <TabsTrigger value="working" className="gap-2 shrink-0">
-                <Hammer className="h-4 w-4" aria-hidden="true" />
-                Working
-              </TabsTrigger>
+              {isJobCreator && (
+                <TabsTrigger value="hiring" className="gap-2 shrink-0">
+                  <Briefcase className="h-4 w-4" aria-hidden="true" />
+                  Hiring
+                </TabsTrigger>
+              )}
+              {isFreelancer && (
+                <>
+                  <TabsTrigger value="working" className="gap-2 shrink-0">
+                    <Hammer className="h-4 w-4" aria-hidden="true" />
+                    Working
+                  </TabsTrigger>
+                  <TabsTrigger value="applications" className="gap-2 shrink-0">
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                    Applications
+                  </TabsTrigger>
+                </>
+              )}
             </TabsList>
             <PageActionsSlot />
           </div>
@@ -161,6 +195,12 @@ export default function MyJobsPage() {
           </TabsContent>
           <TabsContent value="working" forceMount hidden={side !== "working"} className="mt-6">
             <FreelancerPage embedded />
+          </TabsContent>
+          {/* Not forceMount: unlike the dashboards, this is one cheap query and
+              a freelancer wants it re-read when they come back to look, which
+              is the whole reason they came back. */}
+          <TabsContent value="applications" className="mt-6">
+            <MyApplications />
           </TabsContent>
         </Tabs>
       </div>

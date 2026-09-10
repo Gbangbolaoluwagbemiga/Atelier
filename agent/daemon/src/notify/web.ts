@@ -47,6 +47,34 @@ interface WebNotification {
   message: string;
 }
 
+/**
+ * Everyone who applied, straight off the chain.
+ *
+ * The chain rather than the index because this list decides who is told they
+ * did not get a job — being missed off it is indistinguishable, to the person
+ * missed, from the client never bothering. The index trails; the escrow does
+ * not.
+ */
+async function applicantsOf(escrowId: string): Promise<string[]> {
+  try {
+    return [...(await atelier.getEscrowApplications(BigInt(escrowId)))];
+  } catch {
+    return [];
+  }
+}
+
+/** Everyone who applied and did not get it, told once each. */
+function losers(applicants: string[], winner: string | null): string[] {
+  const won = winner?.toLowerCase();
+  const seen = new Map<string, string>();
+  for (const a of applicants) {
+    const key = a?.toLowerCase();
+    if (!key || key === won) continue;
+    if (!seen.has(key)) seen.set(key, a);
+  }
+  return [...seen.values()];
+}
+
 /** Resolved from the chain, not the local task store. */
 async function clientOf(escrowId: string): Promise<string | null> {
   try {
@@ -98,6 +126,25 @@ export async function recipientsFor(event: AgentEvent): Promise<WebNotification[
             : "The agent hired the strongest applicant against your brief.",
         });
       }
+
+      /*
+       * And everyone who did not get it.
+       *
+       * They applied, waited, and were told nothing — the job simply went quiet
+       * on them forever. An answer you did not want is still better than
+       * silence, and someone who knows they were not picked can go and apply
+       * for the next one.
+       */
+      for (const who of losers(await applicantsOf(id), worker ?? null)) {
+        if (client && who.toLowerCase() === client.toLowerCase()) continue;
+        out.push({
+          to: who,
+          type: "application",
+          title: "This job went to someone else",
+          message:
+            "The client has hired another freelancer. Thanks for applying — your application is closed, so you are free to take on other work.",
+        });
+      }
       break;
     }
 
@@ -110,6 +157,20 @@ export async function recipientsFor(event: AgentEvent): Promise<WebNotification[
           title: "Nobody cleared the bar yet",
           message:
             "No applicant met your brief's threshold, so the commission stays open and your money stays where it is.",
+        });
+      }
+
+      /* Nobody was hired, which is still an outcome the people who applied are
+         owed — and unlike a filled job, this one they can act on: the job is
+         still open, so a better application can still win it. */
+      for (const who of losers(await applicantsOf(id), null)) {
+        if (client && who.toLowerCase() === client.toLowerCase()) continue;
+        out.push({
+          to: who,
+          type: "application",
+          title: "Nobody has been hired for this job yet",
+          message:
+            "No application met the brief's threshold this round. The job is still open, so a stronger application can still win it.",
         });
       }
       break;
