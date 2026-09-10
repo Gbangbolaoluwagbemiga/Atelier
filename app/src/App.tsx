@@ -1,4 +1,5 @@
-import { Routes, Route, Outlet, Navigate } from "react-router-dom";
+import { Routes, Route, Outlet, Navigate, useLocation } from "react-router-dom";
+import { ErrorBoundary } from "./components/error-boundary";
 import { Navbar } from "./components/navbar";
 import { Toaster } from "./components/ui/toaster";
 import { NewMessageWatcher } from "./components/new-message-watcher";
@@ -18,17 +19,28 @@ import WorkerPage from "./pages/WorkerPage";
 import AutopilotComposePage from "./pages/AutopilotComposePage";
 import DevPreviewPage from "./pages/DevPreviewPage";
 
-const AppLayout = () => (
-  <>
-    <Navbar />
-    <div className="pt-16">
-      <Outlet />
-    </div>
-    <NewMessageWatcher />
-    <EscrowPoller />
-    <Toaster />
-  </>
-);
+const AppLayout = () => {
+  const { pathname } = useLocation();
+  return (
+    <>
+      <Navbar />
+      <div className="pt-16">
+        {/*
+          Around the route, not the app: a page that throws should not take the
+          navigation down with it, or the only way out is a reload into the same
+          crash. Keyed on the path so moving to another page clears the error
+          rather than making every subsequent route look broken.
+        */}
+        <ErrorBoundary resetKey={pathname}>
+          <Outlet />
+        </ErrorBoundary>
+      </div>
+      <NewMessageWatcher />
+      <EscrowPoller />
+      <Toaster />
+    </>
+  );
+};
 
 /**
  * Atelier's routes.
