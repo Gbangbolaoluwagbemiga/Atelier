@@ -39,7 +39,13 @@ export default tseslint.config(
       ecmaVersion: 2020,
       globals: globals.browser,
       parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
+        project: [
+          "./tsconfig.node.json",
+          "./tsconfig.app.json",
+          // Without this the whole e2e suite fails to parse, and eslint reports
+          // that as six errors rather than as "these files were never linted".
+          "./tsconfig.e2e.json",
+        ],
         tsconfigRoot: import.meta.dirname,
       },
     },

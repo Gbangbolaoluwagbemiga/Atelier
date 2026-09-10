@@ -103,6 +103,29 @@ const aiLimiter = rateLimit({
 
 app.use(generalLimiter);
 
+/*
+ * Something at the root.
+ *
+ * This is a JSON API with no page, so `/` was a 404 — and the README links it,
+ * which means anyone following that link met an error and had to guess whether
+ * the service was down. It is not documentation; it is a signpost saying what
+ * this is and where the useful endpoints are.
+ */
+app.get("/", (_req, res) => {
+  res.json({
+    service: "Atelier API",
+    what: "Notifications, messaging, cover letters and file uploads for atelier-job.vercel.app. The escrow itself lives on Arc, not here.",
+    endpoints: {
+      health: "/health",
+      notifications: "/v1/notifications?wallet=0x… (Bearer API_SECRET)",
+      messages: "/v1/messages/inbox?wallet=0x…",
+      applications: "/v1/applications/:escrowId",
+      analytics: "/v1/analytics/platform",
+    },
+    source: "https://github.com/Gbangbolaoluwagbemiga/Atelier",
+  });
+});
+
 app.get("/health", async (_req, res) => {
   /*
    * Reachability, not configuration.

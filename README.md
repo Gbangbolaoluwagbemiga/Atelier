@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-581%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-584%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -320,27 +320,30 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**581 tests.** The contract suite went from zero.
+**584 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
 | Contract | **154** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
-| Frontend | **251** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield switch |
-| Backend | **51** | Route handlers, which browsers may call them, and what they do when the database is unreachable |
+| Frontend | **251** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job |
+| Backend | **54** | Route handlers, which browsers may call them, and what they do when the database is unreachable |
 | Daemon | **77** | Who the agent tells, who it hires, which jobs it picks up, and whether it pays |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 ```bash
 (cd app/contracts/solidity && forge test)   # 154
 (cd app && npm test)                        # 251
-(cd backend && npx vitest run)              # 51
+(cd backend && npx vitest run)              # 54
 (cd agent/daemon && npm test)               # 77
 (cd app && npm run e2e)                     # 48 — needs all three services up
 
 # Typecheck the web app with `npm run typecheck`, never `tsc --noEmit`:
 # app/tsconfig.json is a solution file, so --noEmit against it compiles zero
-# files and exits 0. That is how a deleted method reached the browser.
+# files and exits 0. That is how a deleted method reached the browser. The
+# script also covers the Playwright suite, which had no tsconfig of its own
+# and so was neither typechecked nor lintable until it got one.
 (cd app && npm run typecheck)
+(cd app && npx eslint .)                    # 0 errors
 ```
 
 Eleven of the contract tests are the Uniswap fork suite. They skip without a

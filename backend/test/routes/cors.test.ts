@@ -107,3 +107,47 @@ describe("with nothing configured", () => {
     expect(res.status).toBe(200);
   });
 });
+
+/**
+ * The README links the API's root, and a JSON service with no page answered a
+ * 404 there — so anyone following that link met an error and had to guess
+ * whether the service was down.
+ */
+describe("the root", () => {
+  it("says what this service is", async () => {
+    const app = await appWith({ FRONTEND_URL: undefined, FRONTEND_URL_PATTERN: undefined });
+    const res = await request(app).get("/");
+    expect(res.status).toBe(200);
+    expect(res.body.service).toBe("Atelier API");
+  });
+
+  it("points at the endpoints worth knowing", async () => {
+    const app = await appWith({ FRONTEND_URL: undefined, FRONTEND_URL_PATTERN: undefined });
+    const res = await request(app).get("/");
+    expect(res.body.endpoints.health).toBe("/health");
+    expect(Object.keys(res.body.endpoints).length).toBeGreaterThan(3);
+  });
+
+  /*
+   * It must not leak the values it names.
+   *
+   * Naming API_SECRET as the header to send is the point of a signpost; putting
+   * its value in the response would not be. The first version of this test
+   * matched the word rather than the value and failed on its own hint, which is
+   * the difference worth encoding.
+   */
+  it("names the secret without printing it", async () => {
+    const app = await appWith({
+      FRONTEND_URL: undefined,
+      FRONTEND_URL_PATTERN: undefined,
+      API_SECRET: "s3cret-value-not-for-publication",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_should_never_appear",
+    });
+    const res = await request(app).get("/");
+    const body = JSON.stringify(res.body);
+
+    expect(body).toContain("API_SECRET");
+    expect(body).not.toContain("s3cret-value-not-for-publication");
+    expect(body).not.toContain("sb_secret_should_never_appear");
+  });
+});
