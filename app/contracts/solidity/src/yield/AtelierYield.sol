@@ -259,7 +259,20 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
     function investableCeiling(uint256 escrowId) public view returns (uint256) {
         IAtelierEscrows.Escrow memory esc = IAtelierEscrows(escrow).getEscrow(escrowId);
         if (esc.depositor == address(0)) return 0;
-        if (esc.isOpenJob || esc.beneficiary == address(0)) return 0;
+        /*
+         * NOTHING IS DEPLOYED UNTIL THE FREELANCER ACTUALLY STARTS.
+         *
+         * This required only that a freelancer be named. That was almost right
+         * and quietly wrong: a job created with its freelancer already on it
+         * deployed capital in its first block, before anyone had begun, while
+         * the client could still cancel it. Cancelling does not unwind — the
+         * escrow would have been asked for cash it had lent out.
+         *
+         * Tying it to `workStarted` makes the two rules one rule: for exactly
+         * as long as the client can take their money back, all of it is
+         * sitting there to be taken.
+         */
+        if (!esc.workStarted || esc.beneficiary == address(0)) return 0;
         if (
             esc.status != IAtelierEscrows.EscrowStatus.Pending &&
             esc.status != IAtelierEscrows.EscrowStatus.InProgress

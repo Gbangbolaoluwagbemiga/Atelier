@@ -191,3 +191,36 @@
       );
   }
 }
+
+/*
+ * A LIVE INDICATOR FOR THE 🌱 ESCROW-YIELD CHIP.
+ *
+ * The escrow is doing something right now — capital is out working while the
+ * job runs — and a static icon says the same thing as a job that earns nothing.
+ * So it breathes: a slow opacity and scale cycle, closer to a status LED than
+ * to a notification.
+ *
+ * Deliberately gentle. Three seconds, and it never leaves 65% opacity, because
+ * this sits on a dashboard someone reads for minutes at a time and a hard blink
+ * would pull the eye off the milestones they actually came for.
+ */
+@keyframes atelier-breathe {
+  0%, 100% { opacity: 1;    transform: scale(1); }
+  50%      { opacity: 0.65; transform: scale(0.94); }
+}
+
+.yield-live {
+  animation: atelier-breathe 3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/*
+ * Someone who has asked their system for less motion has asked for less
+ * motion. The chip still reads as live through its colour and its label, so
+ * nothing is lost by holding still.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .yield-live {
+    animation: none;
+  }
+}

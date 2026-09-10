@@ -125,7 +125,7 @@ export function JobCard({
                   title="This job's escrow is invested while you work. You get the larger share of what it earns, on top of the budget."
                   data-testid="earning-badge"
                 >
-                  <Sprout className="h-3 w-3" aria-hidden="true" />
+                  <Sprout className="h-3 w-3 yield-live" aria-hidden="true" />
                   Earning
                 </Badge>
               )}

@@ -945,7 +945,24 @@ contract Atelier is
     function cancelJob(uint256 escrowId) external nonReentrant whenNotPaused {
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
-        if (!esc.isOpenJob) revert CannotCancelAssignedJob();
+        /**
+         * WHILE NOBODY HAS STARTED, THE MONEY IS STILL THE CLIENT'S.
+         *
+         * This read `!esc.isOpenJob`, which meant a job created with its
+         * freelancer already named could never be cancelled at all — its
+         * `isOpenJob` is false from the first block. The client's budget was
+         * locked until the deadline plus the emergency delay, on a job nobody
+         * had touched. That is the same trapped-funds shape as the post-dispute
+         * bug, arrived at from a different direction.
+         *
+         * `workStarted` is the line, as it is for the yield term: it is the
+         * freelancer's own act, and the first moment anyone is relying on the
+         * job. The cost is real and worth stating — a freelancer who was named
+         * or accepted, and has not yet started, can be dropped. Weighed against
+         * a client's money being unreachable for a fortnight on a job that
+         * never began, that is the better failure.
+         */
+        if (esc.workStarted) revert CannotCancelAssignedJob();
         if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
 
         // Track cancellation
@@ -1044,7 +1061,9 @@ contract Atelier is
     {
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
-        if (!esc.isOpenJob) revert CannotCancelAssignedJob();
+        // Same rule as cancelJob: before work starts, the job is still the
+        // client's to adjust.
+        if (esc.workStarted) revert CannotCancelAssignedJob();
         if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
         if (additionalAmount == 0) revert InvalidAmount();
 
@@ -1088,8 +1107,8 @@ contract Atelier is
         /**
          * Two ways to be allowed here.
          *
-         * Before anyone is hired, this is ordinary fund management on an open
-         * job. After arbitration, it is the exit from a job that has visibly
+         * Before the freelancer starts, this is ordinary fund management on a
+         * job nobody has begun. After arbitration, it is the exit from a job that has visibly
          * broken — and that case had no exit at all. A dispute settles one
          * milestone, not the job: the escrow returned to InProgress with the
          * remaining milestones funded and unreachable, because cancelJob and
@@ -1106,10 +1125,10 @@ contract Atelier is
          * they earned — anything already delivered still goes through review or
          * arbitration.
          */
-        bool beforeHiring = esc.isOpenJob && esc.status == EscrowStatus.Pending;
+        bool beforeWorkStarts = !esc.workStarted && esc.status == EscrowStatus.Pending;
         bool afterArbitration =
             esc.status == EscrowStatus.InProgress && disputeVoteCounts[escrowId] > 0;
-        if (!beforeHiring && !afterArbitration) revert CannotCancelAssignedJob();
+        if (!beforeWorkStarts && !afterArbitration) revert CannotCancelAssignedJob();
         if (withdrawAmount == 0 || withdrawAmount > esc.totalAmount) revert InvalidAmount();
 
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);

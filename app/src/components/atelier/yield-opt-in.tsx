@@ -75,7 +75,10 @@ export function YieldOptIn({
             aria-label="This escrow earns while the job runs"
             data-testid="yield-status"
           >
-            <Sprout className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+            {/* Breathes, because the escrow is working right now — see
+                .yield-live in index.css. Holds still under
+                prefers-reduced-motion. */}
+            <Sprout className="h-3.5 w-3.5 text-emerald-500 yield-live" aria-hidden="true" />
             Escrow yield
           </span>
         </TooltipTrigger>
