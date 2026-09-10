@@ -83,7 +83,7 @@ export function ApplicationDialog({
       setMilestonesLoading(true);
       try {
         const { ContractService } = await import("@/lib/web3/contract-service");
-        const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+        const svc = new ContractService(CONTRACTS.ATELIER_ESCROW);
         const raw = await svc.getMilestones(Number(job.id));
         if (cancelled) return;
         const parsed: MilestonePreview[] = (raw as any[]).map((m: any) => ({

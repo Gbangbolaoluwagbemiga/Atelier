@@ -15,8 +15,8 @@ import {
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
 function contractAddr() {
-  const addr = CONTRACTS.SECUREFLOW_ESCROW;
-  if (!addr) throw new Error("VITE_SECUREFLOW_CONTRACT_ADDRESS is not set");
+  const addr = CONTRACTS.ATELIER_ESCROW;
+  if (!addr) throw new Error("VITE_ATELIER_CONTRACT_ADDRESS is not set");
   return addr as `0x${string}`;
 }
 

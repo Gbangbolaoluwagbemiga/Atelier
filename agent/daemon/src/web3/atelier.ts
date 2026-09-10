@@ -10,14 +10,14 @@
 // Reads go through a plain public client — no signing, no cost, no custody question.
 
 import { createPublicClient, http, zeroAddress, type Abi, type PublicClient } from "viem";
-import secureFlowAbi from "./AtelierABI.json" with { type: "json" };
+import atelierAbi from "./AtelierABI.json" with { type: "json" };
 import { arcTestnet, config, rpcUrl } from "../config.js";
 import { createCircleSigner, type CircleSigner } from "../circle/circleSigner.js";
 
 // Cast to viem's `Abi` type (not a tighter `as const` literal, since this is loaded
 // from JSON) so `writeContract` can still resolve stateMutability (payable vs not)
 // and accept `value` on `createEscrow` — a looser `unknown[]` cast defeats that.
-const abi = secureFlowAbi as Abi;
+const abi = atelierAbi as Abi;
 
 // Arc's USDC precompile (config.usdcAddress) is a non-zero address, so Atelier's
 // createEscrow treats it as an ERC20 (NATIVE_TOKEN in the contract is address(0) —

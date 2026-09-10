@@ -99,7 +99,7 @@ export default function AnalyticsPage() {
       // Fetch analytics directly from blockchain
       const { ContractService } = await import("@/lib/web3/contract-service");
       const { CONTRACTS } = await import("@/lib/web3/config");
-      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       // Get next escrow ID to know how many escrows exist
       const nextEscrowId = await cs.getNextEscrowId();

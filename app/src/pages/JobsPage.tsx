@@ -618,7 +618,7 @@ export default function JobsPage() {
       const { ContractService: GaslessCS } = await import(
         "@/lib/web3/contract-service"
       );
-      const gaslessService = new GaslessCS(CONTRACTS.SECUREFLOW_ESCROW);
+      const gaslessService = new GaslessCS(CONTRACTS.ATELIER_ESCROW);
       await gaslessService.applyToJob({
         escrow_id: Number.parseInt(job.id, 10),
         cover_letter: coverLetter,

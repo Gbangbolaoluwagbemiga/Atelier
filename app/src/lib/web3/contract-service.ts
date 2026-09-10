@@ -21,7 +21,7 @@ export class ContractService {
   private contract: any; // typed loosely to avoid viem generic constraints
   readonly addr: Address;
 
-  constructor(contractAddress: string = CONTRACTS.SECUREFLOW_ESCROW) {
+  constructor(contractAddress: string = CONTRACTS.ATELIER_ESCROW) {
     this.addr = contractAddress as Address;
     this.client = createPublicClient({
       chain: arcTestnet,
@@ -534,11 +534,11 @@ export class ContractService {
     jobCreationPaused: boolean;
     userMessage: string;
   }> {
-    if (!CONTRACTS.SECUREFLOW_ESCROW) {
+    if (!CONTRACTS.ATELIER_ESCROW) {
       return {
         ok: false,
         jobCreationPaused: true,
-        userMessage: "Contract address not configured. Set VITE_SECUREFLOW_CONTRACT_ADDRESS in your .env file.",
+        userMessage: "Contract address not configured. Set VITE_ATELIER_CONTRACT_ADDRESS in your .env file.",
       };
     }
     try {

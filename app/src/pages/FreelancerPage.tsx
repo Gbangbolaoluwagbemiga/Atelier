@@ -331,7 +331,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
           if (allIds.length > 0) {
             try {
               const { ContractService: CS } = await import("@/lib/web3/contract-service");
-              const svc = new CS(CONTRACTS.SECUREFLOW_ESCROW);
+              const svc = new CS(CONTRACTS.ATELIER_ESCROW);
               const [rpcBatch, milestonesBatch] = await Promise.all([
                 svc.getEscrowsBatch(allIds),
                 svc.getMilestonesBatch(allIds),
@@ -392,7 +392,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
 
       // ── RPC fallback ──────────────────────────────────────────────────────
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const contractService = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       const nowSeconds = Math.floor(Date.now() / 1000);
       const freelancerEscrows: Escrow[] = [];
@@ -756,7 +756,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
       });
 
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       await cs.startWork(Number(escrowId), wallet.address, writeContractAsync);
 
@@ -995,7 +995,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
     // Additional check: Get the current milestone status from contract
     try {
       const { ContractService: MilCS } = await import("@/lib/web3/contract-service");
-      const milCS = new MilCS(CONTRACTS.SECUREFLOW_ESCROW);
+      const milCS = new MilCS(CONTRACTS.ATELIER_ESCROW);
       const milestones: any[] = await milCS.getMilestones(Number(escrowId)) as any[];
 
       if (milestones && milestones.length > milestoneIndex) {
@@ -1041,7 +1041,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
       });
 
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       await cs.submitMilestone({
         escrow_id: Number(escrowId),
@@ -1174,7 +1174,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
 
       // Use ContractService resubmitMilestone for rejected milestones
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const contractService = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       const resubmitHash = await contractService.resubmitMilestone({
         escrow_id: Number(escrowId),
@@ -1254,7 +1254,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
 
       // Use ContractService instead of contract.send
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const contractService = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       await contractService.disputeMilestone({
         escrow_id: Number(escrowId),
@@ -1312,7 +1312,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
   const raiseOverdueDispute = async (escrowId: string, reason: string) => {
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const contractService = new ContractService(CONTRACTS.ATELIER_ESCROW);
       toast({
         title: "Raising overdue dispute…",
         description: "Please confirm the transaction in your wallet",

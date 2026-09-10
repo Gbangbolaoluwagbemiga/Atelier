@@ -116,7 +116,7 @@ export function JobManagement({
     setIsSubmitting(true);
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       toast({ title: "Adding funds…", description: "Confirm in your wallet." });
 
@@ -184,7 +184,7 @@ export function JobManagement({
     setIsSubmitting(true);
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       toast({ title: "Withdrawing funds…", description: "Confirm in your wallet." });
 
@@ -226,7 +226,7 @@ export function JobManagement({
     setIsSubmitting(true);
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       // Snapshot applicants BEFORE cancelling — once the job is cancelled the
       // escrow is gone, so this is the last chance to know who to notify.

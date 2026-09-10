@@ -89,7 +89,7 @@ export default function ApprovalsPage() {
 
       // Use ContractService instead of contract.call - it reads from blockchain
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const contractService = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       // Get next escrow ID from blockchain (not hardcoded)
       const nextEscrowId = await contractService.getNextEscrowId();
@@ -218,7 +218,7 @@ export default function ApprovalsPage() {
 
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
 
       await cs.acceptFreelancer({
         escrow_id: Number(selectedJobForApproval.id),

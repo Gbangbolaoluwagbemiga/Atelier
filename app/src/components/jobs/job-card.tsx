@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AutopilotBadge } from "@/components/atelier/autopilot-badge";
 import { motion } from "framer-motion";
-import { Clock, AlertCircle, History, Star, Tag } from "lucide-react";
+import { Clock, AlertCircle, History, Lock, Star, Tag } from "lucide-react";
 import { categoryLabel, categoryOf, withoutMarker } from "@/lib/atelier/categories";
 import type { Escrow } from "@/lib/web3/types";
 import { ContractService } from "@/lib/web3/contract-service";
@@ -49,7 +49,7 @@ export function JobCard({
 
   useEffect(() => {
     if (!job.payer) return;
-    const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+    const svc = new ContractService(CONTRACTS.ATELIER_ESCROW);
     svc.getAverageClientRating(job.payer)
       .then((r: any) => { if (r.count > 0) setClientRating({ average: r.averageX100 / 100, count: r.count }); })
       .catch(() => {});
@@ -99,6 +99,21 @@ export function JobCard({
                   {category}
                 </Badge>
               )}
+              {/*
+                The single most important fact for a freelancer deciding whether
+                to spend an hour writing an application: the money is already
+                in the contract. An unfunded job never reaches this board, so
+                this is always true here — and saying it is the difference
+                between applying and wondering.
+              */}
+              <Badge
+                variant="outline"
+                className="gap-1.5 border-[var(--actor-border)]"
+                data-testid="funded-badge"
+              >
+                <Lock className="h-3 w-3" aria-hidden="true" />
+                Funded — held in escrow
+              </Badge>
               {isAutopilot && <AutopilotBadge />}
               {/*
                 A job that has been through arbitration and put back on the

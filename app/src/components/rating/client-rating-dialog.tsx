@@ -53,7 +53,7 @@ export function ClientRatingDialog({
     }
     setLoading(true);
     try {
-      const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const svc = new ContractService(CONTRACTS.ATELIER_ESCROW);
       await svc.submitClientRating({
         escrow_id: escrowId,
         rating,

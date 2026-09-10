@@ -52,6 +52,7 @@ interface IAtelierEscrows {
 
     function getEscrow(uint256 escrowId) external view returns (Escrow memory);
     function getMilestones(uint256 escrowId) external view returns (Milestone[] memory);
+    function feeCollector() external view returns (address);
 }
 
 /**
@@ -85,6 +86,9 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
     error NotEscrow();
     error BufferTooLow();
     error InvalidConfig();
+    error AlreadySettled();
+    error UnknownEscrow();
+    error JobNotFinished();
     error Unauthorized();
 
     address public immutable escrow;
@@ -96,8 +100,39 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
     mapping(address => uint256) public deployedAssets;
     mapping(uint256 => uint256) public escrowDeployed;
 
+    /**
+     * Yield this escrow has actually earned, banked as its position unwound.
+     *
+     * It has to be credited on the way out rather than computed at the end: by
+     * the time a job settles, onObligationChanged has already pulled its
+     * principal back, so escrowDeployed is zero and there is nothing left to
+     * take a share of. Whatever came back above the principal is the earnings,
+     * and it is already sitting in this contract.
+     */
+    mapping(uint256 => uint256) public escrowYield;
+
+    /** Paid out once, whatever else happens. */
+    mapping(uint256 => bool) public yieldSettled;
+
+    /**
+     * The freelancer's share of what is left after the client's fee is covered.
+     *
+     * They are the party whose money sat locked while it earned, which is the
+     * whole reason there is anything to split — and a marketplace's hard side
+     * is freelancers, not clients.
+     */
+    uint256 public freelancerShareBP = 6000;
+
     event YieldAdapterSet(address indexed token, address indexed adapter);
     event YieldOptInChanged(uint256 indexed escrowId, bool optedIn);
+    event FreelancerShareUpdated(uint256 bp);
+    event YieldAccrued(uint256 indexed escrowId, uint256 amount);
+    event YieldDistributed(
+        uint256 indexed escrowId,
+        uint256 feeWaived,
+        uint256 toFreelancer,
+        uint256 toPlatform
+    );
     event YieldDeployed(address indexed token, uint256 amount);
     event YieldUnwound(address indexed token, uint256 requested, uint256 recovered);
     /** The venue could not return funds on demand. Surfaced, never swallowed. */
@@ -126,6 +161,13 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
      *      turns the venue from an optimisation into a dependency — precisely
      *      what the circuit breaker exists to avoid.
      */
+    /// @param bp Freelancer's share of surplus yield, in basis points.
+    function setFreelancerShare(uint256 bp) external onlyOwner {
+        if (bp > 10000) revert InvalidConfig();
+        freelancerShareBP = bp;
+        emit FreelancerShareUpdated(bp);
+    }
+
     function setYieldBuffer(uint256 bp) external onlyOwner {
         if (bp < 1000 || bp > 10000) revert BufferTooLow();
         yieldBufferBP = bp;
@@ -275,16 +317,138 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
         IYieldAdapter adapter = yieldAdapter[token];
         if (address(adapter) == address(0)) return;
 
-        try adapter.withdraw(excess) returns (uint256 recovered) {
+        /*
+         * When this closes the position entirely, claim the earnings with it.
+         *
+         * A venue returns what you ask for and no more, so asking only for the
+         * principal leaves the gain sitting in the adapter — and once the
+         * position is closed there is no deployed balance left to attribute it
+         * by. This is the last moment the escrow's share can be identified, so
+         * it is the moment to collect it.
+         *
+         * The share is this escrow's portion of the pool's gain, by principal.
+         * Not time-weighted: an escrow that deployed late gets the same rate as
+         * one that deployed early. Doing better needs principal-seconds, and
+         * the error only matters when deployment times differ wildly.
+         */
+        uint256 claim = excess;
+        if (safe == 0) {
+            uint256 pooled = deployedAssets[token];
+            uint256 held = adapter.totalAssets();
+            if (held > pooled && pooled > 0) {
+                claim += ((held - pooled) * deployed) / pooled;
+            }
+        }
+
+        try adapter.withdraw(claim) returns (uint256 recovered) {
             uint256 booked = recovered > deployed ? deployed : recovered;
             escrowDeployed[escrowId] = deployed - booked;
             deployedAssets[token] -= booked;
+            /*
+             * Anything above the principal is this escrow's earnings, and it is
+             * already here — _send below forwards only the principal. Banking it
+             * now is the only chance: once the position is fully unwound there
+             * is no deployed balance left to attribute a share of.
+             */
+            if (recovered > booked) {
+                escrowYield[escrowId] += recovered - booked;
+                emit YieldAccrued(escrowId, recovered - booked);
+            }
             _send(token, escrow, booked);
             emit YieldUnwound(token, excess, recovered);
             if (recovered < excess) emit YieldCircuitBreakerTripped(token, excess - recovered);
         } catch {
             emit YieldCircuitBreakerTripped(token, excess);
         }
+    }
+
+    /**
+     * @notice Pay out what an escrow's idle capital earned, once the job is over.
+     *
+     * THE POINT OF THE WHOLE FEATURE
+     *
+     * A freelance platform normally funds itself by taxing the freelancer. This
+     * one can fund itself from money that was doing nothing: escrowed capital
+     * sits still between funding and approval, often for weeks. The waterfall
+     * below is what turns that into a fee nobody pays.
+     *
+     *   1. The client's platform fee, up to the amount earned. They took the
+     *      venue risk by opting in, and this is what they get for it — their fee
+     *      goes to zero. Without this the client is the only party with nothing
+     *      to gain, and since opting in is THEIR call, the mechanism would
+     *      simply never be switched on.
+     *   2. Of whatever is left, the freelancer's share. Their payment is the one
+     *      that sat locked while it earned.
+     *   3. The remainder to the platform.
+     *
+     * WHEN IT WENT TO ARBITRATION, THE PLATFORM TAKES IT ALL
+     *
+     * A disputed job costs the platform an arbiter and the work of settling it,
+     * and the two parties have just demonstrated they disagree about who
+     * deserves what. Splitting the earnings between them is an invitation to
+     * argue about the split too. Sending it to the platform is the one outcome
+     * neither side can game by disputing.
+     *
+     * Permissionless on purpose: anyone may trigger it, because the parties owed
+     * money should not depend on the platform remembering to pay them.
+     */
+    function distributeYield(uint256 escrowId) external nonReentrant {
+        if (yieldSettled[escrowId]) revert AlreadySettled();
+
+        IAtelierEscrows.Escrow memory esc = IAtelierEscrows(escrow).getEscrow(escrowId);
+        if (esc.depositor == address(0)) revert UnknownEscrow();
+        // Only once the job can no longer move. A live escrow may still unwind
+        // more of its position, and paying early would settle a smaller number.
+        if (
+            esc.status == IAtelierEscrows.EscrowStatus.Pending ||
+            esc.status == IAtelierEscrows.EscrowStatus.InProgress ||
+            esc.status == IAtelierEscrows.EscrowStatus.Disputed
+        ) revert JobNotFinished();
+
+        yieldSettled[escrowId] = true;
+
+        uint256 earned = escrowYield[escrowId];
+        if (earned == 0) {
+            emit YieldDistributed(escrowId, 0, 0, 0);
+            return;
+        }
+        escrowYield[escrowId] = 0;
+
+        address token = esc.token;
+        address platform = IAtelierEscrows(escrow).feeCollector();
+
+        if (_wentToArbitration(escrowId)) {
+            _send(token, platform, earned);
+            emit YieldDistributed(escrowId, 0, 0, earned);
+            return;
+        }
+
+        uint256 waived = earned > esc.platformFee ? esc.platformFee : earned;
+        uint256 surplus = earned - waived;
+        uint256 toFreelancer = (surplus * freelancerShareBP) / 10000;
+        uint256 toPlatform = surplus - toFreelancer;
+
+        if (waived > 0) _send(token, esc.depositor, waived);
+        // A job that ended with nobody hired has no freelancer to pay; that
+        // share follows the rest to the platform rather than being stranded.
+        if (toFreelancer > 0 && esc.beneficiary != address(0)) {
+            _send(token, esc.beneficiary, toFreelancer);
+        } else {
+            toPlatform += toFreelancer;
+            toFreelancer = 0;
+        }
+        if (toPlatform > 0) _send(token, platform, toPlatform);
+
+        emit YieldDistributed(escrowId, waived, toFreelancer, toPlatform);
+    }
+
+    /** True once any milestone has been disputed, settled or not. */
+    function _wentToArbitration(uint256 escrowId) internal view returns (bool) {
+        IAtelierEscrows.Milestone[] memory ms = IAtelierEscrows(escrow).getMilestones(escrowId);
+        for (uint256 i; i < ms.length; ++i) {
+            if (ms[i].disputedAt != 0 || ms[i].resolvedAt != 0) return true;
+        }
+        return false;
     }
 
     /** @notice Yield earned above principal. Zero if the venue has lost money. */

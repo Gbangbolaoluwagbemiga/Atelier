@@ -112,13 +112,13 @@ export function MilestoneActions({
       switch (actionType) {
         case "start": {
           const { ContractService: StartCS } = await import("@/lib/web3/contract-service");
-          const startSvc = new StartCS(CONTRACTS.SECUREFLOW_ESCROW);
+          const startSvc = new StartCS(CONTRACTS.ATELIER_ESCROW);
           txHash = await startSvc.startWork(Number(escrowId), wallet.address || "", writeContractAsync);
           break;
         }
         case "submit": {
           const { ContractService: SubCS } = await import("@/lib/web3/contract-service");
-          const subSvc = new SubCS(CONTRACTS.SECUREFLOW_ESCROW);
+          const subSvc = new SubCS(CONTRACTS.ATELIER_ESCROW);
           txHash = await subSvc.submitMilestone({
             escrow_id: Number(escrowId),
             milestone_index: milestoneIndex,
@@ -133,7 +133,7 @@ export function MilestoneActions({
             "@/lib/web3/contract-service"
           );
           const contractService = new ContractService(
-            CONTRACTS.SECUREFLOW_ESCROW
+            CONTRACTS.ATELIER_ESCROW
           );
           txHash = await contractService.approveMilestone({
             escrow_id: Number(escrowId),
@@ -147,7 +147,7 @@ export function MilestoneActions({
             "@/lib/web3/contract-service"
           );
           const rejectContractService = new RejectContractService(
-            CONTRACTS.SECUREFLOW_ESCROW
+            CONTRACTS.ATELIER_ESCROW
           );
           txHash = await rejectContractService.rejectMilestone({
             escrow_id: Number(escrowId),
@@ -167,7 +167,7 @@ export function MilestoneActions({
             "@/lib/web3/contract-service"
           );
           const disputeContractService = new DisputeContractService(
-            CONTRACTS.SECUREFLOW_ESCROW
+            CONTRACTS.ATELIER_ESCROW
           );
           txHash = await disputeContractService.disputeMilestone({
             escrow_id: Number(escrowId),
@@ -178,7 +178,7 @@ export function MilestoneActions({
           break;
         case "resubmit": {
           const { ContractService: ResubmitCS } = await import("@/lib/web3/contract-service");
-          const resubmitCS = new ResubmitCS(CONTRACTS.SECUREFLOW_ESCROW);
+          const resubmitCS = new ResubmitCS(CONTRACTS.ATELIER_ESCROW);
           txHash = await resubmitCS.submitMilestone({
             escrow_id: Number(escrowId),
             milestone_index: milestoneIndex,
@@ -337,7 +337,7 @@ export function MilestoneActions({
           // Notify admin/contract owner about the new dispute
           try {
             const { ContractService: AdminCS } = await import("@/lib/web3/contract-service");
-            const adminCS = new AdminCS(CONTRACTS.SECUREFLOW_ESCROW);
+            const adminCS = new AdminCS(CONTRACTS.ATELIER_ESCROW);
             const ownerAddress = await adminCS.getOwner();
             if (ownerAddress) {
               addNotification(

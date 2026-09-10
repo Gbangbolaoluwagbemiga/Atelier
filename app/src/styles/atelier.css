@@ -76,7 +76,7 @@
 
 .dark {
   /* Dark mode is the real surface — this is where both products live.
-     Teal is lifted off SecureFlow's existing accent so the app still feels
+     Teal is lifted off the escrow protocol's accent so the app still feels
      like itself; amber is #f2c15c, unchanged, because it is the
      brand and it is already correct on near-black. */
   --actor-human: oklch(0.78 0.13 199);

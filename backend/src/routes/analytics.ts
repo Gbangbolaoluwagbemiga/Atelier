@@ -15,7 +15,7 @@ const publicClient = createPublicClient({
 });
 
 // Contract ABI - only the functions we need for analytics
-const SECUREFLOW_ABI = [
+const ATELIER_ABI = [
   {
     inputs: [],
     name: "nextEscrowId",
@@ -111,7 +111,7 @@ router.get("/platform", async (req, res) => {
     // Get total number of escrows
     const nextEscrowId = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
-      abi: SECUREFLOW_ABI,
+      abi: ATELIER_ABI,
       functionName: "nextEscrowId",
     });
 
@@ -129,7 +129,7 @@ router.get("/platform", async (req, res) => {
       escrowPromises.push(
         publicClient.readContract({
           address: CONTRACT_ADDRESS,
-          abi: SECUREFLOW_ABI,
+          abi: ATELIER_ABI,
           functionName: "getEscrow",
           args: [BigInt(i)],
         })
@@ -192,7 +192,7 @@ router.get("/user/:address", async (req, res) => {
     // Get user's completed escrows count
     const completedCount = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
-      abi: SECUREFLOW_ABI,
+      abi: ATELIER_ABI,
       functionName: "completedEscrows",
       args: [userAddress],
     });
@@ -200,7 +200,7 @@ router.get("/user/:address", async (req, res) => {
     // Get user's reputation
     const reputation = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
-      abi: SECUREFLOW_ABI,
+      abi: ATELIER_ABI,
       functionName: "reputation",
       args: [userAddress],
     });
@@ -208,7 +208,7 @@ router.get("/user/:address", async (req, res) => {
     // Get user's average rating
     const [averageX100, ratingCount] = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
-      abi: SECUREFLOW_ABI,
+      abi: ATELIER_ABI,
       functionName: "getAverageRating",
       args: [userAddress],
     });
@@ -216,7 +216,7 @@ router.get("/user/:address", async (req, res) => {
     // Get total number of escrows to scan
     const nextEscrowId = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
-      abi: SECUREFLOW_ABI,
+      abi: ATELIER_ABI,
       functionName: "nextEscrowId",
     });
 
@@ -234,7 +234,7 @@ router.get("/user/:address", async (req, res) => {
       escrowPromises.push(
         publicClient.readContract({
           address: CONTRACT_ADDRESS,
-          abi: SECUREFLOW_ABI,
+          abi: ATELIER_ABI,
           functionName: "getEscrow",
           args: [BigInt(i)],
         })
@@ -308,7 +308,7 @@ router.get("/trends", async (req, res) => {
     // Get total number of escrows
     const nextEscrowId = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
-      abi: SECUREFLOW_ABI,
+      abi: ATELIER_ABI,
       functionName: "nextEscrowId",
     });
 
@@ -331,7 +331,7 @@ router.get("/trends", async (req, res) => {
       escrowPromises.push(
         publicClient.readContract({
           address: CONTRACT_ADDRESS,
-          abi: SECUREFLOW_ABI,
+          abi: ATELIER_ABI,
           functionName: "getEscrow",
           args: [BigInt(i)],
         })

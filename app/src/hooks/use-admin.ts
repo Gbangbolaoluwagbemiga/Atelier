@@ -6,8 +6,8 @@ import { toast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 
 function contractAddr() {
-  const addr = CONTRACTS.SECUREFLOW_ESCROW;
-  if (!addr) throw new Error("VITE_SECUREFLOW_CONTRACT_ADDRESS is not set");
+  const addr = CONTRACTS.ATELIER_ESCROW;
+  if (!addr) throw new Error("VITE_ATELIER_CONTRACT_ADDRESS is not set");
   return addr as `0x${string}`;
 }
 

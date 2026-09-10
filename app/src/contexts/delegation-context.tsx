@@ -201,7 +201,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
       }
 
       // Get contract instance
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW);
+      const contract = getContract(CONTRACTS.ATELIER_ESCROW);
       if (!contract) {
         throw new Error("Contract not available");
       }
