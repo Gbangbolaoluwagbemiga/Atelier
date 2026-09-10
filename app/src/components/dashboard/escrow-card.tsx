@@ -24,6 +24,7 @@ import type { Escrow } from "@/lib/web3/types";
 import { encodeJobId } from "@/lib/id-codec";
 import { AutopilotControl } from "@/components/atelier/autopilot-control";
 import { JobDecisionLog } from "@/components/atelier/job-decision-log";
+import { PostDisputeChoice } from "@/components/atelier/post-dispute-choice";
 
 
 interface EscrowCardProps {
@@ -432,6 +433,18 @@ export function EscrowCard({
                       milestones={escrow.milestones}
                     />
                   )}
+
+                {/* After an arbiter rules, the rest of the job is the client's
+                    call: take back what nobody started, or hand it on. Renders
+                    nothing until there is actually a ruling and something left,
+                    so it needs no condition of its own here. */}
+                <PostDisputeChoice
+                  escrowId={Number(escrow.id)}
+                  isClient={escrow.isClient === true}
+                  status={escrow.status}
+                  milestones={escrow.milestones}
+                  onDone={() => window.dispatchEvent(new CustomEvent("escrowUpdated"))}
+                />
 
                 {/*
                   What the agent actually did, in its own words. Renders nothing

@@ -656,6 +656,23 @@ export class ContractService {
    * Reverts with ManagerCannotBeBeneficiary if the address is already the hired
    * freelancer, which is the guard that keeps that last sentence true.
    */
+  /**
+   * Put the unfinished part of an arbitrated job back on the board.
+   *
+   * The alternative to withdrawing the remaining budget: the client wants the
+   * work finished, just not by the person they disputed with. Everything the
+   * previous freelancer submitted stays on-chain, so whoever picks it up can
+   * read the history before taking it on.
+   */
+  async reopenAfterDispute(escrowId: number, write: WagmiWrite): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: AtelierABI.abi,
+      functionName: "reopenAfterDispute",
+      args: [BigInt(escrowId)],
+    });
+  }
+
   async setJobManager(
     params: { escrow_id: number; manager: string },
     write: WagmiWrite

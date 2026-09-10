@@ -11,7 +11,30 @@ import { test, expect } from "@playwright/test";
  */
 
 test.describe("routes resolve", () => {
-  for (const path of ["/", "/jobs", "/post", "/post/autopilot", "/analytics", "/my-jobs"]) {
+  /*
+   * Every route a visitor can reach, not a sample of them.
+   *
+   * Browse Jobs once rendered a blank black page for a whole day because a hook
+   * was added inside a render loop — the request still returned 200, the shell
+   * still mounted, and only the page-error assertion below would have caught it.
+   * A route missing from this list is a route that can break silently.
+   */
+  for (const path of [
+    "/",
+    "/jobs",
+    "/jobs/1", // the deep link an agent sends into Telegram
+    "/post",
+    "/post/autopilot",
+    "/create",
+    "/get-hired",
+    "/freelancers",
+    "/analytics",
+    "/my-jobs",
+    "/approvals",
+    "/messages",
+    "/admin",
+    "/disputes",
+  ]) {
     test(`${path} renders without a crash`, async ({ page }) => {
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));

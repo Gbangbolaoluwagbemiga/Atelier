@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AutopilotBadge } from "@/components/atelier/autopilot-badge";
 import { motion } from "framer-motion";
-import { Clock, AlertCircle, Star } from "lucide-react";
+import { Clock, AlertCircle, History, Star } from "lucide-react";
 import type { Escrow } from "@/lib/web3/types";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
@@ -31,6 +31,17 @@ export function JobCard({
   ongoingProjectsCount,
   onApply,
 }: JobCardProps) {
+  /*
+   * Has this job already been through an arbiter and been put back?
+   *
+   * Read off the milestones rather than passed in, because it is a property of
+   * the escrow and the card already has them. A milestone carrying a resolution
+   * on a job that is open again can only mean it was reopened after a dispute.
+   */
+  const hasHistory = (job.milestones ?? []).some(
+    (m) => (m.resolvedAt ?? 0) > 0 || m.status === "resolved",
+  );
+
   const [clientRating, setClientRating] = useState<{ average: number; count: number } | null>(null);
 
   useEffect(() => {
@@ -80,6 +91,23 @@ export function JobCard({
                   inside a known window — rather than labelling the client a
                   machine. See autopilot-badge.tsx. */}
               {isAutopilot && <AutopilotBadge />}
+              {/*
+                A job that has been through arbitration and put back on the
+                board. Worth saying out loud: someone applying deserves to know
+                there is history here before they commit, and the whole reason
+                reopening is fair is that the record survived. Silence would
+                make this look like any other fresh posting.
+              */}
+              {hasHistory && (
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 border-[var(--actor-border)]"
+                  data-testid="reopened-badge"
+                >
+                  <History className="h-3 w-3" aria-hidden="true" />
+                  Reopened — previous work visible
+                </Badge>
+              )}
             </div>
 
             <p className="text-muted-foreground mb-4 break-words overflow-hidden">
