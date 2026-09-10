@@ -27,6 +27,7 @@ import { JobDecisionLog } from "@/components/atelier/job-decision-log";
 import { PostDisputeChoice } from "@/components/atelier/post-dispute-choice";
 import { YieldOptIn } from "@/components/atelier/yield-opt-in";
 import { DeclinedChoice } from "@/components/atelier/declined-choice";
+import { WaitingOnFreelancer } from "@/components/atelier/waiting-on-freelancer";
 
 
 interface EscrowCardProps {
@@ -438,6 +439,17 @@ export function EscrowCard({
                       milestones={escrow.milestones}
                     />
                   )}
+
+                {/* Hired, and still nothing. Silent for the first day, because
+                    somebody hired this morning is not ghosting anyone. */}
+                <WaitingOnFreelancer
+                  escrowId={Number(escrow.id)}
+                  isClient={escrow.isClient === true}
+                  status={escrow.status}
+                  beneficiary={escrow.beneficiary}
+                  hiredAt={escrow.createdAt}
+                  onDone={() => window.dispatchEvent(new CustomEvent("escrowUpdated"))}
+                />
 
                 {/* The freelancer handed it back. Renders nothing unless the
                     escrow is in the one state that means exactly that. */}

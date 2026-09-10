@@ -308,3 +308,116 @@ contract DeclineAssignmentTest is JobManagerBase {
         sf.declineAssignment(id);
     }
 }
+
+/**
+ * WHAT IT COSTS TO WALK AWAY FROM A JOB NOBODY STARTED.
+ *
+ * The cancellation fee is there so a client cannot waste people's time: post a
+ * job, let freelancers write applications, pull it. That is a real cost and it
+ * should be paid.
+ *
+ * It was also being charged to a client stranded by a freelancer who was named,
+ * never started, and never would — 5% of their own budget for somebody else's
+ * silence. Nobody had applied to that job. Nobody had spent anything.
+ */
+contract CancellationCostTest is JobManagerBase {
+    function _assignedAtCreation() internal returns (uint256 id) {
+        address[] memory arbiters = new address[](1);
+        arbiters[0] = arbiter;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = M1;
+        amounts[1] = M2;
+        string[] memory descs = new string[](2);
+        descs[0] = "First milestone";
+        descs[1] = "Second milestone";
+        vm.prank(client);
+        id = sf.createEscrow(
+            worker, address(usdc), BUDGET, 30, arbiters, 1, amounts, descs, "Logo", "A logo"
+        );
+    }
+
+    /** Past the free tier, so a penalty would otherwise apply. */
+    function _useUpTheFreeCancellations() internal {
+        for (uint256 i; i < 3; ++i) {
+            uint256 id = _createOpenJob();
+            vm.prank(client);
+            sf.cancelJob(id);
+        }
+    }
+
+    function test_aGhostedClientGetsEveryCentBack() public {
+        _useUpTheFreeCancellations();
+        uint256 id = _assignedAtCreation();
+
+        uint256 before = usdc.balanceOf(client);
+        vm.prank(client);
+        sf.cancelJob(id);
+
+        // Budget plus the platform fee, whole. The freelancer never started and
+        // nobody applied, so there is nothing anyone can charge for.
+        assertEq(
+            usdc.balanceOf(client) - before,
+            BUDGET + (BUDGET * 250) / 10000,
+            "charged for being let down"
+        );
+    }
+
+    /**
+     * And the fee still bites where it was meant to. Somebody wrote an
+     * application for this job; pulling it after that is not free.
+     */
+    function test_aClientWhoWastedApplicantsTimeStillPays() public {
+        _useUpTheFreeCancellations();
+        uint256 id = _createOpenJob();
+        _apply(id, worker);
+
+        uint256 before = usdc.balanceOf(client);
+        vm.prank(client);
+        sf.cancelJob(id);
+
+        assertLt(
+            usdc.balanceOf(client) - before,
+            BUDGET + (BUDGET * 250) / 10000,
+            "cancelling on applicants became free"
+        );
+    }
+
+    /**
+     * The applicant fee is not a tier, and does not have a free allowance.
+     *
+     * The base tier forgives a client's first two cancellations, because plans
+     * change and a marketplace that punishes the first mistake is not one
+     * people post on. The 5% for having applicants is charged from the very
+     * first one, because it is not about the client's record — it is about the
+     * person who wrote an application that just became worthless.
+     *
+     * Written down because the two read as one fee and are not, and because I
+     * assumed otherwise while writing these tests.
+     */
+    function test_theApplicantFeeAppliesFromTheFirstCancellation() public {
+        uint256 id = _createOpenJob();
+        _apply(id, worker);
+
+        uint256 before = usdc.balanceOf(client);
+        vm.prank(client);
+        sf.cancelJob(id);
+
+        uint256 fullRefund = BUDGET + (BUDGET * 250) / 10000;
+        assertEq(
+            usdc.balanceOf(client) - before,
+            fullRefund - (BUDGET * 5) / 100,
+            "one applicant should cost 5%, tier or no tier"
+        );
+    }
+
+    /* But with nobody applied, the first cancellation is genuinely free. */
+    function test_anUntouchedJobCostsNothingToPullDown() public {
+        uint256 id = _createOpenJob();
+
+        uint256 before = usdc.balanceOf(client);
+        vm.prank(client);
+        sf.cancelJob(id);
+
+        assertEq(usdc.balanceOf(client) - before, BUDGET + (BUDGET * 250) / 10000);
+    }
+}

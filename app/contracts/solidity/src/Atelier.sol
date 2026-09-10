@@ -380,7 +380,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.6.0-decline-and-reclaim";
+        return "3.7.0-ghosted-client";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -1036,8 +1036,23 @@ contract Atelier is
         userCancellations[msg.sender]++;
         lastCancellationTime[msg.sender] = block.timestamp;
 
-        // Calculate penalty
-        uint256 penalty = _calculateCancellationPenalty(msg.sender, escrowId);
+        /*
+         * NO APPLICATIONS, NO PENALTY.
+         *
+         * The cancellation fee exists so a client cannot waste people's time:
+         * post a job, let freelancers write applications, pull it. On a job
+         * nobody applied to, nobody spent anything — and the case that made
+         * this obvious is a client stranded by a freelancer who was named,
+         * never started, and never will. Charging them 5% of their own budget
+         * for someone else's silence is a fee for being let down.
+         *
+         * Directly assigned jobs have no applications by construction, so this
+         * covers the ghosting case exactly, without needing to store when the
+         * assignment happened or guess how long is long enough to wait.
+         */
+        uint256 penalty = escrowApplications[escrowId].length == 0
+            ? 0
+            : _calculateCancellationPenalty(msg.sender, escrowId);
         uint256 refundAmount = esc.totalAmount;
         uint256 feeRefund = esc.platformFee;
         
