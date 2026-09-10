@@ -137,11 +137,32 @@ export function ReviewStep({
                 ⚠️ Milestone amounts don't match project budget
               </p>
             )}
+            {/*
+              The number the wallet is about to ask for, on the screen before
+              it does.
+
+              This said "Platform fee: covered by what the escrow earns", which
+              was false twice over: the fee is charged whichever option you
+              pick, and what comes back is a refund out of later earnings. A
+              client read that, chose the yield option, and then watched their
+              wallet request budget + fee anyway — with no line anywhere on this
+              page that added up to the figure they were being shown.
+            */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Platform fee (2.5%)</span>
+              <span>{(budget * PLATFORM_FEE_BP / 10000).toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between font-semibold border-t border-border/40 pt-2 mt-2">
+              <span>You approve now</span>
+              <span data-testid="approval-total">
+                {(budget + budget * PLATFORM_FEE_BP / 10000).toFixed(4)}
+              </span>
+            </div>
             {formData.yieldOptIn && (
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>Platform fee</span>
-                <span>covered by what the escrow earns</span>
-              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                The fee comes back to you out of what the escrow earns, as it
+                earns it — first claim on the earnings, ahead of everyone.
+              </p>
             )}
             {hasInsufficientBalance && (
               <p className="text-sm text-destructive mt-3 flex items-center gap-1">

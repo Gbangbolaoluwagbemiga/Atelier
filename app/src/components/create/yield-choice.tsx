@@ -1,7 +1,23 @@
 import { Sprout, Wallet } from "lucide-react";
 
 /**
- * WHO PAYS THE PLATFORM FEE — asked once, while the job is being posted.
+ * WHAT YOUR ESCROW DOES WHILE IT WAITS — asked once, while posting.
+ *
+ * THIS IS NOT A CHOICE ABOUT WHO PAYS THE FEE
+ *
+ * It was framed that way and the framing was false. `createEscrow` takes
+ * budget + fee unconditionally — the escrow contract has no idea the yield
+ * controller exists — so both answers cost exactly the same at the moment you
+ * sign, and a client who picked "let the escrow earn it" still watched their
+ * wallet ask for the fee. The summary line went further and said the fee was
+ * "covered by what the escrow earns", which is not true of any money that has
+ * changed hands yet.
+ *
+ * What actually differs is what happens to the idle portion afterwards, and
+ * where the earnings go: the client's fee is the first claim on them. So the
+ * fee is a *refund* that may or may not arrive in full, not a bill avoided —
+ * and on a short job it will not arrive in full, because 2.5% of a budget is
+ * more than a fortnight of any believable rate earns.
  *
  * WHY THIS IS NOT A SWITCH ON THE JOB PAGE
  *
@@ -38,9 +54,10 @@ export function YieldChoice({ value, onChange, fee, disabled }: Props) {
   return (
     <div className="space-y-3" data-testid="yield-choice">
       <div>
-        <h4 className="font-medium">How the platform fee gets paid</h4>
+        <h4 className="font-medium">What your escrow does while it waits</h4>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Choose once. It cannot be changed after someone is hired.
+          You pay the same either way — ${(fee).toFixed(2)} in platform fee, taken
+          when you post. Choose once; it cannot be changed after someone is hired.
         </p>
       </div>
 
@@ -50,26 +67,27 @@ export function YieldChoice({ value, onChange, fee, disabled }: Props) {
           disabled={disabled}
           onSelect={() => onChange(false)}
           icon={Wallet}
-          title="I'll pay it"
+          title="Just hold it"
           testId="yield-choice-fee"
-          body={`The fee — $${fee.toFixed(2)} — is taken when you post, and your escrow simply waits.`}
+          body="Your budget sits in escrow until each milestone is approved. Nothing else happens to it."
         />
         <Option
           selected={value}
           disabled={disabled}
           onSelect={() => onChange(true)}
           icon={Sprout}
-          title="Let the escrow earn it"
+          title="Put it to work"
           testId="yield-choice-yield"
-          body="The part of your budget no milestone can claim yet earns in a stable position. What it earns covers your fee first; 60% of anything beyond that goes to the freelancer."
+          body={`The part no milestone can claim yet earns while the job runs. Earnings come back to you first, up to the $${fee.toFixed(2)} you paid; 60% of anything beyond that goes to the freelancer.`}
         />
       </div>
 
       {value && (
         <p className="text-xs text-muted-foreground" data-testid="yield-choice-note">
           Your next milestone payment always stays in cash, so this never delays
-          paying anyone. The job carries a 🌱 tag on the board, which is part of
-          why a freelancer picks it.
+          paying anyone, and the job carries a 🌱 tag on the board. The fee comes
+          back as earnings arrive rather than up front — on a short job that is
+          usually part of it, not all.
         </p>
       )}
     </div>

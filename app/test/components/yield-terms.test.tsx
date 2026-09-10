@@ -77,11 +77,37 @@ describe("choosing, while the job is being posted", () => {
     return onChange;
   }
 
-  /* "Enable yield optimisation" is a feature name. "Your fee comes back out of
-     what the escrow earns" is a reason, and it is the actual decision. */
-  it("frames it as who pays the fee, and names the amount", () => {
+  /**
+   * NEITHER OPTION AVOIDS THE FEE.
+   *
+   * This was framed as "who pays the platform fee", and that was false:
+   * createEscrow charges budget + fee unconditionally — the escrow contract has
+   * no idea the yield controller exists — so a client who picked the yield
+   * option watched their wallet ask for the fee anyway, with nothing on the page
+   * adding up to the figure they were shown.
+   *
+   * The honest framing is what the idle money does, and the fee as a refund out
+   * of earnings rather than a bill avoided.
+   */
+  it("does not claim either option avoids the fee", () => {
     choice();
-    expect(screen.getByTestId("yield-choice-fee")).toHaveTextContent("$1.25");
+    const holdCard = screen.getByTestId("yield-choice-fee");
+    expect(holdCard).not.toHaveTextContent(/covered by/i);
+    expect(holdCard).not.toHaveTextContent(/I'll pay it/i);
+  });
+
+  it("says the fee is charged either way, and names it", () => {
+    choice();
+    expect(screen.getByText(/you pay the same either way/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$1\.25 in platform fee/i)).toBeInTheDocument();
+  });
+
+  /* A refund out of earnings, not a bill avoided — and on a short job it is
+     usually part of the fee rather than all of it. */
+  it("calls the fee relief a refund that arrives as earnings do", () => {
+    choice({ value: true });
+    expect(screen.getByTestId("yield-choice-yield")).toHaveTextContent(/come back to you first/i);
+    expect(screen.getByTestId("yield-choice-note")).toHaveTextContent(/usually part of it, not all/i);
   });
 
   it("says out loud that it cannot be changed later", () => {
