@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { createPublicClient, http, verifyMessage } from "viem";
 import { getSupabase } from "../lib/supabase.js";
+import { attempt, isUnreachable } from "../lib/degrade.js";
 
 export const uploadRouter = Router();
 
@@ -171,18 +172,25 @@ uploadRouter.post(
       .slice(2)}.${ext}`;
 
     // Ensure bucket exists (idempotent – ignore "already exists" errors)
-    await supabase.storage.createBucket(BUCKET, {
-      public: true,
-      allowedMimeTypes: Array.from(ALLOWED_MIME_TYPES),
-      fileSizeLimit: MAX_FILE_SIZE,
-    });
+    await attempt(
+      supabase.storage.createBucket(BUCKET, {
+        public: true,
+        allowedMimeTypes: Array.from(ALLOWED_MIME_TYPES),
+        fileSizeLimit: MAX_FILE_SIZE,
+      }),
+    );
 
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, file.buffer, {
+    /*
+     * There is no degrading a file upload. If the store is gone the bytes have
+     * nowhere to live, and telling the freelancer their deliverable is attached
+     * when it is not would be the worst of the three answers available.
+     */
+    const { error: uploadError } = await attempt(
+      supabase.storage.from(BUCKET).upload(path, file.buffer, {
         contentType: file.mimetype,
         upsert: true, // upsert=true avoids duplicate-key errors on retry
-      });
+      }),
+    );
 
     if (uploadError) {
       const hint =
@@ -190,7 +198,7 @@ uploadRouter.post(
         uploadError.message.includes("violates")
           ? " — ensure the Supabase storage RLS policy allows inserts, or use the service_role key"
           : "";
-      res.status(500).json({ error: uploadError.message + hint });
+      res.status(isUnreachable(uploadError) ? 503 : 500).json({ error: uploadError.message + hint });
       return;
     }
 

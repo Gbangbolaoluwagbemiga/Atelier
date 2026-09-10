@@ -74,11 +74,34 @@ const aiLimiter = rateLimit({
 
 app.use(generalLimiter);
 
-app.get("/health", (_req, res) => {
+app.get("/health", async (_req, res) => {
+  /*
+   * Reachability, not configuration.
+   *
+   * This used to report supabase:true whenever the two env vars were set,
+   * which it kept doing after the project itself stopped resolving — a health
+   * check that answers "is it configured" while every route that touches it
+   * returns 500. A health endpoint that is green during an outage is worse
+   * than no health endpoint, because it is where you look first.
+   */
+  let supabase = false;
+  const url = process.env.SUPABASE_URL?.trim();
+  if (url && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const probe = await fetch(`${url}/rest/v1/`, {
+        headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY },
+        signal: AbortSignal.timeout(3000),
+      });
+      supabase = probe.status < 500;
+    } catch {
+      supabase = false;
+    }
+  }
+
   res.json({
     ok: true,
     groq: !!process.env.GROQ_API_KEY,
-    supabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+    supabase,
   });
 });
 

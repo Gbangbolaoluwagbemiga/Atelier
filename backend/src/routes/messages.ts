@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getSupabase } from "../lib/supabase.js";
+import { attempt, isUnreachable } from "../lib/degrade.js";
 
 export const messagesRouter = Router();
 
@@ -41,7 +42,7 @@ messagesRouter.post("/", async (req, res) => {
 
   const convId = conversationId(sender_address, recipient_address);
 
-  const { data, error } = await supabase
+  const { data, error } = await attempt(supabase
     .from("messages")
     .insert({
       conversation_id: convId,
@@ -50,10 +51,14 @@ messagesRouter.post("/", async (req, res) => {
       content: content.trim().slice(0, 4000),
     })
     .select("id, created_at")
-    .single();
+    .single());
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    if (isUnreachable(error)) {
+      res.status(503).json({ error: "Messages store unreachable" });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
     return;
   }
 
@@ -89,9 +94,9 @@ messagesRouter.get("/conversation", async (req, res) => {
     query = query.gt("created_at", since);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await attempt(query);
   if (error) {
-    res.status(500).json({ error: error.message });
+    res.json({ messages: [], degraded: true });
     return;
   }
 
@@ -113,15 +118,15 @@ messagesRouter.get("/inbox", async (req, res) => {
   }
 
   // Fetch messages where user is sender OR recipient, ordered by newest first
-  const { data, error } = await supabase
+  const { data, error } = await attempt(supabase
     .from("messages")
     .select("id, conversation_id, sender_address, recipient_address, content, read_at, created_at")
     .or(`sender_address.eq.${wallet},recipient_address.eq.${wallet}`)
     .order("created_at", { ascending: false })
-    .limit(500);
+    .limit(500));
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    res.json({ conversations: [], degraded: true });
     return;
   }
 
@@ -169,14 +174,14 @@ messagesRouter.get("/unread-count", async (req, res) => {
     return;
   }
 
-  const { count, error } = await supabase
+  const { count, error } = await attempt(supabase
     .from("messages")
     .select("id", { count: "exact", head: true })
     .eq("recipient_address", wallet)
-    .is("read_at", null);
+    .is("read_at", null));
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    res.json({ count: 0, degraded: true });
     return;
   }
 
@@ -201,15 +206,19 @@ messagesRouter.patch("/conversation/read", async (req, res) => {
   }
 
   const convId = conversationId(a, b);
-  const { error } = await supabase
+  const { error } = await attempt(supabase
     .from("messages")
     .update({ read_at: new Date().toISOString() })
     .eq("conversation_id", convId)
     .eq("recipient_address", wallet)
-    .is("read_at", null);
+    .is("read_at", null));
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    if (isUnreachable(error)) {
+      res.status(503).json({ error: "Messages store unreachable" });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
     return;
   }
 
@@ -236,15 +245,19 @@ messagesRouter.patch("/:id/read", async (req, res) => {
     return;
   }
 
-  const { error } = await supabase
+  const { error } = await attempt(supabase
     .from("messages")
     .update({ read_at: new Date().toISOString() })
     .eq("id", id)
     .eq("recipient_address", wallet)
-    .is("read_at", null);
+    .is("read_at", null));
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    if (isUnreachable(error)) {
+      res.status(503).json({ error: "Messages store unreachable" });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
     return;
   }
 

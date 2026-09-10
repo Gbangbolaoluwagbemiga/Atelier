@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getSupabase } from "../lib/supabase.js";
+import { attempt, isUnreachable } from "../lib/degrade.js";
 
 export const notificationsRouter = Router();
 
@@ -21,18 +22,30 @@ notificationsRouter.get("/", async (req, res) => {
   // Normalize to lowercase — wagmi returns checksum case but writers may use lowercase.
   const wallet = walletRaw.toLowerCase();
 
+  /*
+   * An unreachable store reads as "no notifications", not as an error.
+   *
+   * The !supabase branch above only catches a store that was never configured.
+   * A configured store whose host has stopped resolving throws inside the
+   * client instead, and with no catch here that surfaced to the browser as
+   * `TypeError: fetch failed` — a 500 on a bell icon, on every page load. An
+   * empty bell is the honest degradation: the user has no notifications we can
+   * show them, and nothing else on the page is broken.
+   */
   // ilike makes this case-insensitive so historical rows in mixed case still surface.
-  const { data, error } = await supabase
-    .from("notifications")
-    .select(
-      "id, wallet_address, type, title, message, read_at, action_url, data, created_at",
-    )
-    .ilike("wallet_address", wallet)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const { data, error } = await attempt(
+    supabase
+      .from("notifications")
+      .select(
+        "id, wallet_address, type, title, message, read_at, action_url, data, created_at",
+      )
+      .ilike("wallet_address", wallet)
+      .order("created_at", { ascending: false })
+      .limit(100),
+  );
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    res.json({ notifications: [], degraded: true });
     return;
   }
 
@@ -70,14 +83,20 @@ notificationsRouter.patch("/:id/read", async (req, res) => {
   }
   const wallet = walletRaw.toLowerCase();
 
-  const { error } = await supabase
-    .from("notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("id", id)
-    .ilike("wallet_address", wallet);
+  const { error } = await attempt(
+    supabase
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", id)
+      .ilike("wallet_address", wallet),
+  );
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    if (isUnreachable(error)) {
+      res.status(503).json({ error: "Notifications store unreachable" });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
     return;
   }
 
@@ -113,21 +132,27 @@ notificationsRouter.post("/", async (req, res) => {
     return;
   }
 
-  const { data, error } = await supabase
-    .from("notifications")
-    .insert({
-      wallet_address: wallet,
-      type: String(type),
-      title: String(title),
-      message: String(message),
-      action_url: action_url ? String(action_url) : null,
-      data: payload && typeof payload === "object" ? payload : {},
-    })
-    .select("id")
-    .single();
+  const { data, error } = await attempt(
+    supabase
+      .from("notifications")
+      .insert({
+        wallet_address: wallet,
+        type: String(type),
+        title: String(title),
+        message: String(message),
+        action_url: action_url ? String(action_url) : null,
+        data: payload && typeof payload === "object" ? payload : {},
+      })
+      .select("id")
+      .single(),
+  );
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    if (isUnreachable(error)) {
+      res.status(503).json({ error: "Notifications store unreachable" });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
     return;
   }
 

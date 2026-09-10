@@ -48,3 +48,28 @@ export function makeSupabaseMock(opts: {
     },
   };
 }
+
+/**
+ * A query builder for a store that is configured but no longer answers.
+ *
+ * `chainableResult` models a store that replies "no" — a row-level-security
+ * refusal, a bad column. This models the other failure: the host stopped
+ * resolving, so `fetch` throws before there is any `{ data, error }` at all.
+ * That is the case that produced raw 500s in production, and it cannot be
+ * reproduced with a resolved error object.
+ */
+export function chainableThrows(message = "fetch failed") {
+  const proxy: any = new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === "then") {
+          return (_resolve: unknown, reject: (e: Error) => void) =>
+            reject(new TypeError(message));
+        }
+        return (..._args: unknown[]) => proxy;
+      },
+    },
+  );
+  return proxy;
+}

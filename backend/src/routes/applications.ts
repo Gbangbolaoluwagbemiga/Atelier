@@ -40,7 +40,15 @@ applicationsRouter.post("/", async (req, res) => {
 
     res.status(201).json({ id: data.id, success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    /*
+     * A write must never report success it did not achieve.
+     *
+     * The application itself lives on-chain — `applyForJob` emits the event the
+     * agent reads. This row is the cover letter beside it, so losing it is
+     * survivable, but the caller has to be told, or a freelancer believes they
+     * sent a pitch that nobody will ever see.
+     */
+    res.status(503).json({ error: "Application store unreachable", detail: String(error?.message ?? error) });
   }
 });
 
@@ -66,12 +74,13 @@ applicationsRouter.get("/:escrowId", async (req, res) => {
       .order("applied_at", { ascending: false });
 
     if (error) {
-      res.status(500).json({ error: error.message });
+      res.json({ applications: [], degraded: true });
       return;
     }
 
     res.json({ applications: data || [] });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Unreachable store, not a bad request: an empty list is the honest answer.
+    res.json({ applications: [], degraded: true, detail: String(error?.message ?? error) });
   }
 });
