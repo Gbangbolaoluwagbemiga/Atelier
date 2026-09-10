@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-592%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-604%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -320,19 +320,19 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**592 tests.** The contract suite went from zero.
+**604 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
-| Contract | **154** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
-| Frontend | **259** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job |
+| Contract | **165** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
+| Frontend | **260** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job |
 | Backend | **54** | Route handlers, which browsers may call them, and what they do when the database is unreachable |
 | Daemon | **77** | Who the agent tells, who it hires, which jobs it picks up, and whether it pays |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 ```bash
-(cd app/contracts/solidity && forge test)   # 154
-(cd app && npm test)                        # 259
+(cd app/contracts/solidity && forge test)   # 165
+(cd app && npm test)                        # 260
 (cd backend && npx vitest run)              # 54
 (cd agent/daemon && npm test)               # 77
 (cd app && npm run e2e)                     # 48 — needs all three services up
@@ -367,9 +367,9 @@ handler offering only the permitted calls proves nothing.
 |---|---|
 | Network | Arc EVM Testnet · chain `5042002` |
 | Proxy (**the contract**) | [`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`](https://testnet.arcscan.app/address/0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE) |
-| Implementation | `0x0176544b1b6b3f4aa42d3af8b9aa2401ede0b557` · `3.7.0-ghosted-client` |
-| Yield controller | [`0x74b26E1F855212079C9A1E26Ae6D430FA05650FC`](https://testnet.arcscan.app/address/0x74b26E1F855212079C9A1E26Ae6D430FA05650FC) |
-| Testnet venue | [`0x2A15F4718220735ce9a4529fe42E957c0af44d4B`](https://testnet.arcscan.app/address/0x2A15F4718220735ce9a4529fe42E957c0af44d4B) — `SponsoredVault`, which earns nothing and says so |
+| Implementation | `0x16789a37a359d141e7fdfd64fa4fb317446c93f6` · `3.8.0-fee-waived-for-work` |
+| Yield controller | [`0x44E5e128B084750694BB0B295713832cfe1750bB`](https://testnet.arcscan.app/address/0x44E5e128B084750694BB0B295713832cfe1750bB) |
+| Testnet venue | [`0xe6775B67963efE7e9F4B4e1621Ec08f8DAf97907`](https://testnet.arcscan.app/address/0xe6775B67963efE7e9F4B4e1621Ec08f8DAf97907) — `SponsoredVault`, which earns nothing and says so |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
 ### Live services
@@ -450,13 +450,22 @@ completed job claimed all of it: 20 USDC of "yield" on a 10 USDC budget, a 200%
 return nobody should believe. The sponsorship is the return, so sizing it is
 the same act as choosing a rate.
 
-**And a property of the waterfall worth knowing before you read a settlement.**
-The client's platform fee is covered before anyone else is paid, and on Arc that
-fee is 2.5% of the budget. A fourteen-day job at any believable rate earns well
-under that, so the yield offsets part of the fee and the freelancer's 60% is
-zero. Their share only becomes reachable when yield exceeds the fee, which
-wants a long job rather than a large one — the fee scales with the budget and
-so does the deployable capital, but the rate does not scale with either.
+**Why a client would ever switch it on.** Because the platform fee is waived
+outright — they approve 2.5% less, today, in the number their wallet shows them.
+
+That is the second answer to this question. The first was that yield refunded
+the fee later, which sounds like a benefit and is not one: a job deploys roughly
+40% of its budget, so covering a 2.5% fee needs rate × days ≥ 22.8 — 228 days at
+10% APY, with the budget cancelling out of the inequality entirely. No freelance
+job is long enough. The client recovered a rounding error and had no reason to
+opt in, and the screen telling them otherwise was simply wrong.
+
+So the platform gives up a certain 2.5% and takes 40% of an uncertain return
+instead, plus a job that carries a share for whoever accepts it — which is the
+recruiting advantage, and the reason a freelancer picks it over an identical
+job. What paid for it in bytecode was the cancellation tier: a charge on a
+client's own cancellation count, which had nobody on the other end of it. The
+applicant fee, which does, is untouched.
 Everything around it is real; the return is a sponsorship and is named as one in
 the contract's first paragraph rather than dressed up as trading fees. Mainnet
 gets the v4 adapter against a real pool, and the deploy script refuses to run
@@ -471,7 +480,7 @@ stake, which is on the roadmap rather than claimed.
 **Productive escrow is deployed.** The yield layer moved into `AtelierYield`, a
 companion contract, which brought Atelier from 26.2KB to 23,611 bytes — under
 EIP-170's limit with ~965 to spare. The live proxy was upgraded in place to
-`3.7.0-ghosted-client` with the escrow counter intact, which is what the UUPS work
+`3.8.0-fee-waived-for-work` with the escrow counter intact, which is what the UUPS work
 was for.
 
 **The Uniswap v4 leg is written and proven on a fork.** `UniswapV4StableAdapter`

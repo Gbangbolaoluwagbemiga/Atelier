@@ -345,6 +345,30 @@ export default function CreateEscrowPage() {
       // USDC is an ERC-20 token, not native ETH
       const tokenToPass = USDC_ADDRESS || "0x3600000000000000000000000000000000000000";
 
+      /*
+       * The fee choice has to be recorded BEFORE the escrow exists.
+       *
+       * It decides whether a platform fee is charged at all, and by the next
+       * transaction the money has already moved — so this cannot be a
+       * follow-up the way it was when the fee was charged either way. The
+       * escrow consumes the flag as it creates the job.
+       *
+       * A failure here must stop the post rather than quietly charge the fee:
+       * a client who chose to pay nothing and was charged anyway has been
+       * overcharged, which is worse than not posting.
+       */
+      if (formData.yieldOptIn) {
+        toast({
+          title: "Putting your escrow to work",
+          description: "Approve this first — it is what waives the platform fee.",
+        });
+        const { ContractService } = await import("@/lib/web3/contract-service");
+        await new ContractService(CONTRACTS.ATELIER_ESCROW).setWorkIntent(
+          true,
+          writeContractAsync,
+        );
+      }
+
       toast({ 
         title: "Creating Escrow", 
         description: "Processing your job creation. This may take a minute. Please don't close this window." 
@@ -364,40 +388,6 @@ export default function CreateEscrowPage() {
         // queryable field, and the UI strips it before anyone reads it.
         project_description: `${categoryMarker(formData.category ?? "design")}\n${formData.projectDescription}`,
       });
-
-      /*
-       * Record the fee choice, if they chose the escrow to earn it.
-       *
-       * A second signature, and unavoidable: the escrow contract is 415 bytes
-       * short of EIP-170, so the flag cannot ride along in createEscrow, and it
-       * lives on the yield controller instead.
-       *
-       * Only sent for "yes". Saying "no" is already the default state, and
-       * charging somebody a wallet confirmation to record a no would be a
-       * signature for nothing.
-       *
-       * A failure here does not undo the job — the escrow is funded and live,
-       * and the window stays open until someone is hired, so it can be retried.
-       * Saying so matters: silently swallowing it would leave a client who
-       * chose the yield route watching a job that never carries the tag.
-       */
-      if (formData.yieldOptIn && result.escrowId !== "unknown") {
-        try {
-          const { ContractService } = await import("@/lib/web3/contract-service");
-          await new ContractService(CONTRACTS.ATELIER_ESCROW).setYieldOptIn(
-            Number(result.escrowId),
-            true,
-            writeContractAsync,
-          );
-        } catch (err: any) {
-          toast({
-            title: "Job posted, but the fee choice did not save",
-            description:
-              "Your job is live and funded. Approve the second transaction from the job page to have the escrow earn its own fee — you can do this any time before you hire someone.",
-            variant: "destructive",
-          });
-        }
-      }
 
       toast({ 
         title: "Job Created Successfully", 

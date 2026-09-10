@@ -380,7 +380,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.7.0-ghosted-client";
+        return "3.8.0-fee-waived-for-work";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -435,7 +435,31 @@ contract Atelier is
         }
         if (milestoneSum != totalAmount) revert MilestoneSumMismatch();
 
-        uint256 fee = (totalAmount * platformFeeBP) / 10000;
+        /*
+         * PUTTING THE ESCROW TO WORK COSTS THE CLIENT NOTHING, AND THAT IS THE POINT.
+         *
+         * The fee used to be charged either way, with yield refunding it later.
+         * That refund is worthless: a job deploys about 40% of its budget, so
+         * covering a 2.5% fee needs rate x days >= 22.8 — 228 days at 10% APY,
+         * and the budget cancels out entirely. No freelance job is long enough,
+         * so the client's benefit rounded to zero and nobody had a reason to
+         * switch it on.
+         *
+         * The platform gives up a certain 2.5% instead, and takes 40% of what
+         * the escrow earns plus a job that carries a share for whoever takes
+         * it — which is why a freelancer picks it over an identical one.
+         *
+         * The client's answer arrives as an intent flag set on the controller
+         * beforehand rather than as an argument here. An eleventh parameter
+         * was the obvious way and cost 1,143 bytes of ABI decoding on a
+         * contract with 118 to spare.
+         */
+        // The id is taken here rather than below so it can be handed to the
+        // controller and reused, instead of reading nextEscrowId twice.
+        uint256 escrowId = nextEscrowId++;
+        bool putToWork = address(yieldController) != address(0)
+            && yieldController.claimIntent(msg.sender, escrowId);
+        uint256 fee = putToWork ? 0 : (totalAmount * platformFeeBP) / 10000;
         uint256 totalDeposit = totalAmount + fee;
 
         if (token == NATIVE_TOKEN) {
@@ -447,7 +471,6 @@ contract Atelier is
 
         if (fee > 0) totalFeesByToken[token] += fee;
 
-        uint256 escrowId = nextEscrowId++;
         bool isOpenJob = beneficiary == address(0);
 
         Escrow storage esc = escrows[escrowId];
@@ -1079,57 +1102,45 @@ contract Atelier is
      * @notice Calculate cancellation penalty based on user's history
      * @dev Tiered system with application-based penalties
      */
-    function _calculateCancellationPenalty(address user, uint256 escrowId) 
-        internal view returns (uint256) 
-    {
-        uint256 effectiveCancellations = _getEffectiveCancellations(user);
-        uint256 baseAmount = escrows[escrowId].totalAmount;
-        
-        // Base penalty based on cancellation tier
-        uint256 basePenaltyPercent = 0;
-        if (effectiveCancellations <= 2) {
-            basePenaltyPercent = 0;  // Tier 1: Free
-        } else if (effectiveCancellations <= 5) {
-            basePenaltyPercent = 5;  // Tier 2: 5%
-        } else if (effectiveCancellations <= 10) {
-            basePenaltyPercent = 10; // Tier 3: 10%
-        } else {
-            basePenaltyPercent = 15; // Tier 4: 15%
-        }
-        
-        // Additional penalty based on applications
-        uint256 applicationCount = escrowApplications[escrowId].length;
-        uint256 applicationPenaltyPercent = 0;
-        if (applicationCount >= 11) {
-            applicationPenaltyPercent = 15;
-        } else if (applicationCount >= 6) {
-            applicationPenaltyPercent = 10;
-        } else if (applicationCount >= 1) {
-            applicationPenaltyPercent = 5;
-        }
-        
-        uint256 totalPenaltyPercent = basePenaltyPercent + applicationPenaltyPercent;
-        // Cap at 30% maximum penalty
-        if (totalPenaltyPercent > 30) totalPenaltyPercent = 30;
-        
-        return (baseAmount * totalPenaltyPercent) / 100;
-    }
-
     /**
-     * @notice Get effective cancellations with time-based reduction
-     * @dev Reduces by 1 for every 30 days without cancellation
+     * What it costs to pull a job down, and who it is actually for.
+     *
+     * ONLY THE APPLICANT FEE SURVIVES, AND IT IS THE ONE WITH A VICTIM.
+     *
+     * There used to be a second, separate charge: a tier on the client's own
+     * cancellation count, decaying by one every thirty days. It read as part of
+     * the same fee and was not — the tier forgave the first two cancellations
+     * and the applicant fee never did — which I got wrong once while writing a
+     * test for it.
+     *
+     * It also had no one to compensate. A client who pulls a job nobody applied
+     * to has cost nobody anything, and charging them for a pattern rather than
+     * for harm is a fine, not a fee. The applicant charge has someone on the
+     * other end of it: a person who wrote an application that just became
+     * worthless.
+     *
+     * Giving it up bought the room to waive the platform fee for a client who
+     * puts their escrow to work, which is a benefit somebody actually receives.
+     *
+     * `userCancellations` and `lastCancellationTime` are still written. They are
+     * a public record of behaviour and the storage slots cannot be reclaimed
+     * from a live proxy anyway.
      */
-    function _getEffectiveCancellations(address user) internal view returns (uint256) {
-        uint256 cancellations = userCancellations[user];
-        uint256 lastCancel = lastCancellationTime[user];
-        
-        if (lastCancel == 0 || cancellations == 0) return cancellations;
-        
-        // Reduce by 1 for every 30 days without cancellation
-        uint256 daysSinceLastCancel = (block.timestamp - lastCancel) / 1 days;
-        uint256 reduction = daysSinceLastCancel / 30;
-        
-        return cancellations > reduction ? cancellations - reduction : 0;
+    function _calculateCancellationPenalty(address, uint256 escrowId)
+        internal view returns (uint256)
+    {
+        uint256 applicationCount = escrowApplications[escrowId].length;
+        uint256 pct;
+        if (applicationCount >= 11) {
+            pct = 15;
+        } else if (applicationCount >= 6) {
+            pct = 10;
+        } else if (applicationCount >= 1) {
+            pct = 5;
+        } else {
+            return 0;
+        }
+        return (escrows[escrowId].totalAmount * pct) / 100;
     }
 
     /**

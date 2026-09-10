@@ -150,20 +150,28 @@ export function ReviewStep({
             */}
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>Platform fee (2.5%)</span>
-              <span>{(budget * PLATFORM_FEE_BP / 10000).toFixed(2)}</span>
+              <span data-testid="fee-line">
+                {formData.yieldOptIn ? (
+                  <>
+                    <span className="line-through opacity-50">
+                      {(budget * PLATFORM_FEE_BP / 10000).toFixed(2)}
+                    </span>{" "}
+                    waived
+                  </>
+                ) : (
+                  (budget * PLATFORM_FEE_BP / 10000).toFixed(2)
+                )}
+              </span>
             </div>
             <div className="flex items-center justify-between font-semibold border-t border-border/40 pt-2 mt-2">
               <span>You approve now</span>
               <span data-testid="approval-total">
-                {(budget + budget * PLATFORM_FEE_BP / 10000).toFixed(4)}
+                {(formData.yieldOptIn
+                  ? budget
+                  : budget + budget * PLATFORM_FEE_BP / 10000
+                ).toFixed(4)}
               </span>
             </div>
-            {formData.yieldOptIn && (
-              <p className="text-xs text-muted-foreground mt-1">
-                The fee comes back to you out of what the escrow earns, as it
-                earns it — first claim on the earnings, ahead of everyone.
-              </p>
-            )}
             {hasInsufficientBalance && (
               <p className="text-sm text-destructive mt-3 flex items-center gap-1">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />

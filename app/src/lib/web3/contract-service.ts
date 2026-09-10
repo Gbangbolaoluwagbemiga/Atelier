@@ -36,6 +36,8 @@ const YIELD_ABI = [
     inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "setYieldOptIn", stateMutability: "nonpayable",
     inputs: [{ type: "uint256" }, { type: "bool" }], outputs: [] },
+  { type: "function", name: "setWorkIntent", stateMutability: "nonpayable",
+    inputs: [{ type: "bool" }], outputs: [] },
 ] as const;
 
 export class ContractService {
@@ -623,6 +625,31 @@ export class ContractService {
     } catch {
       return off;
     }
+  }
+
+  /**
+   * Say that your next job should put its escrow to work.
+   *
+   * Sent BEFORE createEscrow, not after, because the answer decides whether a
+   * platform fee is charged at all and by the next transaction the money has
+   * moved. The escrow consumes the flag as it creates the job — one intent,
+   * spent by one job, so a client who does this once does not silently stop
+   * paying for every job after.
+   *
+   * It could not simply be an argument to createEscrow: an eleventh
+   * ABI-decoded parameter cost 1,143 bytes on a contract with 118 to spare.
+   */
+  async setWorkIntent(on: boolean, write: WagmiWrite): Promise<`0x${string}`> {
+    const controller = (await this.contract.read.yieldController([])) as Address;
+    if (!controller || controller === ZERO_ADDRESS) {
+      throw new Error("This escrow has no yield controller set.");
+    }
+    return write({
+      address: controller,
+      abi: YIELD_ABI,
+      functionName: "setWorkIntent",
+      args: [on],
+    });
   }
 
   /**

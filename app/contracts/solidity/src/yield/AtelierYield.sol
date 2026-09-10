@@ -150,6 +150,7 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
 
     event YieldAdapterSet(address indexed token, address indexed adapter);
     event YieldOptInChanged(uint256 indexed escrowId, bool optedIn);
+    event WorkIntentSet(address indexed client, bool on);
     event FreelancerShareUpdated(uint256 bp);
     event YieldAccrued(uint256 indexed escrowId, uint256 amount);
     event YieldDistributed(
@@ -196,6 +197,44 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
     function setYieldBuffer(uint256 bp) external onlyOwner {
         if (bp < 1000 || bp > 10000) revert BufferTooLow();
         yieldBufferBP = bp;
+    }
+
+    /**
+     * @notice The escrow telling us a client chose this while posting.
+     *
+     * Their answer now decides whether they are charged a platform fee at all,
+     * so it has to be settled inside the creating transaction — a second
+     * signature afterwards is too late, the money has already moved. That is
+     * why this exists alongside setYieldOptIn rather than replacing it:
+     * setYieldOptIn is for a job whose question is still open, and this is for
+     * one being answered as it is born.
+     *
+     * onlyEscrow, and it marks the choice made, so nobody can answer twice by
+     * coming in through the other door.
+     */
+    /** Set by a client before posting; consumed by the escrow as it creates. */
+    mapping(address => bool) public workIntent;
+
+    /**
+     * @notice Say that the next job you post should put its escrow to work.
+     *
+     * One flag per client, not per job, because the job does not exist yet.
+     * Consumed by the very next escrow they create, so it cannot leak into a
+     * later one they meant to post normally — and re-settable, since somebody
+     * who changes their mind between here and posting should be able to.
+     */
+    function setWorkIntent(bool on) external {
+        workIntent[msg.sender] = on;
+        emit WorkIntentSet(msg.sender, on);
+    }
+
+    function claimIntent(address client, uint256 escrowId) external onlyEscrow returns (bool) {
+        if (!workIntent[client]) return false;
+        workIntent[client] = false;
+        yieldChoiceMade[escrowId] = true;
+        yieldOptIn[escrowId] = true;
+        emit YieldOptInChanged(escrowId, true);
+        return true;
     }
 
     /**

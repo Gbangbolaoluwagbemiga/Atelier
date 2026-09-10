@@ -24,6 +24,7 @@ const CALLED_BY_THE_UI = [
   // yield — the 🌱 tag and the posting-time fee choice
   "getYieldStatus",
   "setYieldOptIn",
+  "setWorkIntent",
   "isEarningYield",
   // hiring
   "acceptFreelancer",

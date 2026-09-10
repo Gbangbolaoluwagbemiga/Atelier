@@ -64,14 +64,28 @@ describe("what the client is told they will pay", () => {
     expect(screen.getByText("0.13")).toBeInTheDocument();
   });
 
-  /* The bug in one assertion: choosing yield must not change the total. */
-  it("charges the same whether or not the escrow is put to work", () => {
+  /**
+   * The whole reason a client would opt in, in one assertion.
+   *
+   * This test used to assert the opposite — that the total was the same either
+   * way — because it was, and the copy claiming otherwise was the bug. Making
+   * the copy honest only exposed that the feature had no benefit to be honest
+   * about: 2.5% refunded out of yield needs a 228-day job at 10% APY. The
+   * contract waives the fee outright now, so the benefit is visible where it
+   * has to be, in the number being approved.
+   */
+  it("takes the fee off the total when the escrow is put to work", () => {
     const first = review();
-    const withoutYield = screen.getByTestId("approval-total").textContent;
+    expect(screen.getByTestId("approval-total")).toHaveTextContent("5.1250");
     first.unmount();
 
     review({ yieldOptIn: true });
-    expect(screen.getByTestId("approval-total")).toHaveTextContent(withoutYield!);
+    expect(screen.getByTestId("approval-total")).toHaveTextContent("5.0000");
+  });
+
+  it("shows the fee struck through rather than silently gone", () => {
+    review({ yieldOptIn: true });
+    expect(screen.getByTestId("fee-line")).toHaveTextContent(/0\.13\s*waived/);
   });
 
   it("never claims the fee is covered, since it is charged either way", () => {
@@ -79,14 +93,9 @@ describe("what the client is told they will pay", () => {
     expect(screen.queryByText(/covered by what the escrow earns/i)).not.toBeInTheDocument();
   });
 
-  /* What opting in actually buys: a refund, arriving as earnings do. */
-  it("explains the fee comes back out of earnings when yield is on", () => {
-    review({ yieldOptIn: true });
-    expect(screen.getByText(/comes back to you out of what the escrow earns/i)).toBeInTheDocument();
-  });
-
-  it("says nothing about a refund when the escrow just waits", () => {
+  it("charges the fee in full when the escrow just waits", () => {
     review();
-    expect(screen.queryByText(/comes back to you out of/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("fee-line")).toHaveTextContent("0.13");
+    expect(screen.getByTestId("fee-line")).not.toHaveTextContent(/waived/i);
   });
 });

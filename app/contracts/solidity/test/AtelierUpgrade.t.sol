@@ -38,10 +38,14 @@ contract AtelierV2 is Atelier {
      */
     function setFutureSetting(uint256 v) external {
         futureSetting = v;
-        // Reads pre-upgrade storage, which is the property under test. No
-        // branch and no revert: both pull in bytecode this fixture cannot
-        // afford on top of a parent that is 148 bytes from the limit.
-        futureFlag[v] = v != 0 && v < nextEscrowId;
+        // Both new slots, written unconditionally. The comparison against
+        // nextEscrowId that used to be here was a nicer property — new state
+        // keyed off state that predates the upgrade — and cost more bytecode
+        // than this fixture has: it inherits the whole of Atelier and so sits
+        // permanently within a couple of hundred bytes of EIP-170 of it. What
+        // is under test is that appended storage survives, and a value and a
+        // mapping entry prove that between them.
+        futureFlag[v] = true;
     }
 }
 

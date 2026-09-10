@@ -78,36 +78,32 @@ describe("choosing, while the job is being posted", () => {
   }
 
   /**
-   * NEITHER OPTION AVOIDS THE FEE.
+   * THE FEE IS THE CLIENT'S REASON, AND IT IS REAL NOW.
    *
-   * This was framed as "who pays the platform fee", and that was false:
-   * createEscrow charges budget + fee unconditionally — the escrow contract has
-   * no idea the yield controller exists — so a client who picked the yield
-   * option watched their wallet ask for the fee anyway, with nothing on the page
-   * adding up to the figure they were shown.
+   * This was framed as a fee choice, which was false — createEscrow charged
+   * budget + fee whichever card you picked — and then reframed honestly, which
+   * exposed that the feature had no benefit to be honest about. 2.5% refunded
+   * out of yield needs a 228-day job at 10% APY.
    *
-   * The honest framing is what the idle money does, and the fee as a refund out
-   * of earnings rather than a bill avoided.
+   * The contract waives the fee outright now, so the framing is both true and
+   * worth something.
    */
-  it("does not claim either option avoids the fee", () => {
+  it("names the fee on each card, since that is what differs", () => {
     choice();
-    const holdCard = screen.getByTestId("yield-choice-fee");
-    expect(holdCard).not.toHaveTextContent(/covered by/i);
-    expect(holdCard).not.toHaveTextContent(/I'll pay it/i);
+    expect(screen.getByTestId("yield-choice-fee")).toHaveTextContent("$1.25");
+    expect(screen.getByTestId("yield-choice-yield")).toHaveTextContent(/no fee/i);
   });
 
-  it("says the fee is charged either way, and names it", () => {
+  it("says how much less the client approves", () => {
     choice();
-    expect(screen.getByText(/you pay the same either way/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$1\.25 in platform fee/i)).toBeInTheDocument();
+    expect(screen.getByTestId("yield-choice-yield")).toHaveTextContent(/\$1\.25 less/i);
   });
 
-  /* A refund out of earnings, not a bill avoided — and on a short job it is
-     usually part of the fee rather than all of it. */
-  it("calls the fee relief a refund that arrives as earnings do", () => {
+  /* One extra signature, and it is the one that does the waiving — worth
+     saying, since a second wallet prompt otherwise looks like a fault. */
+  it("warns about the extra signature and says what it buys", () => {
     choice({ value: true });
-    expect(screen.getByTestId("yield-choice-yield")).toHaveTextContent(/come back to you first/i);
-    expect(screen.getByTestId("yield-choice-note")).toHaveTextContent(/usually part of it, not all/i);
+    expect(screen.getByTestId("yield-choice-note")).toHaveTextContent(/one extra signature/i);
   });
 
   it("says out loud that it cannot be changed later", () => {
