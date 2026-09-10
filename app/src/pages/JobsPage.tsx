@@ -534,6 +534,26 @@ export default function JobsPage() {
           description: "No gas, no signature — we signed it for you.",
         });
         setHasApplied((prev: Record<string, boolean>) => ({ ...prev, [job.id]: true }));
+
+        /*
+         * Close it, and tell the client — both of which the wallet path below
+         * already did and this one did not.
+         *
+         * Leaving the dialog open after a successful send reads as a failure:
+         * somebody applied, saw the form still sitting there, submitted again,
+         * and was told they had already applied — by which point the only
+         * evidence it had worked was a toast that had already gone.
+         */
+        setSelectedJob(null);
+        if (job.payer) {
+          addNotification(
+            createApplicationNotification("submitted", Number(job.id), workerId, {
+              jobTitle: job.projectTitle || encodeJobId(job.id),
+              freelancerName: "a managed worker",
+            }),
+            [job.payer],
+          );
+        }
       } catch (e) {
         toast(toastError("Could not send that application", e));
       }

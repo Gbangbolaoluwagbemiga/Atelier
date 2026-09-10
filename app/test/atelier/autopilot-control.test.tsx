@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 /**
@@ -34,8 +34,10 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
+const fetchLimits = vi.fn().mockResolvedValue({ applicationWindowMinutes: 3 });
 vi.mock("@/lib/atelier/agent-api", () => ({
   AUTOPILOT_CONFIGURED: true,
+  fetchLimits,
 }));
 
 const { AutopilotControl } = await import(
@@ -192,5 +194,56 @@ describe("what the client is shown before handing over", () => {
     await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
     await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
     expect(delegate).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * WHEN THE AGENT DECIDES.
+ *
+ * A client handed a job over and had no way to know whether hiring would happen
+ * in a second, in an hour, or only once they went and asked. The panel said
+ * what the agent does and never when.
+ *
+ * It waits on purpose: scoring the first application to arrive would make this
+ * a race rather than a comparison, and comparing applicants against each other
+ * is the claim the whole feature rests on.
+ */
+describe("when it will decide", () => {
+  it("names the window it leaves applications open for", async () => {
+    fetchLimits.mockResolvedValue({ applicationWindowMinutes: 3 });
+    hookState.manager = MANAGER;
+    render(<AutopilotControl escrowId={1} isClient />);
+    expect(await screen.findByText(/3 minutes/)).toBeInTheDocument();
+  });
+
+  it("says why it waits, rather than looking slow", async () => {
+    hookState.manager = MANAGER;
+    render(<AutopilotControl escrowId={1} isClient />);
+    expect(
+      await screen.findByText(/rather than hiring\s+whoever happened to apply first/i),
+    ).toBeInTheDocument();
+  });
+
+  /* Someone who applied in good time must not be told they were too late. */
+  it("says a later applicant is still read", async () => {
+    hookState.manager = MANAGER;
+    render(<AutopilotControl escrowId={1} isClient />);
+    expect(await screen.findByText(/still picked up on the next pass/i)).toBeInTheDocument();
+  });
+
+  it("reads the window from the daemon rather than assuming it", async () => {
+    fetchLimits.mockResolvedValue({ applicationWindowMinutes: 60 });
+    hookState.manager = MANAGER;
+    render(<AutopilotControl escrowId={1} isClient />);
+    expect(await screen.findByText(/60 minutes/)).toBeInTheDocument();
+  });
+
+  /* An unreachable daemon must not put a made-up number on the screen. */
+  it("says nothing about timing when the daemon cannot be reached", async () => {
+    fetchLimits.mockRejectedValue(new Error("offline"));
+    hookState.manager = MANAGER;
+    render(<AutopilotControl escrowId={1} isClient />);
+    await waitFor(() => expect(fetchLimits).toHaveBeenCalled());
+    expect(screen.queryByText(/minutes/)).not.toBeInTheDocument();
   });
 });

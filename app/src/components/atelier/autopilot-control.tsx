@@ -12,7 +12,8 @@
  * who can see the exit is much more likely to try the thing at all.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { fetchLimits } from "@/lib/atelier/agent-api";
 import { motion } from "framer-motion";
 import { Bot, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,20 @@ export function AutopilotControl({
   projectDescription?: string;
   milestones?: Array<{ description: string; amount: string }>;
 }) {
+  /*
+   * Read from the daemon, never assumed. The window is an environment variable
+   * and a client can lengthen it per job, so a number typed into this file
+   * would be right until the day it quietly was not.
+   */
+  const [windowMinutes, setWindowMinutes] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetchLimits()
+      .then((l) => { if (live) setWindowMinutes(l.applicationWindowMinutes ?? null); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+
   const { manager, loaded, busy, delegate, revoke } = useJobManager(escrowId);
   const { toast } = useToast();
   const [pending, setPending] = useState<"delegate" | "revoke" | null>(null);
@@ -152,6 +167,26 @@ export function AutopilotControl({
                 . It cannot move your money anywhere else, and it cannot settle
                 a dispute — if it runs out of revision rounds it hands the job
                 to a human arbiter, exactly as you or the freelancer could.
+                {/*
+                  When it decides, which was nowhere on this screen.
+                  A client handed a job over and had no idea whether hiring
+                  happened in a second, an hour, or only once they asked.
+
+                  It waits on purpose. Scoring the first application to arrive
+                  would make this a race rather than a comparison, and the whole
+                  claim is that applicants are read against each other.
+                */}
+                {windowMinutes !== null && (
+                  <>
+                    {" "}It leaves applications open for{" "}
+                    <strong className="text-foreground">
+                      {windowMinutes === 1 ? "a minute" : `${windowMinutes} minutes`}
+                    </strong>{" "}
+                    and then reads them all together, rather than hiring
+                    whoever happened to apply first. Anyone who applies after
+                    that is still picked up on the next pass.
+                  </>
+                )}
               </>
             ) : (
               "You write the brief, choose the freelancer, and approve each milestone yourself."
