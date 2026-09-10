@@ -376,13 +376,20 @@ handler offering only the permitted calls proves nothing.
 | Subgraph | [`atelier/v0.0.3`](https://api.studio.thegraph.com/query/1759977/atelier/v0.0.3) on Subgraph Studio, indexing Arc |
 | API | `https://atelier-production-be62.up.railway.app` — Railway |
 | Web app | [`atelier-job.vercel.app`](https://atelier-job.vercel.app) — Vercel |
-| Autopilot daemon | **Not hosted yet.** It runs locally |
+| Autopilot daemon | [`independent-presence-production-952d`](https://independent-presence-production-952d.up.railway.app/healthz) — Railway, on a persistent volume |
 
-The daemon is the one piece that cannot go on a serverless host: it holds SQLite
-on disk, polls every fifteen seconds, and keeps a Telegram long-poll open for
-twenty-five seconds at a time. Until it is on an always-on host, the deployed
-site can browse jobs, post them and settle them — everything that talks to Arc
-directly — while Autopilot and the managed-worker door only work locally.
+The daemon cannot go on a serverless host: it holds SQLite on disk, polls every
+fifteen seconds, and keeps a Telegram long-poll open twenty-five seconds at a
+time. It runs in a container with a volume mounted at `/app/data`, because
+without one every deploy silently forgets every job it was running.
+
+**It found work on its first boot.** Starting cold, with an empty database, it
+swept `JobManagerSet` logs on Arc, found an escrow naming its own wallet as
+manager, confirmed against the mapping that the client had not revoked it, and
+rebuilt the brief from the escrow's own milestones rather than from the
+description's prose. Nothing told it that job existed — which is the whole point
+of delegation, and was completely inert for weeks while the app set a manager
+on-chain and no process ever looked.
 
 **The proxy address is the contract.** The implementation changes on every
 upgrade; the proxy never does.
@@ -486,6 +493,7 @@ what makes the loop fast rather than what makes it work.
 - [x] Deploy the subgraph to Subgraph Studio — live at `atelier/v0.0.3`, indexing Arc
 - [x] Deploy the yield controller carrying the 60/40 split, and attach a venue — live, escrow #6 is earning 4 USDC of a 10 USDC budget
 - [ ] Arc mainnet deployment, and attach the v4 adapter to a live pool there
+- [x] Host the Autopilot daemon on an always-on container with a persistent volume
 - [ ] Broaden the daemon's test suite past the four modules that move money
 - [x] Notifications raised by the agent, not only by a browser that happens to be open
 - [ ] Identity or stake, so two colluding wallets cannot rate each other

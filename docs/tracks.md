@@ -188,12 +188,13 @@ Continuity-track only.
 | Public GitHub repo | Done |
 | `FEEDBACK.md` | Done |
 | Live subgraph on Subgraph Studio | Done — `atelier/v0.0.3`, indexing Arc |
-| Autopilot daemon hosted | **Outstanding** — runs locally; needs an always-on host, not serverless |
+| Autopilot daemon hosted | Done — Railway container, volume at `/app/data`, [`/healthz`](https://independent-presence-production-952d.up.railway.app/healthz) |
 | Uniswap Developer Feedback Form | **Outstanding** — must link to `FEEDBACK.md` |
 | Demo video, 2–4 minutes | **Outstanding** |
 | Arc mainnet deploy by 30 September | **Outstanding** |
 
-The daemon being unhosted is the one that costs points rather than tidiness: the
-Circle Agent Stack prize is about an agent that transacts, and a judge clicking
-the deployed link should see it transact. Railway already hosts the API, so the
-same platform can take it.
+The daemon is now hosted, which was the one outstanding item that cost points
+rather than tidiness: the Circle Agent Stack prize is about an agent that
+transacts, and a judge clicking the deployed link now reaches one that does.
+On its first boot it discovered a delegated escrow from chain logs alone —
+[`adoptDelegated.ts`](../agent/daemon/src/agent/adoptDelegated.ts).
