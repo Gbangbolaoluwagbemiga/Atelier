@@ -74,6 +74,17 @@ export function useCreateEscrow() {
       duration: number;      // in seconds
       project_title: string;
       project_description: string;
+      /**
+       * Whether the client already set their work intent on the controller.
+       *
+       * The contract waives the platform fee for such a job, but quoteDeposit
+       * cannot know that — it is a pure function of the amount, with no idea
+       * who is asking or what they intend. Without this the approval asked for
+       * budget + fee while the review screen promised budget alone, and a
+       * client watching their wallet contradict the page they had just read
+       * concluded, reasonably, that something was out of sync.
+       */
+      put_to_work?: boolean;
     }) => {
       if (!params.depositor) throw new Error("Wallet not connected");
 
@@ -103,8 +114,9 @@ export function useCreateEscrow() {
         throw new Error(`Milestone amounts (${milestoneSum}) do not equal total amount (${totalAmount})`);
       }
 
-      // Get exact deposit amount (totalAmount + platformFee) from contract
-      const { deposit } = await contractService.quoteDeposit(totalAmount);
+      // Exact deposit from the contract, minus the fee it is about to waive.
+      const { deposit: quoted } = await contractService.quoteDeposit(totalAmount);
+      const deposit = params.put_to_work ? totalAmount : quoted;
 
       if (deposit === 0n) {
         throw new Error("Deposit amount is 0. Please check your input amounts.");

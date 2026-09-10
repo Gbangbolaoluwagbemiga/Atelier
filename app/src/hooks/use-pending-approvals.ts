@@ -35,6 +35,18 @@ export function usePendingApprovals() {
           escrow.depositor?.toLowerCase().trim() === wallet.address.toLowerCase().trim();
         if (!isMyJob) continue;
 
+        /*
+         * Only a job that is still Pending has anything to approve.
+         *
+         * This checked whether the job was open and had applicants, and never
+         * once looked at its status — so a cancelled job that had received a
+         * single application went on claiming a decision was waiting, forever.
+         * The dot sat on My Jobs with nothing behind it, which is worse than no
+         * dot at all: a notification that is sometimes wrong stops being read.
+         */
+        const PENDING = 0;
+        if (Number(escrow.status) !== PENDING) continue;
+
         const zeroAddress = "0x0000000000000000000000000000000000000000";
         const isOpenJob =
           escrow.isOpenJob ||

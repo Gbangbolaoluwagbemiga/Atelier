@@ -387,6 +387,9 @@ export default function CreateEscrowPage() {
         // The marker leads the description so the subgraph can lift it into a
         // queryable field, and the UI strips it before anyone reads it.
         project_description: `${categoryMarker(formData.category ?? "design")}\n${formData.projectDescription}`,
+        // Set on the controller just above, and about to be consumed by the
+        // escrow — so the approval must not ask for a fee that is being waived.
+        put_to_work: formData.yieldOptIn,
       });
 
       toast({ 
