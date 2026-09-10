@@ -41,7 +41,15 @@ handler that deliberately attempts every forbidden move —
 | Meaningful use of Arc and USDC | Every escrow is USDC on Arc. The whole product is settlement |
 | Conditional payments, on-chain automation, multi-step settlement | Milestone escrow: funds lock before a job is visible, and release per milestone against criteria the client approved. Disputes go to a multi-arbiter vote with a confirmation threshold — [`Atelier.sol`](../app/contracts/solidity/src/Atelier.sol) |
 | Treasury workflows | Per-client deposit balances, signed like a withdrawal so nobody spends against someone else's deposit — [`index.ts`](../agent/daemon/src/index.ts) |
-| Why stablecoin-native infrastructure changes what is possible | Idle escrow is productive. Money sitting between funding and approval is deployed to a stable-stable LP, with the investable ceiling derived from the largest imminent claim rather than a percentage — [`AtelierYield.sol`](../app/contracts/solidity/src/yield/AtelierYield.sol) |
+| Why stablecoin-native infrastructure changes what is possible | **The platform fee is not charged.** A client who lets their escrow work approves 2.5% less; the platform takes 40% of what the escrow earns instead, and the freelancer 60%. Money sitting between funding and approval goes to a stable-stable LP, with the investable ceiling derived from the largest imminent claim rather than a percentage — [`AtelierYield.sol`](../app/contracts/solidity/src/yield/AtelierYield.sol), [`FeeWaiver.t.sol`](../app/contracts/solidity/test/FeeWaiver.t.sol) |
+
+**The version that did not work, stated because it is the interesting part.**
+The fee was charged and the yield refunded it later. That refund is worth
+nothing: covering a 2.5% fee needs `rate × days ≥ 22.8` — 228 days at 10% APY,
+with the budget cancelling out of the inequality entirely. No freelance job is
+long enough, so no client had a reason to opt in and the screen offering it was
+misleading. Waiving the fee outright is the second answer, and it is the one a
+client can see in their wallet.
 
 **The invariant that had to be weakened, stated honestly:** cash plus deployed
 capital never falls below what is owed. A failing venue can *delay* a payout; it

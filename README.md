@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-604%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-606%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -155,24 +155,43 @@ states:
 > Cash plus deployed capital never falls below what is owed. A failing venue can
 > **delay** a payout; it cannot lose the money.
 
-**Where what it earns goes.** Not to us by default. The waterfall is: the
-client's platform fee is covered first, then **60% of the remainder to the
-freelancer**, then the rest to the platform. The first rule is the one that
-makes the feature exist — opting in is the client's call and nobody else's, so
-a split that gives the client nothing is a split that never gets switched on.
-The second is why a freelancer would rather take this job than an identical one:
-their locked budget earns them something while they work.
+**What the client gets, and why the first answer was worthless.** Opting in
+waives the platform fee outright: they approve **2.5% less**, in the number
+their wallet shows them.
+
+It did not start there. The first design charged the fee and let the yield
+refund it, which reads as a benefit and is not one. A job deploys roughly 40% of
+its budget, so covering a 2.5% fee needs `rate × days ≥ 22.8` — 228 days at 10%
+APY, and **the budget cancels out of the inequality entirely**, so a larger job
+does not help. No freelance job is long enough. The client recovered a rounding
+error, and a screen telling them otherwise was simply wrong.
+
+So the platform trades a certain fee for an uncertain return: **60% of what the
+escrow earns goes to the freelancer, 40% to us.** That second number is the
+whole business case, and the freelancer's share is the recruiting one — a
+reason to take this job over an identical one.
 
 If the job goes to arbitration, **all of it goes to the platform** — somebody
 has to pay for the arbiters, and it should not be either of the two people
 arguing.
 
-The client turns it on per job, because it is their capital at risk and the
-contract enforces that. A freelancer sees the result as a **🌱 Earning** tag on
-the job card, shown only while capital is genuinely deployed.
+**The answer has to be given before the escrow exists**, because it decides
+whether a fee is charged, and by the next transaction the money has moved. It
+could not be an argument to `createEscrow`: an eleventh ABI-decoded parameter
+measured **1,143 bytes** against 118 of headroom. So the client sets an intent
+flag on the controller and the escrow consumes it as it creates the job — one
+intent, spent by one job. What paid for even that was the cancellation tier, a
+charge on a client's own cancellation count that had nobody on the other end of
+it. The applicant fee, which does, is untouched.
+
+A freelancer sees the result as a **🌱 Earning** tag on the job card. It reads
+the opt-in rather than the deployed balance, because an open job deploys nothing
+until someone starts work — and the board is exactly where a freelancer is
+deciding whether to apply.
 
 [`ProductiveEscrow.t.sol`](app/contracts/solidity/test/ProductiveEscrow.t.sol) ·
 [`YieldDistribution.t.sol`](app/contracts/solidity/test/YieldDistribution.t.sol) ·
+[`FeeWaiver.t.sol`](app/contracts/solidity/test/FeeWaiver.t.sol) ·
 [`FEEDBACK.md`](FEEDBACK.md)
 
 ### 3. A front door with no wallet
@@ -320,19 +339,19 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**604 tests.** The contract suite went from zero.
+**606 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
 | Contract | **165** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
-| Frontend | **260** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job |
+| Frontend | **262** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job |
 | Backend | **54** | Route handlers, which browsers may call them, and what they do when the database is unreachable |
 | Daemon | **77** | Who the agent tells, who it hires, which jobs it picks up, and whether it pays |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 ```bash
 (cd app/contracts/solidity && forge test)   # 165
-(cd app && npm test)                        # 260
+(cd app && npm test)                        # 262
 (cd backend && npx vitest run)              # 54
 (cd agent/daemon && npm test)               # 77
 (cd app && npm run e2e)                     # 48 — needs all three services up

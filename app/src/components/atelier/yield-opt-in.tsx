@@ -132,8 +132,23 @@ export function YieldOptIn({
             <p className="font-medium">Put this escrow to work.</p>
             <p className="text-xs mt-1.5 leading-relaxed">
               The part of the budget no milestone can claim yet is invested while
-              the job runs. What it earns covers your platform fee first; the
-              freelancer takes the larger share of anything beyond that.
+              the job runs, and the freelancer takes the larger share of what it
+              earns.
+            </p>
+            {/*
+              Said plainly, because the posting screen makes a different and
+              better offer. Waiving the fee happens in the creating transaction;
+              this job already paid one, and nothing here gets it back — 2.5%
+              refunded out of yield needs a 228-day job at 10% APY.
+
+              So this is a gift to whoever takes the job, and a reason for a
+              better freelancer to take it. That is worth doing and worth being
+              honest about, but it is not a saving.
+            */}
+            <p className="text-xs mt-1.5 leading-relaxed">
+              This job has already paid its platform fee, so switching this on
+              now costs you nothing and saves you nothing — it gives the
+              freelancer a share, and the job a 🌱 tag on the board.
             </p>
             <p className="text-xs mt-1.5 leading-relaxed">
               Answered once. You cannot turn it off afterwards, which is what

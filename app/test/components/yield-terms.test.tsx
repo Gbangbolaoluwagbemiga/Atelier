@@ -253,6 +253,28 @@ describe("a job that never answered the question", () => {
     expect((await screen.findAllByText(/cannot turn it off afterwards/i)).length).toBeGreaterThan(0);
   });
 
+  /**
+   * The posting screen waives the fee; this cannot, because the job already
+   * paid one. Promising a refund here would be the same worthless offer the
+   * whole feature was rebuilt to stop making — 2.5% out of yield needs a
+   * 228-day job at 10% APY.
+   */
+  it("does not pretend switching it on now saves the client anything", async () => {
+    getYieldStatus.mockResolvedValue(UNANSWERED);
+    offer();
+    await openTooltip(await screen.findByTestId("yield-offer"));
+    expect(
+      (await screen.findAllByText(/costs you nothing and saves you nothing/i)).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("says what it does buy: a share for the freelancer", async () => {
+    getYieldStatus.mockResolvedValue(UNANSWERED);
+    offer();
+    await openTooltip(await screen.findByTestId("yield-offer"));
+    expect((await screen.findAllByText(/gives the\s+freelancer a share/i)).length).toBeGreaterThan(0);
+  });
+
   /* Answered "no" is answered. Offering again would be re-opening a settled
      question, which is the thing the contract exists to prevent. */
   it("does not offer again to a job that said no", async () => {
