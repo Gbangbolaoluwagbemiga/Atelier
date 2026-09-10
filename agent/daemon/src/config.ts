@@ -55,6 +55,17 @@ export const config = {
   logRangeLimit: BigInt(process.env.LOG_RANGE_LIMIT?.trim() || "9000"),
   graphUrl: process.env.GRAPH_URL?.trim() || "",
 
+  /**
+   * The Atelier API, which owns the notification store.
+   *
+   * The daemon needs it to tell web users what the agent did on their behalf —
+   * Telegram users already got told, web users got nothing, because
+   * notifications were only ever written from the acting party's browser and
+   * the agent does not have one.
+   */
+  apiUrl: (process.env.API_URL?.trim() || "").replace(/\/$/, ""),
+  apiSecret: process.env.API_SECRET?.trim() || "",
+
   // Circle Programmable Wallets (MPC) — the Atelier Agent Wallet treasury.
   circleApiKey: process.env.CIRCLE_API_KEY?.trim() || "",
   circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET?.trim() || "",

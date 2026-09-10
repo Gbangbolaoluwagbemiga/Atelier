@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { createPublicClient, http as viemHttp, formatEther, verifyMessage } from "viem";
 import { config, arcTestnet, rpcUrl } from "./config.js";
 import { AgentClient, type AgentEvent } from "./agent/AgentClient.js";
+import { notifyWeb } from "./notify/web.js";
 import { createAtelierGateway } from "./circle/gateway.js";
 import { listWhitelistedTokens } from "./web3/tokens.js";
 import { adoptDelegatedJobs } from "./agent/adoptDelegated.js";
@@ -77,6 +78,19 @@ function getGateway() {
 
 const agent = new AgentClient((event) => {
   broadcast(event);
+
+  /*
+   * The same news, to the same people, in the web app.
+   *
+   * Everything below reaches a human on Telegram. Someone using the web app was
+   * told nothing at all when the agent acted, because notifications are written
+   * from the acting party's browser and the agent has no browser. That made
+   * Autopilot the one mode where you had to watch the job.
+   *
+   * Fire-and-forget on purpose: the hire has already happened on-chain, and an
+   * undelivered courtesy must never stall the loop that pays people.
+   */
+  void notifyWeb(event);
 
   // Reach the human this actually happened to. The web page can show all of
   // this, but only if someone is looking at it — a freelancer waiting to hear
