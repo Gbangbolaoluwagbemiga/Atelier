@@ -40,7 +40,7 @@ import { AlertCircle } from "lucide-react";
 export default function JobsPage() {
   const { wallet } = useWeb3();
   /* Which jobs the agent is running, for the Autopilot badge on each card. */
-  const { managed: managedEscrows } = useManagedEscrows();
+  const { managed: managedEscrows, refresh: refreshManaged } = useManagedEscrows();
   const { writeContractAsync } = useWriteContract();
   const { toast } = useToast();
   const { addNotification } = useNotifications();
@@ -219,6 +219,10 @@ export default function JobsPage() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
+      /* Including the Autopilot badges, which this button used to leave
+         untouched — so pressing it after handing a job over spun and changed
+         nothing. */
+      refreshManaged();
       await Promise.all([fetchOpenJobs(), countOngoingProjects()]);
       // Check application status after refreshing jobs
       if (wallet.address && jobs.length > 0) {
