@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 /**
@@ -34,6 +34,24 @@ beforeEach(() => {
   getYieldStatus.mockReset();
   getYieldStatus.mockResolvedValue({ ...EARNING });
 });
+
+/**
+ * Open the chip's tooltip.
+ *
+ * Radix renders the content twice — once visibly, once in a visually-hidden
+ * node for screen readers — so every assertion on tooltip text uses the
+ * `All` queries. Matching one would be matching an implementation detail of
+ * which copy came first.
+ *
+ * `userEvent.hover` is not enough: Radix's trigger opens on `pointermove` with
+ * a non-touch pointerType, which hover does not dispatch. Focus is sent too, so
+ * this covers the keyboard path a screen-reader user takes as well as the mouse
+ * one — and if either ever stops working, these go red.
+ */
+async function openTooltip(chip: HTMLElement) {
+  fireEvent.pointerMove(chip, { pointerType: "mouse" });
+  fireEvent.focus(chip);
+}
 
 describe("choosing, while the job is being posted", () => {
   function choice(props: Record<string, unknown> = {}) {
@@ -87,33 +105,60 @@ describe("choosing, while the job is being posted", () => {
   });
 });
 
+/**
+ * The chip is four words; the detail lives on hover.
+ *
+ * It used to be a paragraph in a bordered box halfway down the card, restating
+ * the mechanism to a client who had already agreed to it when they posted the
+ * job — on every card, pushing what actually needs attention further down. A
+ * standing fact is not news, and news is what earns vertical space.
+ */
 describe("stating it, once the job exists", () => {
   const panel = (props: Record<string, unknown> = {}) =>
     render(<YieldOptIn escrowId={5} status="active" {...props} />);
 
-  it("says what the escrow does and who gets what", async () => {
+  it("is a short chip, not a paragraph", async () => {
     panel();
-    expect(await screen.findByTestId("yield-status")).toHaveTextContent(/earns while the job runs/i);
-    expect(screen.getByText(/60% of anything beyond that/i)).toBeInTheDocument();
+    const chip = await screen.findByTestId("yield-status");
+    expect(chip).toHaveTextContent(/^Escrow yield$/);
   });
 
-  /* The whole point of the change: there is nothing here to click. */
-  it("offers no control to change it", async () => {
+  it("is reachable to a screen reader without hovering anything", async () => {
+    panel();
+    expect(await screen.findByLabelText(/earns while the job runs/i)).toBeInTheDocument();
+  });
+
+  it("keeps the detail out of the way until someone asks for it", async () => {
     panel();
     await screen.findByTestId("yield-status");
-    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByText(/60% of anything beyond that/i)).not.toBeInTheDocument();
   });
 
-  it("says the term was fixed when the job was posted", async () => {
+  it("explains the split on hover", async () => {
     panel();
-    expect(await screen.findByText(/fixed since/i)).toBeInTheDocument();
+    await openTooltip(await screen.findByTestId("yield-status"));
+    expect((await screen.findAllByText(/60% of anything beyond that/i)).length).toBeGreaterThan(0);
+  });
+
+  it("says on hover that the term was fixed when the job was posted", async () => {
+    panel();
+    await openTooltip(await screen.findByTestId("yield-status"));
+    expect((await screen.findAllByText(/fixed since/i)).length).toBeGreaterThan(0);
   });
 
   it("shows how much is out earning, in dollars", async () => {
     getYieldStatus.mockResolvedValue({ ...EARNING, deployed: 4_250_000n });
     panel();
-    expect(await screen.findByTestId("yield-deployed")).toHaveTextContent("$4.25");
+    await openTooltip(await screen.findByTestId("yield-status"));
+    expect((await screen.findAllByTestId("yield-deployed"))[0]).toHaveTextContent("$4.25");
+  });
+
+  /* The whole point of the change upstream: there is nothing here to click. */
+  it("offers no control to change it", async () => {
+    panel();
+    await screen.findByTestId("yield-status");
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   /* A job that behaves like every other job has nothing to tell anyone. */

@@ -255,6 +255,9 @@ export function EscrowCard({
               >
                 {displayStatus}
               </Badge>
+              {/* A standing fact about the job, so it belongs with the status
+                  rather than in a box of its own halfway down the card. */}
+              <YieldOptIn escrowId={Number(escrow.id)} status={escrow.status} />
               {/* Message Freelancer — visible to client only once a real freelancer
                   is assigned. `escrow.beneficiary` is truthy even for the zero
                   address on genuinely unassigned open jobs, so that alone isn't
@@ -434,11 +437,6 @@ export function EscrowCard({
                       milestones={escrow.milestones}
                     />
                   )}
-
-                {/* What this escrow does while it waits — a statement of a term
-                    agreed at posting, not a control. Renders nothing on a job
-                    that does not earn. */}
-                <YieldOptIn escrowId={Number(escrow.id)} status={escrow.status} />
 
                 {/* After an arbiter rules, the rest of the job is the client's
                     call: take back what nobody started, or hand it on. Renders

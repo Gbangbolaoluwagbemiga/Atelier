@@ -121,7 +121,7 @@ export function JobCard({
               {earning && (
                 <Badge
                   variant="outline"
-                  className="gap-1 border-[var(--actor-border)] text-[11px] px-2 py-0"
+                  className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[11px] px-2 py-0"
                   title="This job's escrow is invested while you work. You get the larger share of what it earns, on top of the budget."
                   data-testid="earning-badge"
                 >
