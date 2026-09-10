@@ -25,6 +25,7 @@ import { encodeJobId } from "@/lib/id-codec";
 import { AutopilotControl } from "@/components/atelier/autopilot-control";
 import { JobDecisionLog } from "@/components/atelier/job-decision-log";
 import { PostDisputeChoice } from "@/components/atelier/post-dispute-choice";
+import { YieldOptIn } from "@/components/atelier/yield-opt-in";
 
 
 interface EscrowCardProps {
@@ -433,6 +434,16 @@ export function EscrowCard({
                       milestones={escrow.milestones}
                     />
                   )}
+
+                {/* Whether this escrow earns while it waits. Renders nothing
+                    unless a controller and a venue both exist, so a client
+                    never sees a switch that cannot do anything. */}
+                <YieldOptIn
+                  escrowId={Number(escrow.id)}
+                  isClient={escrow.isClient === true}
+                  status={escrow.status}
+                  onDone={() => window.dispatchEvent(new CustomEvent("escrowUpdated"))}
+                />
 
                 {/* After an arbiter rules, the rest of the job is the client's
                     call: take back what nobody started, or hand it on. Renders

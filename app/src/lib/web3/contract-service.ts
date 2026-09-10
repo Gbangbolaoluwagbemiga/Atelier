@@ -16,6 +16,26 @@ export type WagmiWrite = (args: any) => Promise<`0x${string}`>;
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
+/**
+ * The slice of AtelierYield the web app touches.
+ *
+ * Hand-written rather than generated because the controller is deployed
+ * separately from the escrow proxy and is not in the synced ABI — and because
+ * the app should read only what it displays.
+ */
+const YIELD_ABI = [
+  { type: "function", name: "yieldAdapter", stateMutability: "view",
+    inputs: [{ type: "address" }], outputs: [{ type: "address" }] },
+  { type: "function", name: "yieldOptIn", stateMutability: "view",
+    inputs: [{ type: "uint256" }], outputs: [{ type: "bool" }] },
+  { type: "function", name: "escrowDeployed", stateMutability: "view",
+    inputs: [{ type: "uint256" }], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "freelancerShareBP", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "setYieldOptIn", stateMutability: "nonpayable",
+    inputs: [{ type: "uint256" }, { type: "bool" }], outputs: [] },
+] as const;
+
 export class ContractService {
   private client;
   private contract: any; // typed loosely to avoid viem generic constraints
@@ -536,6 +556,81 @@ export class ContractService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Everything the yield panel needs, in one place.
+   *
+   * `available` is the honest gate: the escrow names a controller, that
+   * controller has an adapter for this escrow's token, and so opting in can
+   * actually lead somewhere. Without it the UI would offer a switch that
+   * silently does nothing — which is how the Earning badge came to be
+   * invisible on every job for a fortnight without anyone noticing.
+   */
+  async getYieldStatus(escrowId: number): Promise<{
+    available: boolean;
+    optedIn: boolean;
+    deployed: bigint;
+    freelancerShareBP: number;
+  }> {
+    const off = { available: false, optedIn: false, deployed: 0n, freelancerShareBP: 0 };
+    try {
+      const controller = (await this.contract.read.yieldController([])) as Address;
+      if (!controller || controller === ZERO_ADDRESS) return off;
+
+      const token = (await this.contract.read.getEscrow([BigInt(escrowId)])) as any;
+      const adapter = (await this.client.readContract({
+        address: controller,
+        abi: YIELD_ABI,
+        functionName: "yieldAdapter",
+        args: [token.token as Address],
+      })) as Address;
+      if (!adapter || adapter === ZERO_ADDRESS) return off;
+
+      const [optedIn, deployed, share] = await Promise.all([
+        this.client.readContract({
+          address: controller, abi: YIELD_ABI,
+          functionName: "yieldOptIn", args: [BigInt(escrowId)],
+        }) as Promise<boolean>,
+        this.client.readContract({
+          address: controller, abi: YIELD_ABI,
+          functionName: "escrowDeployed", args: [BigInt(escrowId)],
+        }) as Promise<bigint>,
+        // Older controllers predate the split and have no such function; the
+        // switch still works there, so a missing share is not a reason to hide it.
+        (this.client.readContract({
+          address: controller, abi: YIELD_ABI,
+          functionName: "freelancerShareBP", args: [],
+        }) as Promise<bigint>).catch(() => 0n),
+      ]);
+
+      return {
+        available: true,
+        optedIn,
+        deployed,
+        freelancerShareBP: Number(share),
+      };
+    } catch {
+      return off;
+    }
+  }
+
+  /** The depositor's call and only theirs — it is their capital at risk. */
+  async setYieldOptIn(
+    escrowId: number,
+    optedIn: boolean,
+    write: WagmiWrite,
+  ): Promise<`0x${string}`> {
+    const controller = (await this.contract.read.yieldController([])) as Address;
+    if (!controller || controller === ZERO_ADDRESS) {
+      throw new Error("This escrow has no yield controller set.");
+    }
+    return write({
+      address: controller,
+      abi: YIELD_ABI,
+      functionName: "setYieldOptIn",
+      args: [BigInt(escrowId), optedIn],
+    });
   }
 
   /** Rating a specific rater gave in an escrow. */

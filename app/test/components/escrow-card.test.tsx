@@ -37,6 +37,8 @@ vi.mock("@/components/atelier/job-decision-log", () => ({ JobDecisionLog: () => 
 // Same reason as the two above: it opens a wagmi write, and this suite renders
 // the card without a WagmiProvider because it is testing prop plumbing, not chain calls.
 vi.mock("@/components/atelier/post-dispute-choice", () => ({ PostDisputeChoice: () => null }));
+// Reaches for wagmi, which has no provider here. Covered in yield-opt-in.test.tsx.
+vi.mock("@/components/atelier/yield-opt-in", () => ({ YieldOptIn: () => null }));
 vi.mock("@/components/chat/chat-dialog", () => ({
   ChatDialog: ({ otherAddress }: { otherAddress: string }) => (
     <div data-testid="chat-dialog" data-other={otherAddress} />
