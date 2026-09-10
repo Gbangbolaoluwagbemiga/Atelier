@@ -42,7 +42,18 @@ function buildOriginMatcher(): cors.CorsOptions["origin"] {
     if (!origin) return callback(null, true);
     if (exactSet.has(origin)) return callback(null, true);
     if (pattern && pattern.test(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin '${origin}' not allowed`));
+    /*
+     * Refuse by saying no, not by throwing.
+     *
+     * Handing cors an Error makes Express answer the preflight with a 500,
+     * which reads as "the API is broken" — and that is how a missing
+     * FRONTEND_URL entry presented in production: the deployed web app could
+     * not reach the API at all, and the only clue was a 500 on an OPTIONS
+     * request. A rejected origin is a configuration answer, not a server
+     * fault, and the difference decides whether the next person looks at the
+     * env vars or at the server logs.
+     */
+    callback(null, false);
   };
 }
 
@@ -52,6 +63,24 @@ app.use(
     credentials: true,
   }),
 );
+
+/*
+ * Say WHICH origin was refused, and where to fix it.
+ *
+ * Without this a blocked browser sees only the absence of a header, which is
+ * indistinguishable from the API being down. cors() has already decided by the
+ * time this runs; all this does is make the refusal legible to whoever is
+ * looking at the network tab.
+ */
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin || res.getHeader("Access-Control-Allow-Origin")) return next();
+  res.status(403).json({
+    error: "Origin not allowed",
+    origin,
+    hint: "Add this origin to FRONTEND_URL (comma-separated) or match it with FRONTEND_URL_PATTERN.",
+  });
+});
 app.use(express.json({ limit: "10mb" }));
 
 // General rate limiter — 60 requests per minute per IP

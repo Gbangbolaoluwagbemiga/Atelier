@@ -4,7 +4,7 @@
 
 **Trustless milestone-based escrow for freelance work on Arc EVM**
 
-[![Live Demo](https://img.shields.io/badge/Live%20App-secureflow--arc.vercel.app-7D00FF?style=flat-square&logo=vercel&logoColor=white)](https://secureflow-arc.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live%20App-atelier--job.vercel.app-7D00FF?style=flat-square&logo=vercel&logoColor=white)](https://atelier-job.vercel.app)
 [![Arc EVM](https://img.shields.io/badge/Arc-EVM%20Testnet-7D00FF?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636?style=flat-square&logo=solidity)](https://soliditylang.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square)](LICENSE)
@@ -26,7 +26,7 @@ Atelier is a decentralized freelancer marketplace built on Arc EVM. Clients depo
 
 | Resource | Link |
 |---|---|
-| Frontend | [secureflow-arc.vercel.app](https://secureflow-arc.vercel.app) |
+| Frontend | [atelier-job.vercel.app](https://atelier-job.vercel.app) |
 | Contract | [`0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59`](https://testnet.arcscan.app/address/0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59) |
 | Subgraph | [Goldsky — secureflow/v1](https://api.goldsky.com/api/public/project_cmpyopkeb3cxh01v51s4wg5nc/subgraphs/secureflow/v2/gn) |
 | Explorer | [testnet.arcscan.app](https://testnet.arcscan.app) |
@@ -247,7 +247,7 @@ SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_PROJECT_ID=
 RELAYER_PRIVATE_KEY=             # EIP-2771 relayer wallet
 CONTRACT_ADDRESS=0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59
-FRONTEND_URL=https://secureflow-arc.vercel.app
+FRONTEND_URL=https://atelier-job.vercel.app
 ```
 
 ### Add Arc Testnet to MetaMask
