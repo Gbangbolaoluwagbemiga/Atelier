@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-566%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-581%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -320,19 +320,19 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**566 tests.** The contract suite went from zero.
+**581 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
 | Contract | **154** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
-| Frontend | **236** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield switch |
+| Frontend | **251** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield switch |
 | Backend | **51** | Route handlers, which browsers may call them, and what they do when the database is unreachable |
 | Daemon | **77** | Who the agent tells, who it hires, which jobs it picks up, and whether it pays |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 ```bash
 (cd app/contracts/solidity && forge test)   # 154
-(cd app && npm test)                        # 236
+(cd app && npm test)                        # 251
 (cd backend && npx vitest run)              # 51
 (cd agent/daemon && npm test)               # 77
 (cd app && npm run e2e)                     # 48 — needs all three services up

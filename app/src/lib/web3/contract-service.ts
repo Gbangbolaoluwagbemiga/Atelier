@@ -28,6 +28,8 @@ const YIELD_ABI = [
     inputs: [{ type: "address" }], outputs: [{ type: "address" }] },
   { type: "function", name: "yieldOptIn", stateMutability: "view",
     inputs: [{ type: "uint256" }], outputs: [{ type: "bool" }] },
+  { type: "function", name: "yieldChoiceMade", stateMutability: "view",
+    inputs: [{ type: "uint256" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "escrowDeployed", stateMutability: "view",
     inputs: [{ type: "uint256" }], outputs: [{ type: "uint256" }] },
   { type: "function", name: "freelancerShareBP", stateMutability: "view",
@@ -560,10 +562,18 @@ export class ContractService {
   async getYieldStatus(escrowId: number): Promise<{
     available: boolean;
     optedIn: boolean;
+    /** Whether the question has been answered at all. */
+    choiceMade: boolean;
     deployed: bigint;
     freelancerShareBP: number;
   }> {
-    const off = { available: false, optedIn: false, deployed: 0n, freelancerShareBP: 0 };
+    const off = {
+      available: false,
+      optedIn: false,
+      choiceMade: false,
+      deployed: 0n,
+      freelancerShareBP: 0,
+    };
     try {
       const controller = (await this.contract.read.yieldController([])) as Address;
       if (!controller || controller === ZERO_ADDRESS) return off;
@@ -578,11 +588,18 @@ export class ContractService {
         args: [esc.token as Address],
       })) as Address;
 
-      const [optedIn, deployed, share] = await Promise.all([
+      const [optedIn, choiceMade, deployed, share] = await Promise.all([
         this.client.readContract({
           address: controller, abi: YIELD_ABI,
           functionName: "yieldOptIn", args: [BigInt(escrowId)],
         }) as Promise<boolean>,
+        /* A controller from before the choice was made final has no such
+           mapping. Treating that as "answered" is the safe read: it hides an
+           offer rather than showing one that would revert. */
+        (this.client.readContract({
+          address: controller, abi: YIELD_ABI,
+          functionName: "yieldChoiceMade", args: [BigInt(escrowId)],
+        }) as Promise<boolean>).catch(() => true),
         this.client.readContract({
           address: controller, abi: YIELD_ABI,
           functionName: "escrowDeployed", args: [BigInt(escrowId)],
@@ -599,6 +616,7 @@ export class ContractService {
       return {
         available: !!adapter && adapter !== ZERO_ADDRESS,
         optedIn,
+        choiceMade,
         deployed,
         freelancerShareBP: Number(share),
       };

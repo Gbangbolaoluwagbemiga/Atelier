@@ -17,21 +17,38 @@ import userEvent from "@testing-library/user-event";
  */
 
 const getYieldStatus = vi.fn();
+const setYieldOptIn = vi.fn().mockResolvedValue("0xhash");
 
+/* The chip became a control again for one case — an unanswered question — so it
+   reaches for wagmi and the toast hook. */
+vi.mock("wagmi", () => ({
+  useWriteContract: () => ({ writeContractAsync: vi.fn() }),
+}));
+vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/contexts/web3-context", () => ({
   useWeb3: () => ({ wallet: { address: "0xC11E27", isConnected: true } }),
 }));
 vi.mock("@/lib/web3/contract-service", () => ({
-  ContractService: class { getYieldStatus = getYieldStatus; },
+  ContractService: class {
+    getYieldStatus = getYieldStatus;
+    setYieldOptIn = setYieldOptIn;
+  },
 }));
 
 const { YieldOptIn } = await import("@/components/atelier/yield-opt-in");
 const { YieldChoice } = await import("@/components/create/yield-choice");
 
-const EARNING = { available: true, optedIn: true, deployed: 0n, freelancerShareBP: 6000 };
+const EARNING = {
+  available: true,
+  optedIn: true,
+  choiceMade: true,
+  deployed: 0n,
+  freelancerShareBP: 6000,
+};
 
 beforeEach(() => {
   getYieldStatus.mockReset();
+  setYieldOptIn.mockClear();
   getYieldStatus.mockResolvedValue({ ...EARNING });
 });
 
@@ -173,5 +190,76 @@ describe("stating it, once the job exists", () => {
     panel({ status: "completed" });
     await waitFor(() => expect(getYieldStatus).toHaveBeenCalled());
     expect(screen.queryByTestId("yield-status")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * A JOB WHOSE QUESTION WAS NEVER ANSWERED.
+ *
+ * Two ways to get one: posted before the question existed, or opted in on a
+ * yield controller that was later replaced — the controller is not upgradeable,
+ * so its book does not carry across.
+ *
+ * The contract still allows an answer while the freelancer has not started, and
+ * the UI should not be stricter than the contract. Offering an unanswered
+ * question is not re-opening a settled one: the chain refuses a second answer
+ * on its own, so nothing here can take a term back from a freelancer.
+ */
+describe("a job that never answered the question", () => {
+  const UNANSWERED = { ...EARNING, optedIn: false, choiceMade: false };
+  const offer = (props: Record<string, unknown> = {}) =>
+    render(<YieldOptIn escrowId={5} status="pending" isClient {...props} />);
+
+  it("offers the choice to the client", async () => {
+    getYieldStatus.mockResolvedValue(UNANSWERED);
+    offer();
+    expect(await screen.findByTestId("yield-offer")).toHaveTextContent(/earn while it waits/i);
+  });
+
+  it("switches it on, once", async () => {
+    getYieldStatus.mockResolvedValue(UNANSWERED);
+    offer();
+    await userEvent.click(await screen.findByTestId("yield-offer"));
+    await waitFor(() => expect(setYieldOptIn).toHaveBeenCalled());
+    expect(setYieldOptIn.mock.calls[0].slice(0, 2)).toEqual([5, true]);
+  });
+
+  it("warns that the answer is final before taking it", async () => {
+    getYieldStatus.mockResolvedValue(UNANSWERED);
+    offer();
+    await openTooltip(await screen.findByTestId("yield-offer"));
+    expect((await screen.findAllByText(/cannot turn it off afterwards/i)).length).toBeGreaterThan(0);
+  });
+
+  /* Answered "no" is answered. Offering again would be re-opening a settled
+     question, which is the thing the contract exists to prevent. */
+  it("does not offer again to a job that said no", async () => {
+    getYieldStatus.mockResolvedValue({ ...EARNING, optedIn: false, choiceMade: true });
+    offer();
+    await waitFor(() => expect(getYieldStatus).toHaveBeenCalled());
+    expect(screen.queryByTestId("yield-offer")).not.toBeInTheDocument();
+  });
+
+  it("does not offer it to the freelancer", async () => {
+    getYieldStatus.mockResolvedValue(UNANSWERED);
+    offer({ isClient: false });
+    await waitFor(() => expect(getYieldStatus).toHaveBeenCalled());
+    expect(screen.queryByTestId("yield-offer")).not.toBeInTheDocument();
+  });
+
+  /* No venue means opting in could not lead anywhere, so it would be a button
+     that reverts. */
+  it("does not offer it when there is nowhere to invest", async () => {
+    getYieldStatus.mockResolvedValue({ ...UNANSWERED, available: false });
+    offer();
+    await waitFor(() => expect(getYieldStatus).toHaveBeenCalled());
+    expect(screen.queryByTestId("yield-offer")).not.toBeInTheDocument();
+  });
+
+  it("does not offer it on a settled job", async () => {
+    getYieldStatus.mockResolvedValue(UNANSWERED);
+    offer({ status: "completed" });
+    await waitFor(() => expect(getYieldStatus).toHaveBeenCalled());
+    expect(screen.queryByTestId("yield-offer")).not.toBeInTheDocument();
   });
 });

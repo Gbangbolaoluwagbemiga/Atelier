@@ -28,6 +28,7 @@ import { PostDisputeChoice } from "@/components/atelier/post-dispute-choice";
 import { YieldOptIn } from "@/components/atelier/yield-opt-in";
 import { DeclinedChoice } from "@/components/atelier/declined-choice";
 import { WaitingOnFreelancer } from "@/components/atelier/waiting-on-freelancer";
+import { AssigneeChip } from "@/components/atelier/assignee-chip";
 
 
 interface EscrowCardProps {
@@ -257,9 +258,19 @@ export function EscrowCard({
               >
                 {displayStatus}
               </Badge>
+              {/* Who is on it. Nothing at all on an open job. */}
+              <AssigneeChip
+                address={escrow.beneficiary}
+                label={escrow.isClient ? "Freelancer" : "Client"}
+              />
               {/* A standing fact about the job, so it belongs with the status
                   rather than in a box of its own halfway down the card. */}
-              <YieldOptIn escrowId={Number(escrow.id)} status={escrow.status} />
+              <YieldOptIn
+                escrowId={Number(escrow.id)}
+                status={escrow.status}
+                isClient={escrow.isClient === true}
+                onDone={() => window.dispatchEvent(new CustomEvent("escrowUpdated"))}
+              />
               {/* Message Freelancer — visible to client only once a real freelancer
                   is assigned. `escrow.beneficiary` is truthy even for the zero
                   address on genuinely unassigned open jobs, so that alone isn't

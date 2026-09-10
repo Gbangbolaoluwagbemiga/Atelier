@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { Sprout } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Sprout, Loader2 } from "lucide-react";
+import { useWriteContract } from "wagmi";
+import { useToast } from "@/hooks/use-toast";
 import {
   Tooltip,
   TooltipContent,
@@ -30,10 +32,26 @@ import { CONTRACTS } from "@/lib/web3/config";
  *
  * It renders nothing on a job that does not earn — an "off" state would be
  * chrome describing the absence of a feature.
+ *
+ * THE ONE CASE WHERE IT IS STILL A CONTROL
+ *
+ * A job whose yield question has never been answered, and whose freelancer has
+ * not started, can still be answered — the contract says so, and the UI should
+ * not be stricter than the contract. That happens to jobs posted before the
+ * question existed, and to jobs whose opt-in did not survive a controller being
+ * replaced.
+ *
+ * Offering an unanswered question is not the same as re-opening a settled one.
+ * The thing that was wrong before was a switch that could be flipped back after
+ * a freelancer took the job on the strength of it; the contract now refuses
+ * that outright, so anything the UI offers here is an offer the chain will
+ * honour or reject on its own terms.
  */
 export function YieldOptIn({
   escrowId,
   status,
+  isClient,
+  onDone,
 }: {
   escrowId: number;
   /* A settled job has nothing left to say about what its escrow is doing. */
@@ -41,13 +59,18 @@ export function YieldOptIn({
   isClient?: boolean;
   onDone?: () => void;
 }) {
+  const { writeContractAsync } = useWriteContract();
+  const { toast } = useToast();
   const [state, setState] = useState<{
+    available: boolean;
     optedIn: boolean;
+    choiceMade: boolean;
     deployed: bigint;
     freelancerShareBP: number;
   } | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let live = true;
     new ContractService(CONTRACTS.ATELIER_ESCROW)
       .getYieldStatus(escrowId)
@@ -56,8 +79,74 @@ export function YieldOptIn({
     return () => { live = false; };
   }, [escrowId]);
 
+  useEffect(() => load(), [load]);
+
+  const settled = status === "completed" || status === "cancelled";
+
+  /* Unanswered, still answerable, and the client's to answer. */
+  if (state && !state.optedIn && !state.choiceMade && state.available && isClient && !settled) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              disabled={busy}
+              data-testid="yield-offer"
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await new ContractService(CONTRACTS.ATELIER_ESCROW).setYieldOptIn(
+                    escrowId,
+                    true,
+                    writeContractAsync,
+                  );
+                  toast({
+                    title: "This escrow will earn while the job runs",
+                    description:
+                      "Only the part no milestone can claim yet, and the decision is final from here.",
+                  });
+                  load();
+                  onDone?.();
+                } catch (err: unknown) {
+                  toast({
+                    title: "Could not switch it on",
+                    description: err instanceof Error ? err.message : String(err),
+                    variant: "destructive",
+                  });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-emerald-500/40 px-2.5 py-0.5 text-xs font-medium text-emerald-500/80 hover:bg-emerald-500/10 disabled:opacity-50"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Sprout className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              Earn while it waits?
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <p className="font-medium">Put this escrow to work.</p>
+            <p className="text-xs mt-1.5 leading-relaxed">
+              The part of the budget no milestone can claim yet is invested while
+              the job runs. What it earns covers your platform fee first; the
+              freelancer takes the larger share of anything beyond that.
+            </p>
+            <p className="text-xs mt-1.5 leading-relaxed">
+              Answered once. You cannot turn it off afterwards, which is what
+              makes it a term a freelancer can rely on.
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
   if (!state?.optedIn) return null;
-  if (status === "completed" || status === "cancelled") return null;
+  if (settled) return null;
 
   const share = state.freelancerShareBP
     ? `${Math.round(state.freelancerShareBP / 100)}%`
