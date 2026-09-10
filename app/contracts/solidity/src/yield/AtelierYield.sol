@@ -206,18 +206,31 @@ contract AtelierYield is IAtelierYield, Ownable2Step, ReentrancyGuard {
      * anybody about it, and the tag on a job card means the same thing on the
      * day the work is delivered as it did on the day it was posted.
      *
-     * The window is "before a freelancer is accepted" rather than "in the same
-     * block as creation" so that a failed first attempt can be retried, and so
-     * a client who thought about it overnight can still say yes. Nobody has
-     * been promised anything yet at that point.
+     * THE WINDOW IS "BEFORE WORK STARTS", NOT "BEFORE A BENEFICIARY EXISTS"
+     *
+     * The first version closed the window the moment an escrow had a
+     * beneficiary, which silently excluded an entire kind of job: a directly
+     * assigned escrow names its freelancer in the creating transaction, so its
+     * beneficiary is never zero and its client could never answer the question
+     * at all. Only the open-job path was reachable, and only the open-job path
+     * had a test.
+     *
+     * `workStarted` is the honest line. It is the freelancer's own act — they
+     * call startWork — and it is the first moment anybody is relying on the
+     * terms. Before it, a client may still answer: a failed first attempt can
+     * be retried, someone who thought it over overnight can still say yes, and
+     * a client who adds the share after hiring is only ever making the job
+     * better for the person taking it. What they cannot do, at any point, is
+     * change an answer they already gave — that is the ChoiceAlreadyMade rule,
+     * and it is what stops the term being withdrawn.
      */
     function setYieldOptIn(uint256 escrowId, bool optedIn) external {
         IAtelierEscrows.Escrow memory esc = IAtelierEscrows(escrow).getEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
         if (yieldChoiceMade[escrowId]) revert ChoiceAlreadyMade();
 
-        // Someone hired, or work already begun, means terms somebody accepted.
-        if (esc.beneficiary != address(0) || esc.status != IAtelierEscrows.EscrowStatus.Pending) {
+        // Work under way means terms somebody is already relying on.
+        if (esc.workStarted || esc.status != IAtelierEscrows.EscrowStatus.Pending) {
             revert TooLateToChoose();
         }
 

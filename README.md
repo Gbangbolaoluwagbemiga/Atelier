@@ -10,7 +10,7 @@ cut of it, or decide who wins a dispute.
 
 [![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-477%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-480%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -320,18 +320,18 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**477 tests.** The contract suite went from zero.
+**480 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
-| Contract | **127** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
+| Contract | **130** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
 | Frontend | **204** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield switch |
 | Backend | **43** | Route handlers, and what they do when the database is unreachable |
 | Daemon | **55** | Who the agent tells, who it hires, which jobs it picks up |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 ```bash
-(cd app/contracts/solidity && forge test)   # 127
+(cd app/contracts/solidity && forge test)   # 130
 (cd app && npm test)                        # 204
 (cd backend && npx vitest run)              # 43
 (cd agent/daemon && npm test)               # 55
@@ -365,8 +365,8 @@ handler offering only the permitted calls proves nothing.
 | Network | Arc EVM Testnet · chain `5042002` |
 | Proxy (**the contract**) | [`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`](https://testnet.arcscan.app/address/0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE) |
 | Implementation | `0x92ec06cf0fff41123564ed8f31d200dde8e5e060` · `3.5.0-reopen-after-dispute` |
-| Yield controller | [`0xA07f578857c52674493953F7CAF119e9D29e36B7`](https://testnet.arcscan.app/address/0xA07f578857c52674493953F7CAF119e9D29e36B7) |
-| Testnet venue | [`0xf24b9C761210DE1240e45870B249278A21116F92`](https://testnet.arcscan.app/address/0xf24b9C761210DE1240e45870B249278A21116F92) — `SponsoredVault`, which earns nothing and says so |
+| Yield controller | [`0x3FAE60Cf9edd0d4B9395FDB7426E1F9De272a770`](https://testnet.arcscan.app/address/0x3FAE60Cf9edd0d4B9395FDB7426E1F9De272a770) |
+| Testnet venue | [`0x8Ec5FBF65aE03a6AafcA7EF47C0E46B31C6030E1`](https://testnet.arcscan.app/address/0x8Ec5FBF65aE03a6AafcA7EF47C0E46B31C6030E1) — `SponsoredVault`, which earns nothing and says so |
 | USDC | `0x3600000000000000000000000000000000000000` |
 
 ### Live services
@@ -484,7 +484,7 @@ what makes the loop fast rather than what makes it work.
 ## Roadmap
 
 - [x] Deploy the subgraph to Subgraph Studio — live at `atelier/v0.0.3`, indexing Arc
-- [x] Deploy the yield controller carrying the 60/40 split, and attach a venue — live, escrow #5 is earning
+- [x] Deploy the yield controller carrying the 60/40 split, and attach a venue — live, escrow #6 is earning 4 USDC of a 10 USDC budget
 - [ ] Arc mainnet deployment, and attach the v4 adapter to a live pool there
 - [ ] Broaden the daemon's test suite past the hire loop and the notifier
 - [x] Notifications raised by the agent, not only by a browser that happens to be open

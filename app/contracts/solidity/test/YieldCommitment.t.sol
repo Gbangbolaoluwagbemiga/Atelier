@@ -94,15 +94,77 @@ contract YieldCommitmentTest is JobManagerBase {
      * who never answered the question cannot answer it now, because the answer
      * is part of what was accepted.
      */
-    function test_theWindowClosesTheMomentSomebodyIsHired() public {
+    function test_theWindowClosesWhenTheFreelancerStartsWork() public {
+        uint256 id = _createOpenJob();
+        _apply(id, worker);
+        vm.prank(client);
+        sf.acceptFreelancer(id, worker);
+        vm.prank(worker);
+        sf.startWork(id);
+
+        vm.prank(client);
+        vm.expectRevert(AtelierYield.TooLateToChoose.selector);
+        yield_.setYieldOptIn(id, true);
+    }
+
+    /**
+     * A DIRECTLY ASSIGNED JOB MUST BE ABLE TO ANSWER AT ALL.
+     *
+     * An escrow created with a named freelancer has a beneficiary from its
+     * first block. The original rule closed the window on "beneficiary is set",
+     * which meant this entire kind of job could never opt in — and no test
+     * caught it, because every yield fixture posted an open job.
+     */
+    function test_aDirectlyAssignedJobCanStillChoose() public {
+        uint256 id = _createAssignedJob();
+
+        vm.prank(client);
+        yield_.setYieldOptIn(id, true);
+
+        assertTrue(yield_.yieldOptIn(id), "a named-freelancer job could not opt in");
+    }
+
+    function test_aDirectlyAssignedJobLocksOnceWorkBegins() public {
+        uint256 id = _createAssignedJob();
+        vm.prank(worker);
+        sf.startWork(id);
+
+        vm.prank(client);
+        vm.expectRevert(AtelierYield.TooLateToChoose.selector);
+        yield_.setYieldOptIn(id, true);
+    }
+
+    /**
+     * Adding the share after hiring but before work begins is allowed, because
+     * it can only make the job better for the person who took it. Removing it
+     * is what must never happen, and ChoiceAlreadyMade is what prevents that.
+     */
+    function test_aClientMayStillSayYesAfterHiringButBeforeWorkStarts() public {
         uint256 id = _createOpenJob();
         _apply(id, worker);
         vm.prank(client);
         sf.acceptFreelancer(id, worker);
 
         vm.prank(client);
-        vm.expectRevert(AtelierYield.TooLateToChoose.selector);
         yield_.setYieldOptIn(id, true);
+        assertTrue(yield_.yieldOptIn(id));
+    }
+
+    /// A job created with a freelancer already named on it.
+    function _createAssignedJob() internal returns (uint256 id) {
+        address[] memory arbiters = new address[](1);
+        arbiters[0] = arbiter;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = M1;
+        amounts[1] = M2;
+        string[] memory descs = new string[](2);
+        descs[0] = "First milestone";
+        descs[1] = "Second milestone";
+
+        vm.prank(client);
+        id = sf.createEscrow(
+            worker, address(usdc), BUDGET, 30, arbiters, 1, amounts, descs, "Logo", "A logo"
+        );
     }
 
     function test_theWindowIsStillOpenWhileApplicationsAreComingIn() public {
