@@ -56,8 +56,18 @@ export async function join(params: JoinParams): Promise<store.WorkerRow> {
   if (!handle) throw new UserFacingError("A handle is required — it's the only thing you have to choose.");
   if (handle.length > 40) throw new UserFacingError("That handle is too long (40 characters max).");
 
-  if (params.channelRef) {
-    const existing = store.getWorkerByChannelRef(params.channel, params.channelRef);
+  /*
+   * Normalised before it is ever stored or looked up.
+   *
+   * The wallet a person gets is keyed on this string, so any two spellings of
+   * the same identity are two wallets — and the one holding their money is the
+   * one they can no longer reach. Lowercasing costs nothing and removes a whole
+   * class of "my balance disappeared".
+   */
+  const channelRef = params.channelRef?.trim().toLowerCase() || undefined;
+
+  if (channelRef) {
+    const existing = store.getWorkerByChannelRef(params.channel, channelRef);
     if (existing) return existing; // idempotent: tapping "join" twice is not two people
   }
 
@@ -68,7 +78,7 @@ export async function join(params: JoinParams): Promise<store.WorkerRow> {
       id,
       handle,
       channel: params.channel,
-      channelRef: params.channelRef ?? null,
+      channelRef: channelRef ?? null,
       skills: params.skills ?? null,
       walletId: null,
       walletAddress: requireAddress(params.ownAddress, "wallet address"),
@@ -81,7 +91,7 @@ export async function join(params: JoinParams): Promise<store.WorkerRow> {
     id,
     handle,
     channel: params.channel,
-    channelRef: params.channelRef ?? null,
+    channelRef: channelRef ?? null,
     skills: params.skills ?? null,
     walletId: wallet.walletId,
     walletAddress: wallet.address,

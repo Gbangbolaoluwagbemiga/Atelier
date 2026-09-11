@@ -97,6 +97,27 @@ export default function WorkerPage() {
               <h1 className="font-display text-3xl sm:text-4xl font-bold mt-3">
                 {worker.handle}
               </h1>
+
+              {/*
+                WHICH ACCOUNT THIS IS.
+
+                A handle is not an identity — two Google accounts can both be
+                "cdev", and when they are, this page is identical between them
+                apart from a truncated hex address. Signing in with the wrong
+                one then looks exactly like the app having issued a new wallet
+                and lost the job the other account was hired for. It has not;
+                the other account still holds it. This is the line that says so.
+              */}
+              {worker.signedInAs && (
+                <p className="text-sm text-muted-foreground mt-1.5">
+                  Signed in as{" "}
+                  <span className="text-foreground">{worker.signedInAs}</span>
+                  {" · "}
+                  <span className="font-mono text-xs">
+                    {worker.address.slice(0, 6)}…{worker.address.slice(-4)}
+                  </span>
+                </p>
+              )}
             </div>
             <Button
               variant="ghost"

@@ -567,10 +567,20 @@ export function getWorker(id: string): WorkerRow | null {
 }
 
 /** Look a worker up by the door they came through — Telegram user id, or a web session handle. */
+/**
+ * Find an account by the identity it signed in with.
+ *
+ * Matched case-insensitively. An email address is not case-sensitive in the
+ * part that matters, but this column is — so "Me@Gmail.com" and "me@gmail.com"
+ * were two different people holding two different wallets, and the second one
+ * would look to its owner exactly like their money had vanished. Google returns
+ * a normalised address today; that is a convention, not a guarantee, and the
+ * cost of it changing is somebody's balance.
+ */
 export function getWorkerByChannelRef(channel: string, channelRef: string): WorkerRow | null {
-  const r = db.prepare(`SELECT * FROM workers WHERE channel = ? AND channel_ref = ?`).get(channel, channelRef) as
-    | Record<string, unknown>
-    | undefined;
+  const r = db
+    .prepare(`SELECT * FROM workers WHERE channel = ? AND LOWER(channel_ref) = LOWER(?)`)
+    .get(channel, channelRef) as Record<string, unknown> | undefined;
   return r ? toWorker(r) : null;
 }
 

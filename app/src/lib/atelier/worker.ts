@@ -46,6 +46,18 @@ export interface Worker {
   mode: WalletMode;
   /** USDC, as a decimal string. Null when the balance read failed. */
   balance?: string | null;
+  /**
+   * The identity this account is signed in with — the Google address for a
+   * managed wallet, null for someone using their own.
+   *
+   * On screen because two Google accounts can carry the same handle, and when
+   * they do the dashboard is otherwise identical apart from a truncated hex
+   * address. Signing in with the wrong one then looks exactly like the app
+   * issuing a new wallet and losing the job the other account was hired for.
+   */
+  signedInAs?: string | null;
+  /** True when this signed an existing person in rather than creating them. */
+  returning?: boolean;
 }
 
 export interface Quest {

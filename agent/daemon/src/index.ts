@@ -1115,6 +1115,16 @@ const server = http.createServer(async (req, res) => {
         handle: worker.handle,
         address: worker.walletAddress,
         mode: worker.mode,
+        signedInAs: worker.channelRef ?? null,
+        /*
+         * Whether this signed somebody IN or signed somebody UP.
+         *
+         * join is idempotent, so a returning person gets their existing wallet
+         * back — and the app told them "a wallet has been created for you"
+         * either way. For someone with two Google accounts that sentence is how
+         * a wrong-account sign-in reads as the app having lost their money.
+         */
+        returning: worker.createdAt < Date.now() - 5_000,
       });
     } catch (err) {
       return json(res, 500, { error: clientError(err) });
@@ -1442,10 +1452,29 @@ const server = http.createServer(async (req, res) => {
     const worker = store.getWorker(id);
     if (!worker) return json(res, 404, { error: "not found" });
     try {
+      /*
+       * `signedInAs` matters more than it looks.
+       *
+       * Somebody with two Google accounts had a "cdev" on each, both managed,
+       * and the dashboard showed a handle and a truncated address and nothing
+       * else. The two were indistinguishable on screen, so signing in with the
+       * wrong one looked exactly like the app had issued a new wallet and lost
+       * the job the other one was hired for. Nothing was lost; nothing on the
+       * page said which identity they were looking at.
+       *
+       * The worker id already grants the right to withdraw, so an id-holder
+       * seeing the email attached to it exposes nothing the id did not.
+       */
       const { balance } = await workers.balance(id);
-      return json(res, 200, { id: worker.id, handle: worker.handle, address: worker.walletAddress, mode: worker.mode, balance });
+      return json(res, 200, {
+        id: worker.id, handle: worker.handle, address: worker.walletAddress,
+        mode: worker.mode, balance, signedInAs: worker.channelRef ?? null,
+      });
     } catch {
-      return json(res, 200, { id: worker.id, handle: worker.handle, address: worker.walletAddress, mode: worker.mode, balance: null });
+      return json(res, 200, {
+        id: worker.id, handle: worker.handle, address: worker.walletAddress,
+        mode: worker.mode, balance: null, signedInAs: worker.channelRef ?? null,
+      });
     }
   }
 

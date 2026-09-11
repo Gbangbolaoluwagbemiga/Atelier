@@ -89,11 +89,24 @@ export function WorkerJoin({ onJoined }: { onJoined: (w: Worker) => void }) {
         skills: skills.trim() || undefined,
         ownAddress: useOwnWallet ? ownAddress.trim() : undefined,
       });
+      /*
+       * "Welcome back" is not a pleasantry here.
+       *
+       * join is idempotent, so signing in returns the existing wallet — and
+       * this said "a wallet has been created for you" either way. Someone with
+       * two Google accounts, both with the handle "cdev", read that as the app
+       * having minted a fresh wallet and lost the job their other account was
+       * hired for. Naming the account they actually landed in is the whole fix.
+       */
       toast({
-        title: `Welcome, ${worker.handle}`,
+        title: worker.returning
+          ? `Welcome back, ${worker.handle}`
+          : `Welcome, ${worker.handle}`,
         description: useOwnWallet
           ? "Your own wallet is linked. You sign everything yourself."
-          : "A wallet has been created for you. You can start applying.",
+          : worker.returning
+            ? `Signed in as ${worker.signedInAs ?? "your Google account"} — this is the wallet that account already had.`
+            : "A wallet has been created for you. You can start applying.",
       });
       onJoined(worker);
     } catch (e) {
