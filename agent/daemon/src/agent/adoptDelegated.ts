@@ -39,7 +39,9 @@ interface RawEscrow {
 }
 
 /** Escrow ids currently naming `manager` on-chain, newest assignment winning. */
-async function delegatedTo(manager: `0x${string}`): Promise<bigint[]> {
+async function delegatedTo(
+  manager: `0x${string}`,
+): Promise<{ ids: bigint[]; complete: boolean }> {
   const client = getPublicClient();
   const event = {
     type: "event",
@@ -150,7 +152,22 @@ async function delegatedTo(manager: `0x${string}`): Promise<bigint[]> {
   if (cursor > previous) store.setPollerInt(CURSOR_KEY, Number(cursor));
   store.setPollerText(SEEN_KEY, JSON.stringify([...seen].map(String)));
 
-  if (rateLimited || cursor < latest) {
+  /*
+   * Did this sweep actually see everything up to the head?
+   *
+   * It matters enormously, because the caller uses the answer to decide what
+   * the client has REVOKED — anything delegated that is not in the list gets
+   * handed back and its task deleted. A truncated scan cannot tell "revoked"
+   * from "not read yet", and treating it as complete deleted the task for
+   * escrow 8 while the chain still named the agent as its manager. The badge
+   * vanished off the board and the agent stopped working a live job.
+   *
+   * That regression came in with making the scan survive rate limits: before
+   * it, a refused scan threw and aborted the sweep, which was accidentally
+   * safe. Surviving is right; acting on a partial answer is not.
+   */
+  const complete = !rateLimited && cursor >= latest;
+  if (!complete) {
     console.log(`[adopt] caught up to block ${cursor} of ${latest}; resuming next sweep`);
   }
 
@@ -168,7 +185,7 @@ async function delegatedTo(manager: `0x${string}`): Promise<bigint[]> {
       return getAddress(current) === getAddress(manager) ? id : null;
     }),
   );
-  return still.filter((id): id is bigint => id !== null);
+  return { ids: still.filter((id): id is bigint => id !== null), complete };
 }
 
 /**
@@ -185,7 +202,7 @@ export async function adoptDelegatedJobs(): Promise<number> {
     return 0; // no agent wallet configured; nothing can be delegated to us
   }
 
-  const ids = await delegatedTo(signer.address as `0x${string}`);
+  const { ids, complete } = await delegatedTo(signer.address as `0x${string}`);
 
   const tasks = store.listTasks(500);
   const known = new Set(tasks.map((t) => String(t.escrowId)));
@@ -202,11 +219,20 @@ export async function adoptDelegatedJobs(): Promise<number> {
    * to forget.
    */
   const stillOurs = new Set(ids.map(String));
-  for (const t of tasks) {
-    if (!t.id.startsWith("delegated-")) continue;
-    if (stillOurs.has(String(t.escrowId))) continue;
-    store.deleteTask(t.id);
-    console.log(`[adopt] escrow ${t.escrowId} was taken back by its client — released`);
+
+  /*
+   * Only when the scan saw the whole chain. A partial list means "these are the
+   * appointments I managed to read", not "these are all the appointments" — and
+   * handing back everything absent from a truncated read takes the agent off
+   * jobs it is actively running.
+   */
+  if (complete) {
+    for (const t of tasks) {
+      if (!t.id.startsWith("delegated-")) continue;
+      if (stillOurs.has(String(t.escrowId))) continue;
+      store.deleteTask(t.id);
+      console.log(`[adopt] escrow ${t.escrowId} was taken back by its client — released`);
+    }
   }
 
   /*
@@ -273,7 +299,26 @@ export async function adoptDelegatedJobs(): Promise<number> {
      * text rather than inventing a new one, so the criteria the agent scores
      * against are the criteria the client actually agreed to.
      */
-    const source = `${esc.projectTitle}\n\n${esc.projectDescription}`;
+    /*
+     * TELL THE GENERATOR WHAT THE JOB IS ACTUALLY WORTH.
+     *
+     * The description usually says nothing about money, so the model invented a
+     * number — $300, then $800, then $500 for escrow 8, which holds ten dollars
+     * — and every one of those tripped the per-commission cap and threw. The
+     * job was never adopted, so the client's hand-over did nothing, forever, on
+     * a sweep that logged the failure and moved on.
+     *
+     * The cap exists for commissions the agent is asked to CREATE, where the
+     * model's figure becomes real money. Here the escrow is already funded and
+     * the figure is overwritten from the chain a few lines below, so the guess
+     * was never going to be used for anything — it just had to be plausible
+     * enough not to abort.
+     *
+     * Stating the real budget removes the guess entirely, and makes the
+     * criteria proportionate to the money while it is at it.
+     */
+    const fundedUsdc = Number(esc.totalAmount) / 1e6;
+    const source = `${esc.projectTitle}\n\n${esc.projectDescription}\n\nBudget: $${fundedUsdc}`;
     let briefJson: string;
     try {
       const { brief } = await generateBrief(source);

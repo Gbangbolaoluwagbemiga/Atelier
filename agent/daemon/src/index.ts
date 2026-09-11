@@ -2332,19 +2332,46 @@ async function sweepOverdueCommissions(): Promise<void> {
 
 async function pollOnce() {
   sweepStrandedBriefs();
-  await sweepExpiredCommissions();
-  await sweepStrandedEscrows();
-  await sweepOverdueCommissions();
-  await reconcileTaskStatuses();
+  /*
+   * HOUSEKEEPING RUNS SLOWER THAN THE WORK.
+   *
+   * Every pass used to run four chain-wide sweeps, adoption, and reconciliation
+   * before it looked at a single task — four times a minute. On a public RPC
+   * that is simply more requests than it will serve, and the symptom was not
+   * slowness: the sweeps were REFUSED, so delegated jobs were never adopted and
+   * a client's hand-over did nothing at all while the log filled with "Request
+   * exceeds defined limit".
+   *
+   * None of these need to be quick. An expired commission does not care about
+   * fifteen seconds versus a minute, and neither does a stranded escrow. What
+   * has to stay responsive is the task loop below — reviewing a submission,
+   * hiring when a window closes — and starving it to re-sweep the whole chain
+   * was the wrong trade.
+   *
+   * Adoption sits in between: a client who hands a job over is watching, so it
+   * runs on the half-minute rather than the minute.
+   */
+  sweepTick++;
+  const everyMinute = sweepTick % 4 === 0;
+  const everyHalfMinute = sweepTick % 2 === 0;
+
+  if (everyMinute) {
+    await sweepExpiredCommissions();
+    await sweepStrandedEscrows();
+    await sweepOverdueCommissions();
+    await reconcileTaskStatuses();
+  }
   /*
    * Jobs handed to us in the app arrive here, not through /api/instruct.
    * Without this the delegation was real on-chain and completely inert: the
    * poller below iterates its own task table, so a client watched an agent
    * that had never heard of their job.
    */
-  await adoptDelegatedJobs().catch((err) =>
-    console.error("[adopt] sweep failed:", err instanceof Error ? err.message : err),
-  );
+  if (everyHalfMinute) {
+    await adoptDelegatedJobs().catch((err) =>
+      console.error("[adopt] sweep failed:", err instanceof Error ? err.message : err),
+    );
+  }
   /*
    * Deliberately NOT gated on the subgraph any more.
    *
@@ -2673,6 +2700,9 @@ void (async () => {
  * Skipping a tick costs nothing: the next one is fifteen seconds away and the
  * work is idempotent by design.
  */
+/* Counts poll passes, so the chain-wide sweeps can run on their own cadence. */
+let sweepTick = 0;
+
 let sweeping = false;
 setInterval(() => {
   if (sweeping) return;

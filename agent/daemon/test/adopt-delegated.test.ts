@@ -380,3 +380,47 @@ describe("a sweep that gets refused immediately", () => {
     expect(moved).toHaveLength(0);
   });
 })
+
+describe("a sweep that could not read the whole chain", () => {
+  /*
+   * The cleanup hands back anything delegated that the scan did not find. A
+   * truncated scan cannot tell "the client revoked this" from "I have not read
+   * that far yet" — and treating one as the other deleted the task for a job
+   * the chain still said the agent managed. The badge vanished off the board
+   * and the agent stopped working a live commission.
+   *
+   * The regression arrived with making the scan survive rate limits. Before
+   * that, a refused scan threw and aborted the sweep, which was accidentally
+   * safe. Surviving is right; acting on a partial answer is not.
+   */
+  it("does not hand back jobs it simply has not read yet", async () => {
+    listTasks.mockReturnValue([
+      { id: "delegated-8", escrowId: "8", status: "posted", briefJson: "{}" },
+    ]);
+    getPollerInt.mockReturnValue(null);
+    getBlockNumber.mockResolvedValue(10_000n);
+    // Refused part way, so the scan never reaches escrow 8's appointment.
+    let calls = 0;
+    getLogs.mockImplementation(async () => {
+      if (++calls > 2) throw new Error("rate limit exceeded");
+      return [];
+    });
+
+    await adoptDelegatedJobs();
+
+    expect(deleteTask).not.toHaveBeenCalled();
+  });
+
+  it("still hands back a genuine revocation once it has seen everything", async () => {
+    listTasks.mockReturnValue([
+      { id: "delegated-8", escrowId: "8", status: "posted", briefJson: "{}" },
+    ]);
+    getPollerInt.mockReturnValue(null);
+    getBlockNumber.mockResolvedValue(100n);
+    getLogs.mockResolvedValue([]); // a complete scan that found no appointment
+
+    await adoptDelegatedJobs();
+
+    expect(deleteTask).toHaveBeenCalledWith("delegated-8");
+  });
+});
