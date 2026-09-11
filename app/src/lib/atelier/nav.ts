@@ -41,16 +41,6 @@ export interface NavItem {
     /** Only for a visitor with no account at all — no wallet, no managed session. */
     | "signed-out"
     /**
-     * For anybody who is somebody — either door.
-     *
-     * Distinct from "participant", which means you have posted a job or been
-     * hired for one. Messages is the counter-example that forced the
-     * distinction: a client can message a freelancer who has never worked here,
-     * and that freelancer needs somewhere to read it before they have a single
-     * job to their name.
-     */
-    | "signed-in"
-    /**
      * Only for somebody signed in with a managed Circle wallet.
      *
      * Their work and their money live on /get-hired, and that route was tagged
@@ -95,15 +85,23 @@ export const PRIMARY_NAV: readonly NavItem[] = [
    */
   { to: "/my-jobs", label: "My Jobs", visibility: "participant" },
   /*
-   * Messages had a page, a table, an inbox endpoint and no way in.
+   * Messages is NOT here, and was for about an hour.
    *
-   * The only link to it was on the old freelancer dashboard — a page a managed
-   * worker never sees — so a direct message was deliverable and unreadable at
-   * the same time. If the product lets a client start a conversation, the
-   * person on the other end needs a door to it that does not depend on which
-   * kind of wallet they happen to hold.
+   * It had a page, a table, an inbox endpoint and no way in — the only link was
+   * on the old freelancer dashboard, which a managed worker never sees, so a
+   * direct message was deliverable and unreadable at the same time. Adding a
+   * nav entry fixed the wrong half of that.
+   *
+   * The bar holds five; this was the sixth, and the note in navbar.tsx about
+   * "Browse Jobs" and "Post a Job" wrapping onto two lines was written when the
+   * fifth went in. It is also the wrong shape for this list, which is places
+   * you GO to do work. A message ARRIVES — same as a notification, and the bell
+   * had already settled what that looks like.
+   *
+   * So it is an icon in the header with an unread count, beside the bell:
+   * `message-center.tsx`. The route stays alive for the freelancer page's link
+   * and anyone's bookmark; it is simply no longer the only door.
    */
-  { to: "/messages", label: "Messages", visibility: "signed-in" },
   { to: "/analytics", label: "Analytics", visibility: "always" },
   /*
    * Disputes is NOT here. It is arbitration — a staff tool, not a place a
@@ -139,8 +137,6 @@ export function visibleNav(
         return roles.isFreelancer || roles.isClient;
       case "signed-out":
         return !roles.hasOwnWallet && !roles.hasManagedAccount;
-      case "signed-in":
-        return roles.hasOwnWallet === true || roles.hasManagedAccount === true;
       /* A wallet user has My Jobs for the same purpose and does not need a
          second entry pointing at the managed-worker board. */
       case "managed":

@@ -200,12 +200,20 @@ describe("isCurrent", () => {
 
 
 /**
- * A CONVERSATION NEEDS A DOOR AT BOTH ENDS.
+ * A CONVERSATION NEEDS A DOOR, BUT NOT A NAV ENTRY.
  *
- * Messages had a page, a table, an inbox endpoint and an unread count. The only
- * link to it was on the old freelancer dashboard — a page a managed worker
- * never sees — so a client could start a conversation the other person had no
- * route to. A message was deliverable and unreadable at the same time.
+ * Messages had a page, a table, an inbox endpoint and no way in: the only link
+ * was on the old freelancer dashboard, which a managed worker never sees. A
+ * direct message was deliverable and unreadable at the same time.
+ *
+ * The first fix was a sixth nav entry, and it was the wrong half of the
+ * problem. The bar holds five — navbar.tsx carries a note about the fifth
+ * making "Browse Jobs" and "Post a Job" wrap on a narrow laptop — and this list
+ * is places you GO to do work. A message ARRIVES, like a notification, and the
+ * bell beside it had already settled what that looks like.
+ *
+ * So the door is an icon in the header with an unread count, and these tests
+ * guard the decision rather than the entry that briefly implemented it.
  */
 describe("the way into Messages", () => {
   const labels = (roles: Parameters<typeof visibleNav>[0]) =>
@@ -218,23 +226,26 @@ describe("the way into Messages", () => {
     isAdmin: false,
   };
 
-  it("is there for somebody holding their own wallet", () => {
-    expect(labels({ ...nobody, hasOwnWallet: true })).toContain("Messages");
+  it("is not a nav entry — it lives in the header", () => {
+    expect(labels({ ...nobody, hasOwnWallet: true })).not.toContain("Messages");
+    expect(labels({ ...nobody, hasManagedAccount: true })).not.toContain("Messages");
   });
 
-  it("is there for a managed worker, who never connects one", () => {
-    expect(labels({ ...nobody, hasManagedAccount: true })).toContain("Messages");
+  it("leaves the bar at five for somebody using both sides of the market", () => {
+    // Six is where "Browse Jobs" and "Post a Job" start wrapping.
+    const full = visibleNav({
+      hasOwnWallet: true,
+      isFreelancer: true,
+      isClient: true,
+      isArbiter: false,
+      isAdmin: false,
+    });
+    expect(full.length).toBeLessThanOrEqual(5);
   });
 
-  it("does not need you to have worked here first", () => {
-    // A client can message a freelancer who has never taken a job. Gating this
-    // on "participant" would hide the message from its recipient.
-    const items = visibleNav({ ...nobody, hasManagedAccount: true });
-    expect(items.map((i) => i.label)).not.toContain("My Jobs");
-    expect(items.map((i) => i.label)).toContain("Messages");
-  });
-
-  it("is not offered to a visitor with no account at all", () => {
-    expect(labels(nobody)).not.toContain("Messages");
+  it("still routes /messages, for the link and the bookmark", () => {
+    // Not in the nav is not the same as gone: FreelancerPage links to it.
+    expect(PRIMARY_NAV.some((i) => i.to === "/messages")).toBe(false);
+    expect(isCurrent("/messages", "/messages")).toBe(true);
   });
 });

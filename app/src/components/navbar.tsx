@@ -14,6 +14,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { WalletButton } from "@/components/wallet-button";
 import { NotificationCenter } from "@/components/notification-center";
+import { MessageCenter } from "@/components/message-center";
 import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -171,6 +172,7 @@ export function Navbar() {
               <ThemeToggle />
             </div>
             <div className="shrink-0">
+              <MessageCenter />
               <NotificationCenter />
             </div>
             <div className="shrink-0">
