@@ -213,7 +213,24 @@ export function WorkerBoard({
               <div key={w.escrowId} className="rounded-xl glass p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="font-medium truncate">{w.title}</div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-medium truncate">{w.title}</span>
+                      {/* Who decides here — the same standing fact the client's
+                          card shows, because it changes what waiting means. */}
+                      {w.reviewer && (
+                        <span
+                          className={`actor-chip shrink-0 ${w.reviewer === "agent" ? "actor-agent" : "actor-human"}`}
+                          title={
+                            w.reviewer === "agent"
+                              ? "An agent reviews and releases payment on this job"
+                              : "The client reviews and releases payment themselves"
+                          }
+                        >
+                          <span className="actor-dot" />
+                          {w.reviewer === "agent" ? "Autopilot" : "Client-run"}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {w.icon} {w.status}
                     </div>

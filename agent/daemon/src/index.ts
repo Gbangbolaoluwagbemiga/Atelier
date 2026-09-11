@@ -1635,6 +1635,27 @@ server.listen(PORT, () => {
   console.log(`     POST /api/hire       (x402-gated — AI agents)`);
   console.log(`     POST /api/instruct   (human front door)`);
   console.log(`     GET  /events         (SSE — command center)\n`);
+
+  /*
+   * A DEPENDENCY THAT IS MISSING RATHER THAN BROKEN SAYS NOTHING.
+   *
+   * notifyWeb's post() opens with `if (!config.apiUrl) return false` — so with
+   * API_URL unset every in-app notification the daemon ever sends is dropped on
+   * the floor, silently, while everything else works perfectly. Hires, reviews,
+   * rejections, payments: all fine on-chain, all invisible in the bell.
+   *
+   * It cost an afternoon of looking for a bug in the notification code, which
+   * was correct the whole time. Say it once, at boot, where somebody will see
+   * it.
+   */
+  if (!config.apiUrl) {
+    console.warn(
+      "  ⚠  API_URL is not set — in-app notifications are DISABLED.\n" +
+        "     Everything else runs normally; the bell will simply never fire.\n",
+    );
+  } else {
+    console.log(`     notifications → ${config.apiUrl}\n`);
+  }
 });
 
 // ── Background poller: applications → hire, submissions → review ──────────

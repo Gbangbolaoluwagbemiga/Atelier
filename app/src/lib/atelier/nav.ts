@@ -39,7 +39,17 @@ export interface NavItem {
     | "arbiter"
     | "admin"
     /** Only for a visitor with no account at all — no wallet, no managed session. */
-    | "signed-out";
+    | "signed-out"
+    /**
+     * Only for somebody signed in with a managed Circle wallet.
+     *
+     * Their work and their money live on /get-hired, and that route was tagged
+     * "signed-out" — an entrance, hidden once you are inside. Which left a
+     * managed worker signed in with no link to their own board: their jobs,
+     * their balance and the Withdraw button were reachable only from a dropdown
+     * behind their address. The entrance and the home are not the same link.
+     */
+    | "managed";
 }
 
 /**
@@ -60,6 +70,9 @@ export const PRIMARY_NAV: readonly NavItem[] = [
    * So it disappears the moment there is an account of either kind.
    */
   { to: "/get-hired", label: "Get Hired", visibility: "signed-out" },
+  /* The same page, for somebody who is already inside it — their work, their
+     earnings, and the button that moves the money out. */
+  { to: "/get-hired", label: "My Work", visibility: "managed" },
   { to: "/post", label: "Post a Job", visibility: "always" },
   /*
    * One destination for both sides of the table.
@@ -106,6 +119,10 @@ export function visibleNav(
         return roles.isFreelancer || roles.isClient;
       case "signed-out":
         return !roles.hasOwnWallet && !roles.hasManagedAccount;
+      /* A wallet user has My Jobs for the same purpose and does not need a
+         second entry pointing at the managed-worker board. */
+      case "managed":
+        return roles.hasManagedAccount === true && !roles.hasOwnWallet;
       case "freelancer":
         return roles.isFreelancer;
       case "client":

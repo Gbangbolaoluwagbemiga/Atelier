@@ -23,6 +23,7 @@ import { isApiConfigured } from "@/lib/api";
 import type { Escrow } from "@/lib/web3/types";
 import { encodeJobId } from "@/lib/id-codec";
 import { AutopilotControl } from "@/components/atelier/autopilot-control";
+import { useJobManager } from "@/hooks/use-job-manager";
 import { JobDecisionLog } from "@/components/atelier/job-decision-log";
 import { PostDisputeChoice } from "@/components/atelier/post-dispute-choice";
 import { YieldOptIn } from "@/components/atelier/yield-opt-in";
@@ -85,6 +86,11 @@ export function EscrowCard({
   const [showDisputeForm, setShowDisputeForm] = useState(false);
 
   const { wallet } = useWeb3();
+
+  /* Who decides on this job's milestones. The card already renders
+     AutopilotControl from the same fact; the milestone buttons need it too, so
+     the client and the agent cannot both act on one submission. */
+  const { manager: jobManager } = useJobManager(Number(escrow.id));
 
   // ── Surplus / stuck-funds detection ───────────────────────────────────────
   // addJobFunds increases totalAmount but doesn't create new milestones, so
@@ -259,6 +265,23 @@ export function EscrowCard({
               >
                 {displayStatus}
               </Badge>
+              {/*
+                WHO IS RUNNING THIS JOB, AT A GLANCE.
+
+                The status badge says where the job is; it never said who was
+                driving. A freelancer could not tell an agent-run commission
+                from a client-run one without opening it, and those behave
+                completely differently — minutes versus whenever somebody next
+                looks. It sits with the status because it is the same kind of
+                standing fact about the job.
+              */}
+              {jobManager !== null && (
+                <span className="actor-chip actor-agent shrink-0" title="An agent hires, reviews and releases payment on this job">
+                  <span className="actor-dot" />
+                  Autopilot
+                </span>
+              )}
+
               {/* Who is on it. Nothing at all on an open job. */}
               <AssigneeChip
                 address={escrow.beneficiary}
@@ -580,6 +603,7 @@ export function EscrowCard({
                         escrowId={escrow.id}
                         milestoneIndex={idx}
                         milestone={milestone}
+                        managedByAgent={jobManager !== null}
                         isPayer={escrow.isClient || false}
                         isBeneficiary={escrow.isFreelancer || false}
                         escrowStatus={escrow.status}

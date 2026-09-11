@@ -18,14 +18,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 
-import {
-  CheckCircle2,
-  Send,
-  AlertTriangle,
-  Gavel,
-  Play,
-  XCircle,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, Gavel, Loader2, Play, Send, XCircle } from "lucide-react";
 import type { Milestone } from "@/lib/web3/types";
 import { formatEth, formatTokenAmount } from "@/lib/utils";
 
@@ -43,6 +36,15 @@ interface MilestoneActionsProps {
   beneficiaryAddress?: string; // Freelancer address for notifications
   escrowReleasedAmount?: string; // Total amount released in escrow (to determine dispute winner)
   escrowTotalAmount?: string; // Total escrow amount
+  /**
+   * True when Autopilot, not the client, decides this milestone.
+   *
+   * The client kept Approve / Reject / Dispute on a job they had handed over,
+   * so both could act on the same submission — and the agent is already mid-
+   * review when they see it. Whoever's transaction lands first wins, and the
+   * other one reverts with a contract error nobody asked for.
+   */
+  managedByAgent?: boolean;
 }
 
 export function MilestoneActions({
@@ -57,6 +59,7 @@ export function MilestoneActions({
   beneficiaryAddress,
   escrowReleasedAmount,
   escrowTotalAmount,
+  managedByAgent = false,
 }: MilestoneActionsProps) {
   const { wallet } = useWeb3();
   const { writeContractAsync } = useWriteContract();
@@ -80,8 +83,13 @@ export function MilestoneActions({
 
   // Helper functions
   const canApproveMilestone = () => {
+    /* Not while the agent is deciding. Taking the job back restores these — the
+       revoke is one click and is exactly the way out. */
     const canApprove =
-      milestone.status === "submitted" && isPayer && escrowStatus === "active";
+      milestone.status === "submitted" &&
+      isPayer &&
+      escrowStatus === "active" &&
+      !managedByAgent;
     return canApprove;
   };
 
@@ -431,6 +439,33 @@ export function MilestoneActions({
   return (
     <>
       <div className="flex flex-col gap-2">
+        {/*
+          THE AGENT HAS THIS ONE.
+
+          Approve / Reject / Dispute stayed on screen after a hand-over, so the
+          client and the agent could act on the same submission — and the agent
+          is already mid-review by the time the client sees it. Whichever
+          transaction lands first wins and the other reverts with a contract
+          error nobody asked for.
+
+          Said rather than hidden: an empty space under a submitted milestone
+          reads as the app forgetting to render something.
+        */}
+        {managedByAgent && milestone.status === "submitted" && isPayer && !isProjectDisputed && (
+          <div className="rounded-lg border border-[var(--actor-agent)]/40 bg-[var(--actor-agent)]/10 px-3 py-2.5 text-sm">
+            <div className="font-medium flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Autopilot is reviewing this delivery
+            </div>
+            <p className="text-muted-foreground mt-1 text-xs">
+              It checks the work against every acceptance criterion and then
+              approves and pays, or sends it back with the reasons. You will see
+              the verdict here. Take the job back if you would rather decide
+              this one yourself.
+            </p>
+          </div>
+        )}
+
         {/* Approve Milestone - Only payer for submitted milestones (disabled if disputed) */}
         {canApproveMilestone() && !isProjectDisputed && (
           <Button

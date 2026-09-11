@@ -83,9 +83,36 @@ describe("visibleNav", () => {
     expect(paths).not.toContain("/get-hired");
   });
 
-  it("hides Get Hired once signed in with a managed account", () => {
-    const paths = visibleNav({ ...NOBODY, hasManagedAccount: true }).map((i) => i.to);
-    expect(paths).not.toContain("/get-hired");
+  /**
+   * THE ENTRANCE GOES; THE HOME ARRIVES.
+   *
+   * /get-hired was tagged signed-out only, so a managed worker lost the link to
+   * their own board the moment they signed in — their jobs, their balance and
+   * the Withdraw button reachable only from a dropdown behind their address.
+   * The door and the room are not the same link, even when they share a path.
+   */
+  it("swaps Get Hired for My Work once signed in with a managed account", () => {
+    const items = visibleNav({ ...NOBODY, hasManagedAccount: true });
+    const labels = items.map((i) => i.label);
+
+    expect(labels).not.toContain("Get Hired");
+    expect(labels).toContain("My Work");
+    // Same destination — it is their board either way.
+    expect(items.find((i) => i.label === "My Work")?.to).toBe("/get-hired");
+  });
+
+  it("gives a wallet user My Jobs instead, not both", () => {
+    // My Jobs already serves this purpose for somebody holding their own keys;
+    // a second entry pointing at the managed board would be noise.
+    const labels = visibleNav({
+      ...NOBODY,
+      hasOwnWallet: true,
+      hasManagedAccount: true,
+      isFreelancer: true,
+    }).map((i) => i.label);
+
+    expect(labels).not.toContain("My Work");
+    expect(labels).toContain("My Jobs");
   });
 
   /**
@@ -132,12 +159,17 @@ describe("visibleNav", () => {
 
   it("preserves declaration order regardless of roles", () => {
     const all = visibleNav({
+      hasManagedAccount: true,
       isFreelancer: true,
       isClient: true,
       isArbiter: true,
       isAdmin: true,
     });
-    expect(all.map((i) => i.to)).toEqual(PRIMARY_NAV.map((i) => i.to));
+    /* Every entry this person can see, in declaration order. Get Hired is the
+       one they cannot — it is for somebody with no account at all. */
+    expect(all.map((i) => i.to)).toEqual(
+      PRIMARY_NAV.filter((i) => i.visibility !== "signed-out").map((i) => i.to),
+    );
   });
 });
 
