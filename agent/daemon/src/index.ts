@@ -1691,7 +1691,25 @@ const server = http.createServer(async (req, res) => {
       );
       return json(res, 200, auth);
     } catch (err) {
-      return json(res, 400, { error: clientError(err) });
+      /*
+       * Its own fallback, not clientError's.
+       *
+       * That helper ends on "Could not open this commission. The failure has
+       * been logged." — written for the route that opens commissions, and
+       * borrowed by every caller since. Attaching a file to a milestone is not
+       * opening a commission, so the one sentence the freelancer got told them
+       * nothing about what had gone wrong or whether their work was lost.
+       *
+       * A message the person caused (UserFacingError) still passes through
+       * untouched; anything else is ours, and says so.
+       */
+      if (err instanceof workers.UserFacingError) {
+        return json(res, 400, { error: err.message });
+      }
+      console.error("[upload-auth]", err instanceof Error ? err.message : err);
+      return json(res, 502, {
+        error: "Could not authorise the file upload. Your work has not been submitted — try again.",
+      });
     }
   }
 
