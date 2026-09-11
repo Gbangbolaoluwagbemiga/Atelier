@@ -57,10 +57,10 @@ function Bubble({ turn }: { turn: AskTurn }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+        className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
           mine
-            ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "glass rounded-bl-sm"
+            ? "bg-primary text-primary-foreground rounded-br-md shadow-sm"
+            : "bg-muted/60 ring-1 ring-border/60 rounded-bl-md"
         }`}
       >
         {mine ? turn.content : <Answer text={turn.content} />}
@@ -188,23 +188,49 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
     <>
       <AnimatePresence>
         {open && (
+          <>
+            {/*
+              A scrim, so this reads as something on top of the page rather than
+              part of it. The translucent panel it replaced sat directly on a
+              dark background and the two dissolved into each other — you could
+              not tell where the conversation ended and the job board began.
+              Dimming what is behind it does the separating; clicking it is the
+              obvious way out.
+            */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              onClick={() => setOpen(false)}
+              aria-hidden="true"
+              className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px]"
+            />
+
           <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            initial={{ opacity: 0, y: 16, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             role="dialog"
+            aria-modal="true"
             aria-label="Ask Atelier"
-            className="fixed z-50 glass-thick border rounded-2xl shadow-2xl flex flex-col
+            /* Opaque, because a floating surface over arbitrary content has to
+               be readable over all of it — that is what --popover is for. */
+            className="fixed z-50 bg-popover text-popover-foreground rounded-2xl flex flex-col
+                       ring-1 ring-border shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]
                        inset-x-3 bottom-3 top-20
-                       sm:inset-x-auto sm:top-auto sm:right-5 sm:bottom-24 sm:w-[24rem] sm:h-[32rem]"
+                       sm:inset-x-auto sm:top-auto sm:right-5 sm:bottom-24
+                       sm:w-[30rem] sm:h-[36rem] sm:max-h-[calc(100vh-9rem)]"
           >
-            <header className="flex items-center justify-between gap-2 px-4 py-3 border-b shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <Sparkles className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
+            <header className="flex items-center justify-between gap-2 px-5 py-4 border-b shrink-0 rounded-t-2xl bg-gradient-to-b from-primary/[0.07] to-transparent">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="h-9 w-9 rounded-full bg-primary/12 ring-1 ring-primary/25 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+                </span>
                 <div className="min-w-0">
                   <div className="font-display font-semibold leading-none">Ask Atelier</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
+                  <div className="text-xs text-muted-foreground mt-1">
                     How it works, and what protects you
                   </div>
                 </div>
@@ -214,23 +240,26 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
               </Button>
             </header>
 
-            <div ref={scrollerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            <div ref={scrollerRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
               {turns.length === 0 && (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                     Ask me anything about how Atelier works — escrow, Autopilot,
                     getting paid. I can explain and point you at the right page,
                     but I can't move money or act on a job.
                   </p>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {OPENERS.map((q) => (
                       <button
                         key={q}
                         type="button"
                         onClick={() => void send(q)}
-                        className="w-full text-left text-sm rounded-lg border px-3 py-2 hover:bg-muted/50 transition-colors"
+                        className="group w-full text-left text-sm rounded-xl border border-border/70 px-3.5 py-2.5
+                                   hover:border-primary/40 hover:bg-primary/[0.06] transition-colors
+                                   flex items-center justify-between gap-3"
                       >
-                        {q}
+                        <span className="min-w-0">{q}</span>
+                        <ArrowUp className="h-3.5 w-3.5 shrink-0 rotate-45 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" />
                       </button>
                     ))}
                   </div>
@@ -264,7 +293,7 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
             </div>
 
             <form
-              className="p-3 border-t shrink-0 flex items-end gap-2"
+              className="p-3 border-t shrink-0 flex items-end gap-2 rounded-b-2xl"
               onSubmit={(e) => { e.preventDefault(); void send(draft); }}
             >
               <textarea
@@ -282,7 +311,7 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
                 }}
                 placeholder="Ask about escrow, Autopilot, getting paid…"
                 aria-label="Your question"
-                className="flex-1 resize-none bg-transparent text-sm outline-none max-h-24 py-2"
+                className="flex-1 resize-none bg-transparent text-sm outline-none max-h-28 py-2 px-2 placeholder:text-muted-foreground/70"
               />
               <Button
                 type="submit"
@@ -297,6 +326,7 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
               </Button>
             </form>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
 

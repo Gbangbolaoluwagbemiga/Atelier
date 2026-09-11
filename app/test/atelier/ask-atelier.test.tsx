@@ -59,6 +59,27 @@ describe("opening it", () => {
     expect(await screen.findByText(/can't move money or act on a job/i)).toBeInTheDocument();
   });
 
+  it("dims the page behind it, so the two do not dissolve into each other", async () => {
+    // The translucent panel this replaced sat on a dark page and you could not
+    // tell where the conversation ended and the job board began.
+    const { container } = show();
+    await userEvent.click(screen.getByRole("button", { name: /ask atelier/i }));
+    await screen.findByRole("dialog");
+
+    expect(container.querySelector('[aria-hidden="true"].fixed.inset-0')).toBeTruthy();
+  });
+
+  it("closes when the dimmed page is clicked", async () => {
+    const { container } = show();
+    await userEvent.click(screen.getByRole("button", { name: /ask atelier/i }));
+    await screen.findByRole("dialog");
+
+    const scrim = container.querySelector('[aria-hidden="true"].fixed.inset-0') as HTMLElement;
+    await userEvent.click(scrim);
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("closes on Escape, because a panel that traps you is worse than none", async () => {
     show();
     await userEvent.click(screen.getByRole("button", { name: /ask atelier/i }));
