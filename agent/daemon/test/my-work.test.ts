@@ -248,3 +248,44 @@ describe("a job with work already delivered", () => {
     expect(row.milestoneCount).toBe(0);
   });
 });
+
+
+/**
+ * FINISHED MEANS EVERY STAGE IS APPROVED — not that the escrow says so.
+ *
+ * The state was read off the escrow's own status, and an escrow whose
+ * milestones are all approved and fully paid can still sit at "Submitted".
+ * Escrow 7 did, after a dispute was resolved — so somebody who had delivered
+ * everything and been paid was shown "in progress", on a bench with nothing on
+ * it, above a row inviting them to send a stage that does not exist.
+ */
+describe("a job where every stage is approved", () => {
+  it("is finished, whatever the escrow's own status has caught up to", async () => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockResolvedValue([{ status: 2 }, { status: 2 }]);
+    // 2 = Submitted, exactly what escrow 7 reads after its dispute resolved.
+    getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 3_000_000n, status: 2 });
+
+    const [row] = await myWork("w1");
+
+    expect(row.state).toBe("completed");
+    expect(row.status).toMatch(/approved and paid/i);
+    expect(row.canSubmit).toBe(false);
+  });
+
+  it("never invites a next stage when there is not one", async () => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockResolvedValue([{ status: 2 }, { status: 2 }]);
+
+    expect((await myWork("w1"))[0].status).not.toMatch(/send the next stage/i);
+  });
+
+  it("still asks for the next stage when one is genuinely left", async () => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockResolvedValue([{ status: 2 }, { status: 0 }]);
+
+    const [row] = await myWork("w1");
+    expect(row.state).toBe("hired");
+    expect(row.status).toMatch(/send the next stage/i);
+  });
+});

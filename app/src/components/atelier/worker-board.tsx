@@ -327,6 +327,58 @@ export function WorkerBoard({
                   </p>
                 )}
 
+                {/*
+                  A JOB THAT WENT TO AN ARBITER, AND WHAT THEY DECIDED.
+
+                  This row had no way to open, so a freelancer whose milestone
+                  had been through a dispute could see that it was over and
+                  never what had been decided. The split is on-chain; the
+                  written reason is not — it is saved in the resolver's own
+                  browser, so there is nowhere to read it from. Showing the
+                  money is honest; implying there is a reasoning we can produce
+                  would not be.
+                */}
+                {w.state === "completed" && (
+                  <button
+                    type="button"
+                    onClick={() => (deliveringTo === w.escrowId ? closeDelivery() : openDelivery(w.escrowId))}
+                    className="text-xs text-muted-foreground hover:text-foreground mt-2 underline underline-offset-2"
+                  >
+                    {deliveringTo === w.escrowId ? "Hide the details" : "See how this ended"}
+                  </button>
+                )}
+
+                {w.state === "completed" && deliveringTo === w.escrowId && target && (
+                  <div className="mt-3 rounded-lg border bg-muted/30 p-3 space-y-2 text-sm">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {target.disputeOutcome ? "An arbiter decided this stage" : "How this stage ended"}
+                    </div>
+
+                    {target.disputeOutcome ? (
+                      <>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">You received</span>
+                          <span className="font-medium">${target.disputeOutcome.freelancerUsdc}</span>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">Returned to the client</span>
+                          <span className="font-medium">${target.disputeOutcome.clientUsdc}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          A human arbiter settled this, not the agent. The split
+                          above is recorded on-chain; their written reasoning is
+                          not, so we cannot show it to you here.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        Approved and paid in full. Nothing further is needed from
+                        you on this one.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Sent back. The one state where doing nothing is the wrong move. */}
                 {(w.needsRevision ?? 0) > 0 && (w.awaitingReview ?? 0) === 0 && deliveringTo !== w.escrowId && (
                   <p className="text-xs text-muted-foreground mt-2">

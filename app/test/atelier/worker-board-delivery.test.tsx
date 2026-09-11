@@ -545,3 +545,73 @@ describe("the standing facts about a worker", () => {
     expect(await screen.findByText("Rating")).toBeInTheDocument();
   });
 });
+
+
+/**
+ * HOW A FINISHED JOB ENDED.
+ *
+ * The row had no way to open, so a freelancer whose milestone had been through
+ * a dispute could see that it was over and never what had been decided. The
+ * split is on-chain; the arbiter's written reasoning is not — it is saved to
+ * the resolver's own browser — so the money is what can honestly be shown.
+ */
+describe("opening a finished job", () => {
+  const DONE = {
+    escrowId: "7", title: "fireball", budget: 3,
+    status: "All 2 stage(s) approved and paid", icon: "✅", state: "completed",
+    awaitingReview: 0, approved: 2, needsRevision: 0, milestoneCount: 2,
+    canSubmit: false, reviewer: "agent" as const,
+  };
+
+  beforeEach(() => myWork.mockResolvedValue([DONE]));
+
+  it("offers a way to see how it ended", async () => {
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    expect(await screen.findByRole("button", { name: /see how this ended/i })).toBeInTheDocument();
+    // And never a way to send more work into a finished job.
+    expect(screen.queryByRole("button", { name: /send work/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the arbiter's split, from the chain", async () => {
+    deliveryTarget.mockResolvedValue({
+      escrowId: "7", index: 1, count: 2, description: "Stage two", amountUsdc: 2,
+      criteria: [], agentReviewed: true, previousFeedback: null, lastReview: null,
+      disputeOutcome: { freelancerUsdc: 0, clientUsdc: 2 },
+    });
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /see how this ended/i }));
+
+    expect(await screen.findByText(/an arbiter decided this stage/i)).toBeInTheDocument();
+    expect(screen.getByText("Returned to the client").parentElement).toHaveTextContent("$2");
+  });
+
+  it("says plainly that the written reasoning cannot be shown", async () => {
+    // Because it genuinely cannot — it is in the resolver's browser and the
+    // contract's DisputeResolved event does not carry it. Better to say so than
+    // to leave a freelancer hunting for an explanation that does not exist.
+    deliveryTarget.mockResolvedValue({
+      escrowId: "7", index: 1, count: 2, description: "Stage two", amountUsdc: 2,
+      criteria: [], agentReviewed: true, previousFeedback: null, lastReview: null,
+      disputeOutcome: { freelancerUsdc: 0, clientUsdc: 2 },
+    });
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /see how this ended/i }));
+
+    expect(await screen.findByText(/cannot show it to you here/i)).toBeInTheDocument();
+  });
+
+  it("says it was simply approved when no arbiter was involved", async () => {
+    deliveryTarget.mockResolvedValue({
+      escrowId: "7", index: 1, count: 2, description: "Stage two", amountUsdc: 2,
+      criteria: [], agentReviewed: true, previousFeedback: null, lastReview: null,
+      disputeOutcome: null,
+    });
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /see how this ended/i }));
+
+    expect(await screen.findByText(/approved and paid in full/i)).toBeInTheDocument();
+  });
+});

@@ -311,6 +311,14 @@ export interface DeliveryTarget {
     score: number | null;
     criteriaResults: { criterion: string; passed: boolean; note: string }[];
   } | null;
+  /**
+   * How an arbiter split this stage, when one had to.
+   *
+   * The written reason lives only in the resolver's own browser, so it is not
+   * something the other side can ever be shown. The split is on-chain and is
+   * the part that decides anything, so that is what gets shown.
+   */
+  disputeOutcome?: { freelancerUsdc: number; clientUsdc: number } | null;
 }
 
 /**

@@ -685,14 +685,38 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
           : "hired"
       : null;
 
+    /* The stage counts, read before anything reasons about them. */
+    const p = progress.get(escrowId);
+    const awaitingReview = p?.awaiting ?? 0;
+    const approved = p?.approved ?? 0;
+    const needsRevision = p?.rejected ?? 0;
+    const milestoneCount = p?.count ?? 0;
+
+    /*
+     * FINISHED MEANS EVERY STAGE IS APPROVED — not that the escrow says so.
+     *
+     * This read the escrow's own status for "Released", and an escrow whose
+     * milestones are all approved and fully paid can still sit at "Submitted":
+     * escrow 7 did, after a dispute was resolved. So a freelancer who had
+     * delivered everything and been paid in full was still shown "in progress",
+     * on a bench with nothing on it, above a row inviting them to send a next
+     * stage that does not exist.
+     *
+     * The milestones are the work. When all of them are approved, the work is
+     * done, whatever the escrow's own bookkeeping has caught up to.
+     */
+    const everyStageApproved = milestoneCount > 0 && approved >= milestoneCount;
+
     const state: WorkState = hired
-      ? t
-        ? t.status === "completed"
-          ? "completed"
-          : t.status === "disputed"
-            ? "disputed"
-            : "hired"
-        : (escState ?? "hired")
+      ? everyStageApproved
+        ? "completed"
+        : t
+          ? t.status === "completed"
+            ? "completed"
+            : t.status === "disputed"
+              ? "disputed"
+              : "hired"
+          : (escState ?? "hired")
       : t?.status === "posted"
         ? "applied"
         : "lost";
@@ -705,12 +729,6 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
       lost: ["—", "Applied, but someone else was hired"],
     };
     let [icon, status] = presentation[state];
-
-    const p = progress.get(escrowId);
-    const awaitingReview = p?.awaiting ?? 0;
-    const approved = p?.approved ?? 0;
-    const needsRevision = p?.rejected ?? 0;
-    const milestoneCount = p?.count ?? 0;
 
     /*
      * One delivery at a time.
@@ -736,6 +754,8 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
           : `${awaitingReview} with the reviewer — the next stage opens once this one is decided`;
     } else if (state === "hired" && approved > 0 && milestoneCount > 0) {
       status = `${approved} of ${milestoneCount} approved and paid — send the next stage`;
+    } else if (state === "completed" && milestoneCount > 0) {
+      status = `All ${milestoneCount} stage(s) approved and paid`;
     }
 
     out.push({
@@ -835,6 +855,16 @@ export async function deliveryTarget(escrowId: string): Promise<{
   agentReviewed: boolean;
   /** Why the last attempt at this stage was sent back, when it was. */
   previousFeedback: string | null;
+  /**
+   * How an arbiter split this stage, when one had to.
+   *
+   * The prose reason lives only in the resolver's own browser — it is written
+   * to localStorage and the contract's DisputeResolved event does not carry it
+   * — so the freelancer could never read it from anywhere. The SPLIT is
+   * on-chain and is the part that actually decides anything, so that is what
+   * gets shown rather than nothing at all.
+   */
+  disputeOutcome: { freelancerUsdc: number; clientUsdc: number } | null;
   /**
    * The reviewer's verdict on this stage, criterion by criterion.
    *
@@ -947,9 +977,25 @@ export async function deliveryTarget(escrowId: string): Promise<{
     /* a verdict we cannot read is not worth failing a delivery over */
   }
 
+  let disputeOutcome: { freelancerUsdc: number; clientUsdc: number } | null = null;
+  try {
+    const awards = await atelier.disputeAwards(BigInt(escrowId));
+    const mine = awards.find((a) => Number(a.milestoneIndex) === index);
+    if (mine) {
+      /* disputeAwards already returns USDC, not base units — dividing here too
+         turned a 2 USDC refund into 0.000002. */
+      disputeOutcome = {
+        freelancerUsdc: mine.freelancerAmount,
+        clientUsdc: mine.clientAmount,
+      };
+    }
+  } catch {
+    /* a log scan that fails leaves the row without the split, not broken */
+  }
+
   return {
     escrowId, index, count, description, amountUsdc, criteria,
-    agentReviewed, previousFeedback, lastReview,
+    agentReviewed, previousFeedback, lastReview, disputeOutcome,
   };
 }
 
