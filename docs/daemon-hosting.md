@@ -136,3 +136,27 @@ get told what happened to their application on the web as well as on Telegram
 ([`notify/web.ts`](../agent/daemon/src/notify/web.ts)). And a judge following
 the deployed link sees an agent that moves money rather than a description of
 one.
+
+## If a fix you just made does not appear in the browser
+
+The project lives on iCloud Drive, and file watching there stops working after
+a while — silently. A Vite dev server left running for a day keeps serving the
+modules it loaded when it started, and no amount of hard-refreshing helps,
+because the browser is asking correctly and the server is answering with old
+code.
+
+It looks exactly like a bug in whatever you just changed, and it cost most of
+an evening chasing a job-manager badge that was already fixed.
+
+```bash
+lsof -ti:5173 | xargs kill
+rm -rf app/node_modules/.vite     # its transform cache, which also goes stale
+(cd app && npm run dev)
+```
+
+To check what is actually being served, ask the dev server rather than the
+browser — it returns the transformed source:
+
+```bash
+curl -s http://localhost:5173/src/hooks/use-job-manager.ts | grep reverted
+```
