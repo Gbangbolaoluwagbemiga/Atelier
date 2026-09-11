@@ -529,3 +529,48 @@ export async function fetchJobCriteria(
 ): Promise<JobCriteria> {
   return get<JobCriteria>(`/api/jobs/criteria?escrowId=${escrowId}`, signal);
 }
+
+/* ── The assistant ───────────────────────────────────────────────────────── */
+
+export interface AskTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AskViewer {
+  role?: "client" | "freelancer" | "both" | null;
+  hiring?: number;
+  working?: number;
+  page?: string | null;
+}
+
+export class AssistantBusy extends Error {}
+
+/**
+ * Ask Atelier a question.
+ *
+ * The viewer block is coarse on purpose — a role and a couple of counts. It is
+ * what turns "how do milestones work" into an answer about the job you are
+ * actually on, without ever handing a balance or an address to a language
+ * model.
+ */
+export async function askAtelier(
+  messages: AskTurn[],
+  viewer?: AskViewer,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (!AUTOPILOT_CONFIGURED) throw new AutopilotUnavailable();
+
+  const res = await fetch(`${BASE}/api/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, viewer }),
+    signal,
+  });
+
+  const payload = (await res.json().catch(() => ({}))) as { answer?: string; error?: string };
+  if (res.status === 429) throw new AssistantBusy(payload.error ?? "Too many questions at once.");
+  if (!res.ok) throw new Error(payload.error ?? `The assistant returned ${res.status}`);
+  if (!payload.answer) throw new Error("The assistant had nothing to say.");
+  return payload.answer;
+}

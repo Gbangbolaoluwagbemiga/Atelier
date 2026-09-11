@@ -20,6 +20,8 @@ import { createAtelierGateway } from "./circle/gateway.js";
 import { listWhitelistedTokens } from "./web3/tokens.js";
 import { adoptDelegatedJobs } from "./agent/adoptDelegated.js";
 import { onWorkerEvent } from "./events.js";
+import { askAtelier, QuestionRejected } from "./assistant/ask.js";
+import { AssistantUnavailable } from "./groq/chat.js";
 import * as handover from "./agent/handover.js";
 import { createAtelierPaywall, ORDER_FEE_USDC } from "./circle/x402-seller.js";
 import * as atelier from "./web3/atelier.js";
@@ -60,6 +62,36 @@ function cancelMessage(address: string, escrowId: string): string {
 /** The sentence a depositor signs to spend their own deposit on a commission. */
 function commissionMessage(address: string, amountUsdc: string): string {
   return `Atelier commission\nAddress: ${address.toLowerCase()}\nBudget: ${amountUsdc} USDC`;
+}
+
+/**
+ * A ceiling on the public assistant, per caller, per minute.
+ *
+ * In memory and deliberately simple. This exists to stop one person or one
+ * script running up a model bill in a loop; it is not a defence against a
+ * distributed flood, and pretending otherwise would be the wrong amount of
+ * machinery for a question box.
+ */
+const ASK_PER_MINUTE = 12;
+const askSeen = new Map<string, { count: number; windowStart: number }>();
+
+function askAllowance(who: string): boolean {
+  const now = Date.now();
+  const entry = askSeen.get(who);
+
+  if (!entry || now - entry.windowStart > 60_000) {
+    askSeen.set(who, { count: 1, windowStart: now });
+    /* Swept here rather than on a timer — the map only grows when somebody is
+       asking, so the moment somebody asks is the right moment to tidy. */
+    if (askSeen.size > 500) {
+      for (const [k, v] of askSeen) if (now - v.windowStart > 60_000) askSeen.delete(k);
+    }
+    return true;
+  }
+
+  if (entry.count >= ASK_PER_MINUTE) return false;
+  entry.count++;
+  return true;
 }
 
 // ── SSE broadcast ──────────────────────────────────────────────────────────
@@ -820,6 +852,44 @@ const server = http.createServer(async (req, res) => {
       source,
       applicationWindowMinutes: prefs?.applicationWindowMinutes ?? config.applicationWindowMinutes,
     });
+  }
+
+  /*
+   * THE ASSISTANT. Open to anyone, so it is rate-limited by IP.
+   *
+   * A public endpoint that costs money per call needs a ceiling, and a cheap
+   * fixed window is the right amount of machinery for one: a burst is what
+   * would hurt, and a burst is exactly what this stops.
+   */
+  if (req.method === "POST" && url.pathname === "/api/ask") {
+    const who = (req.socket.remoteAddress ?? "unknown") as string;
+    if (!askAllowance(who)) {
+      return json(res, 429, {
+        error: "That is a lot of questions at once — give it a moment and ask again.",
+      });
+    }
+
+    try {
+      const body = JSON.parse(await readBody(req)) as {
+        messages?: { role?: string; content?: string }[];
+        viewer?: { role?: string | null; hiring?: number; working?: number; page?: string | null };
+      };
+
+      const turns = Array.isArray(body.messages)
+        ? body.messages.map((m) => ({ role: m.role === "assistant" ? "assistant" as const : "user" as const, content: String(m.content ?? "") }))
+        : [];
+
+      const answer = await askAtelier(turns, body.viewer);
+      return json(res, 200, { answer });
+    } catch (err) {
+      if (err instanceof QuestionRejected) return json(res, 400, { error: err.message });
+      if (err instanceof AssistantUnavailable) {
+        return json(res, 503, {
+          error: "The assistant is unavailable right now. Everything else works normally.",
+        });
+      }
+      return json(res, 500, { error: clientError(err) });
+    }
   }
 
   if (req.method === "GET" && url.pathname === "/api/limits") {

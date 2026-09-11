@@ -1,6 +1,7 @@
 import { Routes, Route, Outlet, Navigate, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "./components/error-boundary";
 import { Navbar } from "./components/navbar";
+import { AskAtelierDock } from "./components/atelier/ask-atelier-dock";
 import { Toaster } from "./components/ui/toaster";
 import { NewMessageWatcher } from "./components/new-message-watcher";
 import { EscrowPoller } from "./components/escrow-poller";
@@ -37,6 +38,12 @@ const AppLayout = () => {
       </div>
       <NewMessageWatcher />
       <EscrowPoller />
+      {/*
+        Outside the route's error boundary on purpose. If a page throws, the
+        assistant is one of the few things still able to tell somebody what is
+        going on — putting it inside would take it down with the page.
+      */}
+      <AskAtelierDock />
       <Toaster />
     </>
   );
