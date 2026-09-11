@@ -101,6 +101,13 @@ export interface WorkItem {
    * stage without ever learning what happened to the last one.
    */
   canSubmit?: boolean;
+  /**
+   * Whether the stage counts on this row were actually read from the chain.
+   *
+   * False means they are placeholders, not figures — the daemon could not reach
+   * the chain for this job. The board must not reason from them.
+   */
+  stagesKnown?: boolean;
   /** Stages sent back for changes. */
   needsRevision?: number;
   /**

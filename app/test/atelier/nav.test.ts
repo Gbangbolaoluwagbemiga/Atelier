@@ -197,3 +197,44 @@ describe("isCurrent", () => {
     expect(isCurrent("/jobs", "/")).toBe(false);
   });
 });
+
+
+/**
+ * A CONVERSATION NEEDS A DOOR AT BOTH ENDS.
+ *
+ * Messages had a page, a table, an inbox endpoint and an unread count. The only
+ * link to it was on the old freelancer dashboard — a page a managed worker
+ * never sees — so a client could start a conversation the other person had no
+ * route to. A message was deliverable and unreadable at the same time.
+ */
+describe("the way into Messages", () => {
+  const labels = (roles: Parameters<typeof visibleNav>[0]) =>
+    visibleNav(roles).map((i) => i.label);
+
+  const nobody = {
+    isFreelancer: false,
+    isClient: false,
+    isArbiter: false,
+    isAdmin: false,
+  };
+
+  it("is there for somebody holding their own wallet", () => {
+    expect(labels({ ...nobody, hasOwnWallet: true })).toContain("Messages");
+  });
+
+  it("is there for a managed worker, who never connects one", () => {
+    expect(labels({ ...nobody, hasManagedAccount: true })).toContain("Messages");
+  });
+
+  it("does not need you to have worked here first", () => {
+    // A client can message a freelancer who has never taken a job. Gating this
+    // on "participant" would hide the message from its recipient.
+    const items = visibleNav({ ...nobody, hasManagedAccount: true });
+    expect(items.map((i) => i.label)).not.toContain("My Jobs");
+    expect(items.map((i) => i.label)).toContain("Messages");
+  });
+
+  it("is not offered to a visitor with no account at all", () => {
+    expect(labels(nobody)).not.toContain("Messages");
+  });
+});

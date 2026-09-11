@@ -486,25 +486,53 @@ export async function hiredEscrowsFor(who: `0x${string}`): Promise<bigint[]> {
 
     if (next <= MAX_DIRECT_ESCROW_SCAN) {
       const ids = Array.from({ length: Number(next) - 1 }, (_, i) => BigInt(i + 1));
-      const escrows = await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const e = (await client.readContract({
-              address: config.atelierAddress,
-              abi,
-              functionName: "getEscrow",
-              args: [id],
-            })) as { beneficiary?: string };
-            return e.beneficiary?.toLowerCase() === who.toLowerCase() ? id : null;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      return escrows.filter((id): id is bigint => id !== null);
+
+      /*
+       * One request, and every failure counted.
+       *
+       * This was a per-id readContract with `catch { return null }` around it,
+       * which is the same mistake as the one the comment above describes, one
+       * level further down. When the RPC answered `rate limit exceeded` — which
+       * it does, precisely because this was N requests — every read failed,
+       * every one became null, and the filter turned a pile of failures into a
+       * clean empty array. The caller has no way to tell that apart from "this
+       * person was never hired", so it reported `answered: true` and a
+       * freelancer's finished job disappeared off their board.
+       *
+       * So: multicall3 for the N-into-1, and if ANY escrow did not answer we
+       * did not learn what this person was hired for. Say nothing rather than
+       * say nothing confidently.
+       */
+      const results = await client.multicall({
+        contracts: ids.map((id) => ({
+          address: config.atelierAddress,
+          abi,
+          functionName: "getEscrow" as const,
+          args: [id] as const,
+        })),
+        allowFailure: true,
+      });
+
+      const unanswered = results.filter((r) => r.status !== "success").length;
+      if (unanswered > 0) {
+        throw new Error(
+          `${unanswered} of ${ids.length} escrows did not answer — cannot tell who was hired`,
+        );
+      }
+
+      return ids.filter((_, i) => {
+        const e = results[i]!.result as { beneficiary?: string };
+        return e?.beneficiary?.toLowerCase() === who.toLowerCase();
+      });
     }
-  } catch {
-    /* fall through to the log walk */
+  } catch (err) {
+    /* Fall through to the log walk — a second source, not a shrug. If it fails
+       too, the throw leaves this function and the caller reports that nobody
+       answered, which is the truth. */
+    console.warn(
+      "[chain] direct escrow scan could not answer, trying the log walk:",
+      err instanceof Error ? err.message : err,
+    );
   }
 
   const event = {

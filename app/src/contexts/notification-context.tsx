@@ -10,9 +10,10 @@ import {
   type ReactNode,
 } from "react";
 import { useWeb3 } from "./web3-context";
-import { currentWorkerAddress, WORKER_IDENTITY_EVENT } from "@/lib/atelier/worker";
+import { useMyAddress } from "@/hooks/use-my-address";
 import { useToast } from "@/hooks/use-toast";
 import {
+  getInbox,
   getNotifications,
   isApiConfigured,
   patchNotificationRead,
@@ -107,20 +108,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
    * A connected wallet still wins — that is the person actively using the app
    * as a client.
    */
-  const [workerAddress, setWorkerAddress] = useState<string | null>(() =>
-    currentWorkerAddress(),
-  );
-  useEffect(() => {
-    const sync = () => setWorkerAddress(currentWorkerAddress());
-    window.addEventListener(WORKER_IDENTITY_EVENT, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(WORKER_IDENTITY_EVENT, sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
-
-  const identity = wallet.address ?? workerAddress ?? null;
+  const identity = useMyAddress();
   const hasIdentity = Boolean(identity);
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -317,6 +305,72 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
     }
   };
+
+  /*
+   * A DIRECT MESSAGE RINGS THE BELL.
+   *
+   * It did not. Messages had a table, routes, an inbox page and a
+   * `getUnreadMessageCount` helper that nothing in the app ever called — so a
+   * client could send a freelancer a message and the only way to find out was
+   * to go looking for a page that was not in the nav. Somebody was messaged and
+   * never knew.
+   *
+   * One notification per thread, not per message: the point is "this person is
+   * waiting on you", and three pings for three lines of one conversation is
+   * noise. The id is derived from the thread and the time of its newest
+   * message, so polling re-derives the same id and merges rather than piling
+   * up, and a genuinely newer message makes a new one.
+   */
+  useEffect(() => {
+    if (!identity || !isApiConfigured()) return;
+    let cancelled = false;
+
+    const check = async () => {
+      let inbox: Awaited<ReturnType<typeof getInbox>>;
+      try {
+        inbox = await getInbox(identity);
+      } catch {
+        /* The bell is a courtesy; a failed read leaves it as it was rather than
+           clearing notifications the user has not seen yet. */
+        return;
+      }
+      if (cancelled) return;
+
+      const fresh: Notification[] = inbox
+        .filter((c) => c.unread > 0)
+        .map((c) => ({
+          id: `message_${c.conversation_id}_${c.latest_at}`,
+          type: "message" as const,
+          title: c.unread > 1 ? `${c.unread} new messages` : "New message",
+          message: `${c.other_address.slice(0, 6)}…${c.other_address.slice(-4)}: ${c.latest_message.slice(0, 120)}`,
+          timestamp: new Date(c.latest_at),
+          read: false,
+          actionUrl: "/messages",
+          data: { conversationId: c.conversation_id, from: c.other_address },
+        }));
+
+      if (fresh.length === 0) return;
+
+      setNotifications((prev) => {
+        const known = new Set(prev.map((n) => n.id));
+        const added = fresh.filter((n) => !known.has(n.id));
+        if (added.length === 0) return prev;
+        return [...added, ...prev].sort(
+          (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+        );
+      });
+    };
+
+    void check();
+    const t = window.setInterval(() => void check(), 20_000);
+    const onFocus = () => void check();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [identity]);
 
   useEffect(() => {
     if (!identity || !isApiConfigured()) return;

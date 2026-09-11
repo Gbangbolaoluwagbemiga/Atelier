@@ -17,6 +17,27 @@ export const arcTestnet = defineChain({
   blockExplorers: {
     default: { name: "ArcScan", url: "https://testnet.arcscan.app" },
   },
+  /*
+   * MULTICALL3, WHICH WAS ALWAYS THERE.
+   *
+   * Arc has multicall3 at the canonical address, and this chain never said so.
+   * viem will not use a contract a chain has not declared, so every
+   * `client.multicall(...)` in this app threw ChainDoesNotSupportContract and
+   * fell into its fallback — which in every case was the sequential loop the
+   * batch existed to replace. Escrows, milestones, the analytics page and the
+   * autopilot badge were all doing one request per item while the code around
+   * them explained why they didn't.
+   *
+   * Nothing was visibly broken, which is why it survived: the fallbacks worked.
+   * They just spent N requests where one would do, against a public RPC that
+   * answers `rate limit exceeded` under exactly that kind of load — and a
+   * rate-limited read is where this app's worst bugs start.
+   *
+   * Verified deployed on Arc testnet (7618 bytes of code) before declaring it.
+   */
+  contracts: {
+    multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" },
+  },
   testnet: true,
 });
 

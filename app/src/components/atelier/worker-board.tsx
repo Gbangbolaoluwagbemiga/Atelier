@@ -99,31 +99,43 @@ export function WorkerBoard({
   }
 
   const refresh = useCallback(async () => {
-    try {
-      const [q, w, m] = await Promise.all([
-        fetchQuests(worker.id),
-        myWork(worker.id),
-        fetchMe(worker.id),
-      ]);
-      setQuests(q);
-      setWork(w);
-      onWorkerChanged(m);
-      setUnreachable(false);
-    } catch {
-      /*
-       * Still no toast — this polls, and one every few seconds because the
-       * daemon blinked would be worse than a stale board. But the LIST must
-       * not be emptied on a failed read: the daemon now refuses to answer at
-       * all rather than claim an empty bench, and clearing `work` here would
-       * reintroduce exactly the disappearance it was changed to prevent.
-       *
-       * A job vanishing without explanation is the worst thing this page can
-       * do — somebody's work and their money look gone.
-       */
-      setUnreachable((was) => was || work.length === 0);
-    } finally {
-      setLoading(false);
-    }
+    /*
+     * THREE READS, SETTLED SEPARATELY.
+     *
+     * This was a Promise.all with one catch around it, which made the page as
+     * reliable as its least reliable read: a blink from the open-jobs list
+     * discarded a perfectly good answer about the work on your bench, and the
+     * board rendered as though you had none. Somebody watched their finished
+     * job vanish because an unrelated request failed.
+     *
+     * Nothing here depends on anything else here, so nothing else should be
+     * lost when one of them fails. Each result is applied on its own, and the
+     * ones that failed leave what was already on screen alone.
+     */
+    const [q, w, m] = await Promise.allSettled([
+      fetchQuests(worker.id),
+      myWork(worker.id),
+      fetchMe(worker.id),
+    ]);
+
+    if (q.status === "fulfilled") setQuests(q.value);
+    if (w.status === "fulfilled") setWork(w.value);
+    if (m.status === "fulfilled") onWorkerChanged(m.value);
+
+    /*
+     * Still no toast — this polls, and one every few seconds because the daemon
+     * blinked would be worse than a stale board. But the LIST must not be
+     * emptied on a failed read: the daemon refuses to answer at all rather than
+     * claim an empty bench, and clearing `work` here would reintroduce exactly
+     * the disappearance it was changed to prevent.
+     *
+     * A job vanishing without explanation is the worst thing this page can do —
+     * somebody's work and their money look gone.
+     */
+    if (w.status === "fulfilled") setUnreachable(false);
+    else setUnreachable((was) => was || work.length === 0);
+
+    setLoading(false);
   }, [worker.id, onWorkerChanged, work.length]);
 
   useEffect(() => {

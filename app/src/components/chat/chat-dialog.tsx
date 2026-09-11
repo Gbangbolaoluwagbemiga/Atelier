@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Loader2, MessageCircle, WifiOff } from "lucide-react";
+import { sameAddress } from "@/hooks/use-my-address";
 import {
   sendMessage,
   getConversation,
@@ -205,7 +206,10 @@ export function ChatDialog({
             <div className="space-y-2 pb-1">
               <AnimatePresence initial={false}>
                 {messages.map((msg) => {
-                  const isMine = msg.sender_address === myAddress;
+                  /* Case-insensitive: the backend folds addresses to one spelling, and a
+                     client holding a checksummed address would otherwise see every
+                     message they sent rendered as though somebody else had sent it. */
+                  const isMine = sameAddress(msg.sender_address, myAddress);
                   return (
                     <motion.div
                       key={msg.id}

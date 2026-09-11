@@ -10,6 +10,10 @@ export const arcTestnet = defineChain({
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
   rpcUrls: { default: { http: [rpcUrl] } },
   blockExplorers: { default: { name: "Arcscan", url: "https://testnet.arcscan.app" } },
+  /* Declared so viem will actually use it — see the note in the app's copy of
+     this chain. Without this line every batched read falls back to a loop, and
+     the loop is what gets rate-limited. */
+  contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
   testnet: true,
 });
 

@@ -238,14 +238,34 @@ describe("a job with work already delivered", () => {
     expect((await myWork("w1"))[0].canSubmit).toBe(false);
   });
 
-  it("still offers the button when the chain will not say", async () => {
-    // Unknown must not mean "you are finished" — that would strand a delivery.
+  it("withholds the button when the chain will not say", async () => {
+    /*
+     * REVERSED, DELIBERATELY.
+     *
+     * This used to assert the opposite — offer the button, on the reasoning
+     * that "unknown must not mean you are finished, that would strand a
+     * delivery". Both readings of unknown are wrong; the question is which
+     * wrong is worse, and that got answered in use.
+     *
+     * Escrow 7 was delivered in full and paid. One rate-limited request later,
+     * its owner's board said "You were hired — send your work" with the button
+     * live. Asking somebody to redo work they have already been paid for is a
+     * real cost to them; a submission on a stage the daemon cannot count would
+     * not have landed correctly anyway.
+     *
+     * The other way round, the cost is a short wait. The row says the stages
+     * could not be read and the board re-polls, so a genuinely-hired freelancer
+     * gets the button back within seconds rather than being told to do work
+     * twice.
+     */
     hiredEscrowsFor.mockResolvedValue([7n]);
     getMilestones.mockRejectedValue(new Error("rpc down"));
 
     const [row] = await myWork("w1");
-    expect(row.canSubmit).toBe(true);
-    expect(row.milestoneCount).toBe(0);
+    expect(row.canSubmit).toBe(false);
+    expect(row.stagesKnown).toBe(false);
+    // The job is still listed, and says which part failed.
+    expect(row.status).toMatch(/could not read/i);
   });
 });
 
@@ -324,5 +344,68 @@ describe("when no source can answer", () => {
     listTasks.mockReturnValue([]);
 
     await expect(myWork("w1")).resolves.toEqual([]);
+  });
+});
+
+/**
+ * ZERO STAGES AND UNREAD STAGES ARE NOT THE SAME NUMBER.
+ *
+ * The milestone read has always had a catch around it, described as leaving the
+ * row "without a stage summary, not missing". Everything downstream then read
+ * that absence through `?? 0` — and zero is a claim: nothing approved, nothing
+ * awaiting, so there must be something to send.
+ *
+ * Escrow 7 was finished and paid in full. One rate-limited request later, its
+ * owner's board read "You were hired — send your work" with the button live.
+ * Asking somebody to redo work they have already been paid for is worse than
+ * showing them nothing at all.
+ */
+describe("when the stages cannot be read", () => {
+  beforeEach(() => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 3_000_000n, status: 1 });
+    getMilestones.mockRejectedValue(new Error("rate limit exceeded"));
+  });
+
+  it("does not invite a delivery it cannot justify", async () => {
+    const [row] = await myWork("w1");
+    expect(row.canSubmit).toBe(false);
+  });
+
+  it("says the stages could not be read, not 'send your work'", async () => {
+    const [row] = await myWork("w1");
+    expect(row.status).not.toMatch(/send your work/i);
+    expect(row.status).toMatch(/could not read/i);
+  });
+
+  it("marks the counts as unread rather than presenting them as figures", async () => {
+    const [row] = await myWork("w1");
+    expect(row.stagesKnown).toBe(false);
+  });
+
+  it("still lists the job — the row is degraded, not dropped", async () => {
+    const [row] = await myWork("w1");
+    expect(row.escrowId).toBe("7");
+    expect(row.title).toBe("fireball");
+  });
+
+  it("keeps saying finished when the escrow itself settled", async () => {
+    // The escrow released: that is a chain fact and needs no milestone read.
+    const RELEASED = 3;
+    getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 3_000_000n, status: RELEASED });
+
+    const [row] = await myWork("w1");
+    expect(row.state).toBe("completed");
+    expect(row.canSubmit).toBe(false);
+  });
+
+  it("still offers a delivery on a genuinely fresh hire", async () => {
+    // The counts read fine and say nothing has been done — that IS an answer.
+    getMilestones.mockResolvedValue([{ status: 0 }, { status: 0 }]);
+
+    const [row] = await myWork("w1");
+    expect(row.stagesKnown).toBe(true);
+    expect(row.canSubmit).toBe(true);
+    expect(row.status).toMatch(/send your work/i);
   });
 });

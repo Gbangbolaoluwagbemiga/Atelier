@@ -499,12 +499,26 @@ export interface WorkRow {
   awaitingReview: number;
   /** Milestones already approved and paid. */
   approved: number;
-  /** Total stages on this job. */
+  /**
+   * Total stages on this job — meaningful only when `stagesKnown`.
+   *
+   * Zero here has two readings and the difference matters: a job with no stages
+   * yet, or a milestone read that did not come back. See `stagesKnown`.
+   */
   milestoneCount: number;
   /** Stages sent back for changes. */
   needsRevision: number;
   /** False when every stage has been delivered — nothing left to send. */
   canSubmit: boolean;
+  /**
+   * Whether the stage counts above were actually read.
+   *
+   * False means the chain did not answer for this job, so every count is a
+   * placeholder rather than a figure. Without it, a rate-limited read looked
+   * identical to "no stages approved yet" and the board told a freelancer whose
+   * work was finished and paid for to go and send it again.
+   */
+  stagesKnown: boolean;
   /**
    * Who decides on a submission — and therefore how long it should take.
    *
@@ -714,6 +728,22 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
 
     /* The stage counts, read before anything reasons about them. */
     const p = progress.get(escrowId);
+    /*
+     * WHETHER WE READ THEM AT ALL — which zero cannot tell you.
+     *
+     * The milestone read has a catch that "leaves the row without a stage
+     * summary". Everything below then read that absence as `?? 0`, and zero
+     * stages is a meaningful number: it means nothing has been approved, so
+     * there is something to send. A freelancer who had delivered every stage of
+     * escrow 7 and been paid in full was shown "You were hired — send your
+     * work" with the button enabled, because the RPC was rate-limited for one
+     * request.
+     *
+     * Inviting somebody to redo finished work is worse than showing them
+     * nothing. So the failure is carried as a fact rather than flattened into a
+     * count.
+     */
+    const stagesKnown = p !== undefined;
     const awaitingReview = p?.awaiting ?? 0;
     const approved = p?.approved ?? 0;
     const needsRevision = p?.rejected ?? 0;
@@ -766,9 +796,15 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
      * thing they are being asked to send again.
      */
     const somethingToSend = milestoneCount === 0 || approved + awaitingReview < milestoneCount;
-    const canSubmit = state === "hired" && awaitingReview === 0 && somethingToSend;
+    const canSubmit =
+      stagesKnown && state === "hired" && awaitingReview === 0 && somethingToSend;
 
-    if (state === "hired" && needsRevision > 0 && awaitingReview === 0) {
+    if (state === "hired" && !stagesKnown) {
+      /* Say which part failed. "Send your work" here would be a request to do
+         work that may already be done and paid for. */
+      icon = "…";
+      status = "Could not read this job's stages just now — trying again shortly";
+    } else if (state === "hired" && needsRevision > 0 && awaitingReview === 0) {
       icon = "✏️";
       status = "Changes requested — revise and send it again";
     } else if (state === "hired" && awaitingReview > 0) {
@@ -788,6 +824,7 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
     out.push({
       escrowId, title, budget, status, icon, state,
       awaitingReview, approved, needsRevision, milestoneCount, canSubmit,
+      stagesKnown,
       reviewer: reviewers.get(escrowId) ?? null,
     });
   }

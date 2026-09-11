@@ -11,8 +11,8 @@ import {
   InboxIcon,
   WifiOff,
 } from "lucide-react";
-import { useWeb3 } from "@/contexts/web3-context";
 import { getInbox, isApiConfigured, Conversation } from "@/lib/api";
+import { useMyAddress } from "@/hooks/use-my-address";
 import { ChatDialog } from "@/components/chat/chat-dialog";
 
 const AVATAR_COLORS = [
@@ -45,8 +45,10 @@ function formatRelative(iso: string): string {
 }
 
 export default function MessagesPage() {
-  const { wallet } = useWeb3();
-  const myAddress = wallet.address ?? "";
+  /* Not `wallet.address`. A managed worker signs in with Google and never
+     connects a wallet, so this page asked for the inbox of the empty string and
+     showed them nothing — while messages addressed to them sat in the table. */
+  const myAddress = useMyAddress() ?? "";
   const apiOk = isApiConfigured();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -126,7 +128,8 @@ export default function MessagesPage() {
             <CardContent className="py-16 text-center">
               <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
               <p className="text-muted-foreground">
-                Connect your wallet to view messages.
+                Sign in to view your messages — connect a wallet, or use the
+                Get Hired door if you would rather we held one for you.
               </p>
             </CardContent>
           </Card>
