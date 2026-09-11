@@ -299,12 +299,22 @@ export class ContractService {
    * Returns null rather than the zero address so callers cannot accidentally
    * treat "nobody" as an address and render a manager chip for 0x000…000.
    */
+  /**
+   * Who manages this job, or null when nobody does.
+   *
+   * THROWS rather than answering null when the read fails, and the difference
+   * is the whole point: null here MEANS "the client runs this job themselves".
+   * Swallowing an RPC error into that value told a client they had taken back
+   * control of a job the agent was still managing on-chain — the panel said
+   * "You are running this job" while `jobManager` still named the agent.
+   *
+   * A caller that genuinely cannot proceed without an answer can catch this.
+   * None of them should turn it back into null.
+   */
   async getJobManager(escrowId: number): Promise<string | null> {
-    try {
-      const mgr = await this.contract.read.jobManager([BigInt(escrowId)]);
-      const addr = String(mgr);
-      return /^0x0{40}$/i.test(addr) ? null : addr;
-    } catch { return null; }
+    const mgr = await this.contract.read.jobManager([BigInt(escrowId)]);
+    const addr = String(mgr);
+    return /^0x0{40}$/i.test(addr) ? null : addr;
   }
 
   async getUserEscrows(addr: string): Promise<number[]> {

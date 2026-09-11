@@ -31,6 +31,35 @@ export interface JobManagerState {
   refresh: () => Promise<void>;
 }
 
+/**
+ * One answer per job, shared by everyone asking about it.
+ *
+ * WHY THIS EXISTS
+ *
+ * The card shows an Autopilot badge, the panel inside it offers to hand over or
+ * take back, and the milestone buttons gate on the same fact — and each called
+ * this hook separately, so each held its own copy. Taking a job back updated
+ * the panel and left the badge above it still saying Autopilot, through a hard
+ * refresh, because nothing told the other instances anything had changed.
+ *
+ * A tiny store rather than a data-fetching library: this is one address per
+ * escrow, and every component that cares is on screen at the same time.
+ */
+const managerCache = new Map<number, string | null>();
+const managerWatchers = new Map<number, Set<(v: string | null) => void>>();
+
+function publishManager(escrowId: number, value: string | null): void {
+  managerCache.set(escrowId, value);
+  for (const fn of managerWatchers.get(escrowId) ?? []) fn(value);
+}
+
+function watchManager(escrowId: number, fn: (v: string | null) => void): () => void {
+  const set = managerWatchers.get(escrowId) ?? new Set();
+  set.add(fn);
+  managerWatchers.set(escrowId, set);
+  return () => set.delete(fn);
+}
+
 export function useJobManager(escrowId: number | null): JobManagerState {
   const { wallet } = useWeb3();
   const { writeContractAsync } = useWriteContract();
@@ -52,7 +81,24 @@ export function useJobManager(escrowId: number | null): JobManagerState {
    */
   const settle = useCallback(
     async (hash: `0x${string}`) => {
-      if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        /*
+         * A mined transaction is not a successful one.
+         *
+         * waitForTransactionReceipt resolves for a REVERTED transaction just as
+         * happily as for one that worked, and nothing checked which. So a
+         * revoke that the contract rejected came back through the success path
+         * and told the client "you are running this job again" while the agent
+         * was still its manager on-chain. On a control they reach for precisely
+         * when they want the agent to stop, that is the worst possible lie.
+         */
+        if (receipt.status === "reverted") {
+          throw new Error(
+            "The transaction was rejected on-chain, so nothing changed. Nobody's money moved.",
+          );
+        }
+      }
       await refreshRef.current();
       return hash;
     },
@@ -70,9 +116,23 @@ export function useJobManager(escrowId: number | null): JobManagerState {
       setLoaded(true);
       return;
     }
-    const current = await contractService.getJobManager(escrowId);
-    setManager(current);
-    setLoaded(true);
+    try {
+      const current = await contractService.getJobManager(escrowId);
+      publishManager(escrowId, current);
+      setManager(current);
+      setLoaded(true);
+      setError(null);
+    } catch (e) {
+      /*
+       * Keep the last answer and stay "not loaded" rather than reporting null.
+       *
+       * null means "the client runs this job", so turning a failed read into it
+       * flips every surface to the wrong mode: the panel offers to hand over a
+       * job already handed over, and the milestone buttons come back on a job
+       * the agent is mid-review on. Saying nothing is the honest failure.
+       */
+      setError(humanizeError(e));
+    }
   }, [escrowId]);
 
   refreshRef.current = refresh;
@@ -82,8 +142,26 @@ export function useJobManager(escrowId: number | null): JobManagerState {
        a manual one briefly renders the previous job's manager as this one's. */
     setLoaded(false);
     setManager(null);
+
+    if (escrowId === null) {
+      void refresh();
+      return;
+    }
+
+    /* Seed from whatever another instance already learned, so a second reader
+       is never blank while it waits for its own request. */
+    if (managerCache.has(escrowId)) {
+      setManager(managerCache.get(escrowId) ?? null);
+      setLoaded(true);
+    }
+
+    const stop = watchManager(escrowId, (v) => {
+      setManager(v);
+      setLoaded(true);
+    });
     void refresh();
-  }, [refresh]);
+    return stop;
+  }, [refresh, escrowId]);
 
   const delegate = useCallback(async () => {
     if (escrowId === null) throw new Error("No job selected.");
