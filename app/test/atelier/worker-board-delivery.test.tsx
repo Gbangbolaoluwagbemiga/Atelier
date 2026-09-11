@@ -586,20 +586,38 @@ describe("opening a finished job", () => {
     expect(screen.getByText("Returned to the client").parentElement).toHaveTextContent("$2");
   });
 
-  it("says plainly that the written reasoning cannot be shown", async () => {
-    // Because it genuinely cannot — it is in the resolver's browser and the
-    // contract's DisputeResolved event does not carry it. Better to say so than
-    // to leave a freelancer hunting for an explanation that does not exist.
+  it("shows the arbiter's own words, now that there is somewhere to keep them", async () => {
+    // The reason used to live in the resolver's localStorage and nowhere else,
+    // so the freelancer whose payment it decided could never read it. It is
+    // recorded against the milestone now, and this is the person it is about.
     deliveryTarget.mockResolvedValue({
       escrowId: "7", index: 1, count: 2, description: "Stage two", amountUsdc: 2,
       criteria: [], agentReviewed: true, previousFeedback: null, lastReview: null,
-      disputeOutcome: { freelancerUsdc: 0, clientUsdc: 2 },
+      disputeOutcome: {
+        freelancerUsdc: 0,
+        clientUsdc: 2,
+        reason: "No deliverable was ever provided across three revision rounds.",
+      },
     });
 
     render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
     await userEvent.click(await screen.findByRole("button", { name: /see how this ended/i }));
 
-    expect(await screen.findByText(/cannot show it to you here/i)).toBeInTheDocument();
+    expect(await screen.findByText(/why they decided that/i)).toBeInTheDocument();
+    expect(screen.getByText(/three revision rounds/i)).toBeInTheDocument();
+  });
+
+  it("says none was recorded, for a dispute settled before there was anywhere to put it", async () => {
+    deliveryTarget.mockResolvedValue({
+      escrowId: "7", index: 1, count: 2, description: "Stage two", amountUsdc: 2,
+      criteria: [], agentReviewed: true, previousFeedback: null, lastReview: null,
+      disputeOutcome: { freelancerUsdc: 0, clientUsdc: 2, reason: null },
+    });
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /see how this ended/i }));
+
+    expect(await screen.findByText(/did not record a written reason/i)).toBeInTheDocument();
   });
 
   it("says it was simply approved when no arbiter was involved", async () => {

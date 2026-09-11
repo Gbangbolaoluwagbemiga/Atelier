@@ -52,6 +52,7 @@ It creates:
 | `notifications` | the bell in the top bar |
 | `messages` | client ↔ freelancer chat |
 | `applications` | cover letters, beside the on-chain application |
+| `dispute_resolutions` | why an arbiter split a milestone the way they did |
 | `archived_escrows` | the per-wallet "hide this job" list |
 | `milestone-attachments` | storage bucket for deliverables, 10 MB, public read |
 

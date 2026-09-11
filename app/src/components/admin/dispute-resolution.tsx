@@ -28,6 +28,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useSignMessage } from "wagmi";
+import { saveDisputeResolutionNote } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { useNotifications } from "@/contexts/notification-context";
@@ -57,6 +59,7 @@ interface DisputeResolutionProps {
 
 export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps) {
   const { wallet } = useWeb3();
+  const { signMessageAsync } = useSignMessage();
   const { toast } = useToast();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
@@ -201,6 +204,37 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
 
       // Only show success and send notifications if transaction was confirmed
       toast({ title: "Dispute Resolved", description: "Resolution confirmed on-chain." });
+
+      /*
+       * PUT THE REASONING SOMEWHERE BOTH SIDES CAN READ IT.
+       *
+       * Below, this was written to localStorage — on this machine, belonging to
+       * whoever happened to resolve it — and the contract's DisputeResolved
+       * event carries the amounts but not the words. So the freelancer whose
+       * payment had just been decided could never read why, from any device.
+       *
+       * After the transaction, because only a resolution that actually landed
+       * has a reason worth recording, and the backend verifies the signer
+       * against the on-chain event. Not fatal: the money has already moved, and
+       * failing the whole action here would tell an arbiter their ruling did
+       * not go through when it did.
+       */
+      if (resolutionReason.trim() && wallet.address) {
+        try {
+          await saveDisputeResolutionNote({
+            escrowId: selectedDispute.escrowId,
+            milestoneIndex: Number(selectedDispute.milestoneIndex),
+            arbiter: wallet.address,
+            reason: resolutionReason.trim(),
+            signMessageAsync,
+          });
+        } catch (e) {
+          toast({
+            title: "Resolution recorded on-chain",
+            description: `Your written reason could not be saved (${e instanceof Error ? e.message : "unknown error"}), so only the amounts are visible to both sides.`,
+          });
+        }
+      }
       
       // Dispatch event for dispute resolved
       window.dispatchEvent(new CustomEvent("disputeResolved", {

@@ -1,5 +1,5 @@
 import { encodeJobId } from "@/lib/id-codec";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWriteContract, usePublicClient } from "wagmi";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { fetchDisputeResolutionNotes } from "@/lib/api";
 import { useWeb3 } from "@/contexts/web3-context";
 import {
   useNotifications,
@@ -90,6 +91,29 @@ export function MilestoneActions({
     | null
   >(null);
   const [disputeReason, setDisputeReason] = useState("");
+  /*
+   * The arbiter's written reasoning, from where both parties can read it.
+   *
+   * Only fetched for a milestone that actually went to arbitration — this is a
+   * network call on a component that renders once per milestone, and a job with
+   * five stages should not make five requests to learn there were no disputes.
+   */
+  const [sharedReason, setSharedReason] = useState<string | null>(null);
+  useEffect(() => {
+    if (milestone.status !== "resolved" && milestone.status !== "disputed") return;
+    let live = true;
+    void fetchDisputeResolutionNotes(escrowId)
+      .then((notes) => {
+        if (!live) return;
+        const mine = notes.find((n) => Number(n.milestone_index) === Number(milestoneIndex));
+        if (mine?.reason) setSharedReason(mine.reason);
+      })
+      .catch(() => {
+        /* the local copy and the on-chain amounts still render */
+      });
+    return () => { live = false; };
+  }, [escrowId, milestoneIndex, milestone.status]);
+
   const [resubmitMessage, setResubmitMessage] = useState("");
 
   // Helper functions
@@ -590,8 +614,18 @@ export function MilestoneActions({
               const idStr = String(escrowId);
               const idxStr = String(milestoneIndex);
 
-              // Resolution reason: try both key formats
+              /*
+               * The shared note first, then this browser's own copy.
+               *
+               * localStorage is whoever resolved it, on whichever machine they
+               * were using — which is why the other party could never read the
+               * reasoning behind their own payment. The recorded note is the
+               * same sentence, somewhere both sides can reach. The local keys
+               * stay as a fallback for disputes settled before there was
+               * anywhere to put it.
+               */
               let resolutionReason =
+                sharedReason ||
                 localStorage.getItem(`resolution_${idStr}_${idxStr}`) ||
                 localStorage.getItem(`resolution_${escrowId}_${milestoneIndex}`) ||
                 milestone.resolutionReason ||

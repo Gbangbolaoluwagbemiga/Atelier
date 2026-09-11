@@ -382,3 +382,102 @@ export async function uploadMilestoneFile(
 
   return res.json() as Promise<UploadedFile>;
 }
+
+/* ── An arbiter's reasoning, where both sides can read it ─────────────────── */
+
+export interface DisputeResolutionNote {
+  milestone_index: number;
+  arbiter_address: string;
+  reason: string;
+  resolved_at: string;
+}
+
+/**
+ * Must produce byte-identical output to `buildResolutionAuthMessage` in
+ * backend/src/routes/disputes.ts — the backend verifies this exact string.
+ */
+export function buildResolutionAuthMessage(
+  escrowId: string | number,
+  milestoneIndex: string | number,
+  arbiter: string,
+  timestamp: string | number,
+): string {
+  return [
+    "Atelier dispute resolution note",
+    `Escrow: ${escrowId}`,
+    `Milestone: ${milestoneIndex}`,
+    `Arbiter: ${arbiter.toLowerCase()}`,
+    `Timestamp: ${timestamp}`,
+  ].join("\n");
+}
+
+/**
+ * Record why a dispute was settled, so the other side can read it.
+ *
+ * The reason used to live in localStorage on the resolver's own machine, and
+ * the contract's DisputeResolved event carries the amounts but not the words —
+ * so the freelancer whose payment it decided could never see it, anywhere.
+ *
+ * Signed, and the backend additionally checks the signer is the arbiter named
+ * in the on-chain event for that milestone. Without that, the reasoning behind
+ * somebody else's payment would be a thing strangers could author.
+ */
+export async function saveDisputeResolutionNote(input: {
+  escrowId: string | number;
+  milestoneIndex: number;
+  arbiter: string;
+  reason: string;
+  signMessageAsync: (args: { message: string }) => Promise<string>;
+}): Promise<void> {
+  const base = getApiBase();
+  if (!base) throw new Error("VITE_API_URL is not set");
+
+  const timestamp = Date.now();
+  const message = buildResolutionAuthMessage(
+    input.escrowId,
+    input.milestoneIndex,
+    input.arbiter,
+    timestamp,
+  );
+  const signature = await input.signMessageAsync({ message });
+
+  const secret = apiSecret();
+  const res = await fetch(`${base}/v1/disputes/resolution`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+    },
+    body: JSON.stringify({
+      escrow_id: String(input.escrowId),
+      milestone_index: String(input.milestoneIndex),
+      arbiter_address: input.arbiter,
+      reason: input.reason,
+      signature,
+      timestamp: String(timestamp),
+    }),
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Could not save the resolution note (${res.status})`);
+  }
+}
+
+/** Every recorded reason for one escrow. Empty when none were written. */
+export async function fetchDisputeResolutionNotes(
+  escrowId: string | number,
+): Promise<DisputeResolutionNote[]> {
+  const base = getApiBase();
+  if (!base) return [];
+
+  const secret = apiSecret();
+  const res = await fetch(
+    `${base}/v1/disputes/resolution?escrow_id=${encodeURIComponent(String(escrowId))}`,
+    { headers: secret ? { Authorization: `Bearer ${secret}` } : {} },
+  );
+  if (!res.ok) return [];
+
+  const body = (await res.json().catch(() => ({}))) as { resolutions?: DisputeResolutionNote[] };
+  return body.resolutions ?? [];
+}

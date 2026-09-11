@@ -364,11 +364,24 @@ export function WorkerBoard({
                           <span className="text-muted-foreground">Returned to the client</span>
                           <span className="font-medium">${target.disputeOutcome.clientUsdc}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          A human arbiter settled this, not the agent. The split
-                          above is recorded on-chain; their written reasoning is
-                          not, so we cannot show it to you here.
-                        </p>
+                        {target.disputeOutcome.reason ? (
+                          <div className="pt-1">
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                              Why they decided that
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {target.disputeOutcome.reason}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            A human arbiter settled this, not the agent. They did
+                            not record a written reason for this one — only the
+                            split above, which is on-chain.
+                          </p>
+                        )}
+
+
                       </>
                     ) : (
                       <p className="text-muted-foreground">

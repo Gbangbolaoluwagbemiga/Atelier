@@ -864,7 +864,12 @@ export async function deliveryTarget(escrowId: string): Promise<{
    * on-chain and is the part that actually decides anything, so that is what
    * gets shown rather than nothing at all.
    */
-  disputeOutcome: { freelancerUsdc: number; clientUsdc: number } | null;
+  disputeOutcome: {
+    freelancerUsdc: number;
+    clientUsdc: number;
+    /** What the arbiter wrote, when they recorded it. */
+    reason: string | null;
+  } | null;
   /**
    * The reviewer's verdict on this stage, criterion by criterion.
    *
@@ -977,16 +982,47 @@ export async function deliveryTarget(escrowId: string): Promise<{
     /* a verdict we cannot read is not worth failing a delivery over */
   }
 
-  let disputeOutcome: { freelancerUsdc: number; clientUsdc: number } | null = null;
+  let disputeOutcome:
+    | { freelancerUsdc: number; clientUsdc: number; reason: string | null }
+    | null = null;
   try {
     const awards = await atelier.disputeAwards(BigInt(escrowId));
     const mine = awards.find((a) => Number(a.milestoneIndex) === index);
     if (mine) {
       /* disputeAwards already returns USDC, not base units — dividing here too
          turned a 2 USDC refund into 0.000002. */
+      /*
+       * And what they wrote, if anywhere. The contract's event carries the
+       * amounts but not the words, so the reasoning lives in the API — which
+       * answers with nothing for a dispute settled before it had somewhere to
+       * put it, and that is a truthful nothing rather than a failure.
+       */
+      let reason: string | null = null;
+      if (config.apiUrl) {
+        try {
+          const r = await fetch(
+            `${config.apiUrl}/v1/disputes/resolution?escrow_id=${escrowId}`,
+            {
+              headers: config.apiSecret ? { authorization: `Bearer ${config.apiSecret}` } : {},
+              signal: AbortSignal.timeout(5000),
+            },
+          );
+          if (r.ok) {
+            const body = (await r.json()) as {
+              resolutions?: { milestone_index: number; reason: string }[];
+            };
+            reason =
+              body.resolutions?.find((n) => Number(n.milestone_index) === index)?.reason ?? null;
+          }
+        } catch {
+          /* the split still renders without it */
+        }
+      }
+
       disputeOutcome = {
         freelancerUsdc: mine.freelancerAmount,
         clientUsdc: mine.clientAmount,
+        reason,
       };
     }
   } catch {

@@ -318,7 +318,12 @@ export interface DeliveryTarget {
    * something the other side can ever be shown. The split is on-chain and is
    * the part that decides anything, so that is what gets shown.
    */
-  disputeOutcome?: { freelancerUsdc: number; clientUsdc: number } | null;
+  disputeOutcome?: {
+    freelancerUsdc: number;
+    clientUsdc: number;
+    /** What the arbiter wrote, when they recorded it. */
+    reason?: string | null;
+  } | null;
 }
 
 /**
