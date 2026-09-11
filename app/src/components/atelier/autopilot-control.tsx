@@ -118,6 +118,19 @@ export function AutopilotControl({
    * would be right until the day it quietly was not.
    */
   const [windowMinutes, setWindowMinutes] = useState<number | null>(null);
+
+  /*
+   * Bumped after a hand-over, because the window is read once on mount and the
+   * client has just changed it.
+   *
+   * Without this the card kept quoting whatever the window was when the page
+   * loaded: somebody picked twenty-four hours, the toast said a day because it
+   * reports what was saved, and the panel underneath went on promising four
+   * hours from the delegation before. Two true-looking numbers about the same
+   * job, and the wrong one is the one that stays on screen.
+   */
+  const [windowTick, setWindowTick] = useState(0);
+
   useEffect(() => {
     let live = true;
 
@@ -137,7 +150,7 @@ export function AutopilotControl({
           .catch(() => {});
       });
     return () => { live = false; };
-  }, [escrowId]);
+  }, [escrowId, windowTick]);
 
   const { manager, loaded, busy, delegate, revoke } = useJobManager(escrowId);
   const { wallet } = useWeb3();
@@ -261,6 +274,11 @@ export function AutopilotControl({
        * worse than none: it is the reason nobody noticed.
        */
       const effective = windowSaved ? chosenWindow : defaultWindow;
+
+      /* Show it immediately, then confirm from the daemon — the panel is about
+         to re-render as "Autopilot is running this job" and quote a number. */
+      if (effective !== null) setWindowMinutes(effective);
+      setWindowTick((n) => n + 1);
       const windowLabel = effective !== null ? describeWindow(effective) : null;
 
       toast({

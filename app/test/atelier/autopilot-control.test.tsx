@@ -577,3 +577,60 @@ describe("a job whose title contradicts its description", () => {
     expect(screen.queryByText(/ask for different things/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * THE CARD AND THE TOAST HAVE TO AGREE.
+ *
+ * The window was read once on mount, so after a hand-over the panel kept
+ * quoting whatever it was when the page loaded. Somebody picked twenty-four
+ * hours, the toast said "a day" because it reports what was saved, and the
+ * panel underneath went on promising the four hours from the delegation
+ * before. Two true-looking numbers about the same job, and the wrong one is
+ * the one that stays on screen.
+ */
+describe("the window shown after handing over", () => {
+  it("matches what was just saved, not what was there before", async () => {
+    // The job currently runs a four-hour window.
+    fetchJobCriteria.mockResolvedValue({
+      criteria: [], source: "brief", applicationWindowMinutes: 240,
+    });
+
+    const { rerender } = render(
+      <AutopilotControl escrowId={8} isClient projectDescription="Make me a dashboard." />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /24 hours/i }));
+
+    // From here the daemon would answer with the new window.
+    fetchJobCriteria.mockResolvedValue({
+      criteria: [], source: "approved", applicationWindowMinutes: 1440,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+    await waitFor(() => expect(saveHandoverPrefs).toHaveBeenCalled());
+
+    hookState.manager = MANAGER;
+    rerender(<AutopilotControl escrowId={8} isClient projectDescription="Make me a dashboard." />);
+
+    expect(await screen.findByText(/a day/i)).toBeInTheDocument();
+    expect(screen.queryByText(/4 hours/i)).not.toBeInTheDocument();
+  });
+
+  it("asks the daemon again rather than trusting the picker", async () => {
+    fetchJobCriteria.mockResolvedValue({
+      criteria: [], source: "brief", applicationWindowMinutes: 240,
+    });
+
+    render(<AutopilotControl escrowId={8} isClient projectDescription="Make me a dashboard." />);
+    await waitFor(() => expect(fetchJobCriteria).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /24 hours/i }));
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+
+    // The optimistic value is shown at once; the daemon still gets asked, so a
+    // save that only half-worked cannot leave a wrong number on screen.
+    await waitFor(() => expect(fetchJobCriteria).toHaveBeenCalledTimes(2));
+  });
+});
