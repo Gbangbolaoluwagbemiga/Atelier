@@ -24,6 +24,7 @@ import type { Escrow } from "@/lib/web3/types";
 import { encodeJobId } from "@/lib/id-codec";
 import { AutopilotControl } from "@/components/atelier/autopilot-control";
 import { useJobManager } from "@/hooks/use-job-manager";
+import { daysUntil, describeDaysLeft } from "@/lib/atelier/deadline";
 import { JobDecisionLog } from "@/components/atelier/job-decision-log";
 import { PostDisputeChoice } from "@/components/atelier/post-dispute-choice";
 import { YieldOptIn } from "@/components/atelier/yield-opt-in";
@@ -248,7 +249,11 @@ export function EscrowCard({
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
                   <span>
-                    {Math.round(escrow.duration / (24 * 60 * 60))} days
+                    {/* The same number the Days Left field shows, from the same
+                        helper. These disagreed by a day — one rounded, the
+                        other ceiled, and neither was reading the deadline. */}
+                    {describeDaysLeft(escrow.deadlineAt) ??
+                      `${Math.round(escrow.duration / (24 * 60 * 60))} days`}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -366,10 +371,12 @@ export function EscrowCard({
                   <div className="font-semibold flex items-center gap-1">
                     <Clock className="h-4 w-4" />
                     {(() => {
-                      const daysLeft = calculateDaysLeft(
-                        escrow.createdAt,
-                        escrow.duration
-                      );
+                      /* From the deadline, which is the only one of these the
+                         chain actually stores. createdAt and duration are both
+                         synthesised, differently, by each loader. */
+                      const daysLeft =
+                        daysUntil(escrow.deadlineAt) ??
+                        calculateDaysLeft(escrow.createdAt, escrow.duration);
                       const message = getDaysLeftMessage(daysLeft);
                       return (
                         <span className={message.color}>{message.text}</span>

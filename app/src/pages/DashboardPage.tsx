@@ -316,6 +316,17 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
               wallet.address.toLowerCase().trim();
 
           if (isPayer || isBeneficiary) {
+            /*
+             * NOT a creation time — the chain does not store one.
+             *
+             * This was Date.now() and named "approx", and anything computing
+             * `createdAt + duration` off it got today's date plus the time
+             * remaining. The subgraph path fills the same field with the real
+             * creation time, so the two loaders produced different answers for
+             * the same job and a background refresh made the number flip
+             * between them. Everything that matters now reads deadlineAt; this
+             * stays only because the shape requires it.
+             */
             const approxCreatedAt = Date.now();
             const deadlineSeconds = Number(escrowData.deadline ?? 0);
             const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
