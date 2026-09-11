@@ -358,3 +358,25 @@ describe("how much chain it reads", () => {
     );
   });
 });
+
+describe("a sweep that gets refused immediately", () => {
+  it("holds its ground rather than losing it", async () => {
+    /*
+     * The sweep starts a little behind the mark to re-read what a reorg might
+     * have changed. When the first window is refused, the cursor is still at
+     * that rewound start — and saving it moved the mark BACKWARDS. Every
+     * rate-limited sweep lost five thousand blocks, so a daemon under pressure
+     * crawled away from the head rather than toward it.
+     */
+    getPollerInt.mockReturnValue(90_000);
+    getBlockNumber.mockResolvedValue(90_100n);
+    getLogs.mockRejectedValue(new Error("rate limit exceeded"));
+
+    await adoptDelegatedJobs();
+
+    const moved = setPollerInt.mock.calls.filter((c) =>
+      String(c[0]).startsWith("scan_cursor:jobmanager:"),
+    );
+    expect(moved).toHaveLength(0);
+  });
+})

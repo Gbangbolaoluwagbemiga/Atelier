@@ -136,7 +136,18 @@ async function delegatedTo(manager: `0x${string}`): Promise<bigint[]> {
     }
   }
 
-  store.setPollerInt(CURSOR_KEY, Number(cursor));
+  /*
+   * Never backwards.
+   *
+   * The sweep starts a little behind the mark on purpose, to re-read blocks a
+   * reorg might have changed. When the very first window is then refused,
+   * `cursor` is still sitting at that rewound start — and saving it moved the
+   * mark BACK five thousand blocks. Every rate-limited sweep lost ground, so a
+   * daemon under pressure crawled away from the head instead of toward it.
+   * Watched it go 61,491,811 → 61,486,811 → 61,481,811 before catching it.
+   */
+  const previous = savedCursor ? BigInt(savedCursor) : 0n;
+  if (cursor > previous) store.setPollerInt(CURSOR_KEY, Number(cursor));
   store.setPollerText(SEEN_KEY, JSON.stringify([...seen].map(String)));
 
   if (rateLimited || cursor < latest) {
