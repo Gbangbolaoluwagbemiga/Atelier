@@ -208,7 +208,9 @@ export async function apply(input: {
 export async function submit(input: {
   workerId: string;
   escrowId: string;
-  milestoneIndex: number;
+  /* Omit to deliver the stage that actually needs work. The daemon resolves it
+     — hard-coding 0 sent a second milestone's delivery to the first one. */
+  milestoneIndex?: number;
   description: string;
 }): Promise<{ txHash?: string }> {
   return call("/api/worker/submit", {

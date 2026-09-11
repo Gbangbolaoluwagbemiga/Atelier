@@ -102,12 +102,15 @@ export function AutopilotControl({
   isClient,
   projectDescription,
   milestones,
+  /** The freelancer already on this job, if there is one. */
+  assignedTo,
 }: {
   escrowId: number;
   isClient: boolean;
   /** What is actually stored on-chain — the only thing the agent can read. */
   projectDescription?: string;
   milestones?: Array<{ description: string; amount: string }>;
+  assignedTo?: string | null;
 }) {
   /*
    * Read from the daemon, never assumed. The window is an environment variable
@@ -170,6 +173,19 @@ export function AutopilotControl({
 
   /* Written into the escrow at funding time — the fallback when the daemon
      cannot be reached to generate anything. */
+  /*
+   * A job with somebody on it is past hiring.
+   *
+   * Autopilot on such a job reviews submissions and releases payment; it has
+   * nobody left to choose. Asking the client how long to leave applications
+   * open would be asking about a decision that has already been made, and the
+   * card would go on promising a window that will never open.
+   */
+  const hasFreelancer =
+    typeof assignedTo === "string" &&
+    assignedTo !== "" &&
+    !/^0x0+$/i.test(assignedTo);
+
   const storedCriteria = criteriaIn(projectDescription);
   const criteria = preview?.criteria.length ? preview.criteria : storedCriteria;
 
@@ -196,6 +212,7 @@ export function AutopilotControl({
        * window, not the job, so say exactly that.
        */
       const wantsCustom =
+        !hasFreelancer &&
         preview !== null &&
         chosenWindow !== null &&
         chosenWindow !== preview.defaultWindowMinutes;
@@ -343,7 +360,7 @@ export function AutopilotControl({
                   would make this a race rather than a comparison, and the whole
                   claim is that applicants are read against each other.
                 */}
-                {windowMinutes !== null && (
+                {windowMinutes !== null && !hasFreelancer && (
                   <>
                     {" "}It leaves applications open for{" "}
                     <strong className="text-foreground">
@@ -463,6 +480,20 @@ export function AutopilotControl({
               the moment to ask, because it is the moment the client is deciding
               how much of the job to hand over.
             */}
+            {hasFreelancer ? (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                  It will not be hiring
+                </div>
+                <p className="text-muted-foreground">
+                  This job already has a freelancer. Autopilot will review what
+                  they submit and release each milestone against the criteria
+                  above — it has nobody left to choose, so there is no
+                  application window to set.
+                </p>
+              </div>
+            ) : (
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5" aria-hidden="true" />
@@ -502,6 +533,7 @@ export function AutopilotControl({
                   )}
               </p>
             </div>
+            )}
           </div>
 
           <AlertDialogFooter>

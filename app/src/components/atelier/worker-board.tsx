@@ -26,6 +26,7 @@ import {
   minutesUntilClose,
   myWork,
   quests as fetchQuests,
+  submit as submitWork,
   withdraw,
   type Quest,
   type Worker,
@@ -46,6 +47,13 @@ export function WorkerBoard({
   const [applyingTo, setApplyingTo] = useState<string | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [busy, setBusy] = useState(false);
+
+  /* Delivering finished work. The row used to say "You were hired — send your
+     work" and offer no way to send it: the endpoint and the client call both
+     existed, the board simply never wired them up, so a hired freelancer's only
+     route to delivering was the Telegram bot. */
+  const [deliveringTo, setDeliveringTo] = useState<string | null>(null);
+  const [delivery, setDelivery] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -70,6 +78,28 @@ export function WorkerBoard({
     const id = setInterval(() => void refresh(), 10_000);
     return () => clearInterval(id);
   }, [refresh]);
+
+  async function sendDelivery(escrowId: string) {
+    setBusy(true);
+    try {
+      /* No milestoneIndex on purpose — the daemon resolves which stage actually
+         needs delivering. Hard-coding 0 filed a second milestone's work
+         against the first. */
+      await submitWork({ workerId: worker.id, escrowId, description: delivery.trim() });
+      toast({
+        title: "Work submitted",
+        description:
+          "It is on-chain and waiting on review. You will hear as soon as the milestone is approved and paid.",
+      });
+      setDeliveringTo(null);
+      setDelivery("");
+      await refresh();
+    } catch (e) {
+      toast(toastError("Could not submit your work", e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function sendApplication(escrowId: string) {
     setBusy(true);
@@ -111,19 +141,63 @@ export function WorkerBoard({
           <h2 className="font-display text-2xl font-semibold">Your work</h2>
           <div className="space-y-3 mt-4">
             {work.map((w) => (
-              <div
-                key={w.escrowId}
-                className="rounded-xl glass p-4 flex items-center justify-between gap-4"
-              >
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{w.title}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {w.status}
+              <div key={w.escrowId} className="rounded-xl glass p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{w.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {w.icon} {w.status}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="actor-figure figure-md">${w.budget}</span>
+                    {w.state === "hired" && deliveringTo !== w.escrowId && (
+                      <Button size="sm" onClick={() => setDeliveringTo(w.escrowId)}>
+                        <Send className="h-4 w-4 mr-2" aria-hidden="true" />
+                        Send work
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <span className="actor-figure figure-md shrink-0">
-                  ${w.budget}
-                </span>
+
+                {w.state === "hired" && deliveringTo === w.escrowId && (
+                  <div className="mt-4 space-y-2">
+                    <Label htmlFor={`wk-${w.escrowId}`} className="text-xs">
+                      What did you deliver?
+                    </Label>
+                    <Textarea
+                      id={`wk-${w.escrowId}`}
+                      rows={3}
+                      value={delivery}
+                      onChange={(e) => setDelivery(e.target.value)}
+                      placeholder="Describe what you produced and where it is — a link, a file, a repo. This is what gets reviewed against the job's criteria."
+                      className="text-sm resize-none"
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setDeliveringTo(null);
+                          setDelivery("");
+                        }}
+                        disabled={busy}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => void sendDelivery(w.escrowId)}
+                        disabled={busy || delivery.trim().length === 0}
+                      >
+                        {busy && (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                        )}
+                        Submit for review
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -430,3 +430,64 @@ describe("when it will decide", () => {
     expect(screen.queryByText(/minutes/)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * A JOB THAT ALREADY HAS SOMEBODY ON IT IS PAST HIRING.
+ *
+ * Autopilot on such a job reviews submissions and releases payment — there is
+ * nobody left for it to choose. Asking the client how long to leave
+ * applications open asks about a decision already made, and the card went on
+ * promising a window that would never open.
+ */
+describe("handing over a job that is already assigned", () => {
+  const HIRED = "0x8289da3f656fb9afb94e1074c7e88f0ad98ac423";
+
+  it("does not offer a review window", async () => {
+    render(<AutopilotControl escrowId={1} isClient assignedTo={HIRED} projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+
+    expect(await screen.findByText(/already has a freelancer/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /24 hours/i })).not.toBeInTheDocument();
+  });
+
+  it("says what it will do instead of hiring", async () => {
+    render(<AutopilotControl escrowId={1} isClient assignedTo={HIRED} projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+
+    expect(await screen.findByText(/review what they submit/i)).toBeInTheDocument();
+  });
+
+  it("never asks for a window signature on an assigned job", async () => {
+    render(<AutopilotControl escrowId={1} isClient assignedTo={HIRED} projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(delegate).toHaveBeenCalled());
+    expect(signMessageAsync).not.toHaveBeenCalled();
+    expect(saveHandoverPrefs).not.toHaveBeenCalled();
+  });
+
+  it("stops promising an application window on the running card", async () => {
+    fetchJobCriteria.mockResolvedValue({ criteria: [], source: "brief", applicationWindowMinutes: 1440 });
+    hookState.manager = MANAGER;
+    render(<AutopilotControl escrowId={1} isClient assignedTo={HIRED} />);
+
+    await waitFor(() => expect(fetchJobCriteria).toHaveBeenCalled());
+    expect(screen.queryByText(/leaves applications open/i)).not.toBeInTheDocument();
+  });
+
+  /* The zero address is "nobody", not somebody. */
+  it("treats an unassigned job as open for hiring", async () => {
+    render(
+      <AutopilotControl
+        escrowId={1}
+        isClient
+        assignedTo="0x0000000000000000000000000000000000000000"
+        projectDescription="Make me a logo."
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+
+    expect(await screen.findByRole("button", { name: /24 hours/i })).toBeInTheDocument();
+  });
+});

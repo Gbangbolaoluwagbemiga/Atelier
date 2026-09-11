@@ -449,6 +449,7 @@ export function EscrowCard({
                       isClient={escrow.isClient === true}
                       projectDescription={escrow.projectDescription}
                       milestones={escrow.milestones}
+                      assignedTo={escrow.beneficiary}
                     />
                   )}
 

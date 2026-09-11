@@ -438,6 +438,58 @@ export async function hasApplied(escrowId: bigint, who: `0x${string}`): Promise<
   }) as Promise<boolean>;
 }
 
+/**
+ * Every escrow this address was hired for, straight from the chain.
+ *
+ * WHY THE CHAIN AND NOT THE TASK TABLE
+ *
+ * "What work is mine" was answered from the daemon's own task rows and its own
+ * `applicant_accepted` decisions. Both are records of what the AGENT did, and
+ * neither is the truth about who owes whom work.
+ *
+ * A client hired a freelancer themselves, from the app, and then took the job
+ * back off Autopilot. Revoking deleted the task row, and with it the only thing
+ * that had ever told the freelancer the job existed — while on-chain they were
+ * still the named beneficiary of a funded escrow and still owed the work. Their
+ * board went empty. The client's screen said the job was assigned to them.
+ *
+ * FreelancerAccepted is indexed on the freelancer, so the chain can answer this
+ * directly, for every hire, no matter who made it.
+ */
+export async function hiredEscrowsFor(who: `0x${string}`): Promise<bigint[]> {
+  const client = getPublicClient();
+  const event = {
+    type: "event",
+    name: "FreelancerAccepted",
+    inputs: [
+      { name: "escrowId", type: "uint256", indexed: true },
+      { name: "freelancer", type: "address", indexed: true },
+    ],
+  } as const;
+
+  const latest = await client.getBlockNumber();
+  const found = new Set<bigint>();
+
+  // Windowed: public RPCs cap a getLogs range and refuse a wide one outright
+  // rather than truncating it.
+  for (let from = config.atelierDeployBlock; from <= latest; from += config.logRangeLimit + 1n) {
+    const to = from + config.logRangeLimit > latest ? latest : from + config.logRangeLimit;
+    const logs = await client.getLogs({
+      address: config.atelierAddress,
+      event,
+      args: { freelancer: who },
+      fromBlock: from,
+      toBlock: to,
+    });
+    for (const log of logs) {
+      const id = (log as { args?: { escrowId?: bigint } }).args?.escrowId;
+      if (id != null) found.add(id);
+    }
+  }
+
+  return [...found].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 /** Every milestone with its amount and status — the only reliable answer to "is money still at stake". */
 export async function getMilestones(escrowId: bigint) {
   return getPublicClient().readContract({

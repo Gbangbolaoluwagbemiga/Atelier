@@ -416,49 +416,109 @@ export async function myWork(
 ): Promise<{ escrowId: string; title: string; budget: number; status: string; icon: string; state: WorkState }[]> {
   const worker = store.getWorker(workerId);
   if (!worker?.walletAddress) return [];
-  const me = worker.walletAddress.toLowerCase();
+  const me = worker.walletAddress as `0x${string}`;
 
-  const hiredFor = new Set(
-    store
-      .listDecisions(300)
-      .filter((d: { type?: string; target?: string }) => d.type === "applicant_accepted" && d.target?.toLowerCase() === me)
-      .map((d: { task_id?: string }) => d.task_id),
-  );
+  /*
+   * WHO WAS HIRED IS A CHAIN FACT, NOT A DAEMON FACT.
+   *
+   * This used to read the agent's own `applicant_accepted` decisions. A client
+   * who hired someone themselves produced no such row, so the freelancer they
+   * had just hired was listed as merely "applied" — and if the client also took
+   * the job off Autopilot, the task row was deleted and the job vanished from
+   * the freelancer's board entirely. They were the named beneficiary of a funded
+   * escrow with no way to see it, while the client's screen showed it assigned
+   * to them.
+   */
+  const hiredIds = await atelier.hiredEscrowsFor(me).catch(() => [] as bigint[]);
+  const hiredFor = new Set(hiredIds.map((id) => id.toString()));
+
+  /*
+   * Candidates are the union of what the agent knows about and what the chain
+   * says is ours. The task table is still the better source for a job the agent
+   * is running — it carries the brief — but it can no longer be the only one.
+   */
+  const tasks = store.listTasks(100).filter((t) => t.escrowId && t.briefJson);
+  const byEscrow = new Map(tasks.map((t) => [t.escrowId as string, t]));
+  const candidateIds = [...new Set([...byEscrow.keys(), ...hiredFor])];
 
   // One chain read per job, run TOGETHER rather than one after another. As a
   // sequential loop this was up to 100 round trips before the first character of
   // output — several seconds of a bot that looks hung, growing every time anyone
   // posts a job. Nothing here depends on the previous answer, so nothing needed
   // to wait for it.
-  const candidates = store.listTasks(100).filter((t) => t.escrowId && t.briefJson);
   const involvement = await Promise.all(
-    candidates.map(async (t) => {
-      if (hiredFor.has(t.escrowId as string)) return { hired: true, applied: true };
+    candidateIds.map(async (escrowId) => {
+      if (hiredFor.has(escrowId)) return { hired: true, applied: true };
       try {
-        return { hired: false, applied: await atelier.hasApplied(BigInt(t.escrowId as string), worker.walletAddress as `0x${string}`) };
+        return { hired: false, applied: await atelier.hasApplied(BigInt(escrowId), me) };
       } catch {
         return { hired: false, applied: false }; // a chain hiccup hides a row, never breaks the list
       }
     }),
   );
 
+  /* A job we were hired for but hold no brief on still has to be listed, so its
+     title and budget come from the escrow itself. */
+  const needsEscrow = candidateIds.filter((id, i) => involvement[i]!.hired && !byEscrow.has(id));
+  const escrows = new Map(
+    (await Promise.all(
+      needsEscrow.map(async (id) => {
+        try {
+          return [id, await atelier.getEscrow(BigInt(id))] as const;
+        } catch {
+          return [id, null] as const;
+        }
+      }),
+    )),
+  );
+
   const out: { escrowId: string; title: string; budget: number; status: string; icon: string; state: WorkState }[] = [];
-  for (const [i, t] of candidates.entries()) {
+  for (const [i, escrowId] of candidateIds.entries()) {
     const { hired, applied } = involvement[i]!;
     if (!hired && !applied) continue;
 
-    const brief = JSON.parse(t.briefJson as string);
-    // `state` is what a surface should BRANCH on; `status` is a sentence for a
-    // human. They were the same string, which meant the web page had to
-    // pattern-match prose to decide whether to show a submit button — and that
-    // prose told a web user to type a Telegram command.
-    const state: WorkState = hired
-      ? t.status === "completed"
+    const t = byEscrow.get(escrowId);
+    const esc = escrows.get(escrowId) as
+      | { projectTitle?: string; totalAmount?: bigint; status?: number }
+      | null
+      | undefined;
+
+    let title: string;
+    let budget: number;
+    if (t?.briefJson) {
+      const brief = JSON.parse(t.briefJson);
+      title = brief.title;
+      budget = brief.budget;
+    } else if (esc) {
+      title = esc.projectTitle || `Job #${escrowId}`;
+      budget = Number(esc.totalAmount ?? 0n) / 1e6; // USDC
+    } else {
+      continue; // nothing anywhere can describe it; a blank row helps nobody
+    }
+
+    /*
+     * The escrow's own status decides a chain-hired job's state. Without a task
+     * row there is no `t.status` to read, and defaulting to "hired" would keep
+     * telling someone to send work on a job that had already been paid out.
+     */
+    const RELEASED = 3, DISPUTED = 4;
+    const escState: WorkState | null = esc
+      ? Number(esc.status) === RELEASED
         ? "completed"
-        : t.status === "disputed"
+        : Number(esc.status) === DISPUTED
           ? "disputed"
           : "hired"
-      : t.status === "posted"
+      : null;
+
+    const state: WorkState = hired
+      ? t
+        ? t.status === "completed"
+          ? "completed"
+          : t.status === "disputed"
+            ? "disputed"
+            : "hired"
+        : (escState ?? "hired")
+      : t?.status === "posted"
         ? "applied"
         : "lost";
 
@@ -471,7 +531,7 @@ export async function myWork(
     };
     const [icon, status] = presentation[state];
 
-    out.push({ escrowId: t.escrowId as string, title: brief.title, budget: brief.budget, status, icon, state });
+    out.push({ escrowId, title, budget, status, icon, state });
   }
   return out;
 }
