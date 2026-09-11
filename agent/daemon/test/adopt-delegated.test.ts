@@ -38,7 +38,14 @@ vi.mock("../src/circle/circleSigner.js", () => ({
 }));
 const getPollerText = vi.fn(() => null as string | null);
 const setPollerText = vi.fn();
-vi.mock("../src/store.js", () => ({ insertTask, deleteTask, listTasks, getPollerText, setPollerText }));
+/* The sweep remembers how far it has read, so it does not rescan 780,000
+   blocks every fifteen seconds and rate-limit itself into finding nothing. */
+const getPollerInt = vi.fn(() => null as number | null);
+const setPollerInt = vi.fn();
+vi.mock("../src/store.js", () => ({
+  insertTask, deleteTask, listTasks,
+  getPollerText, setPollerText, getPollerInt, setPollerInt,
+}));
 vi.mock("../src/agent/BriefGenerator.js", () => ({ generateBrief }));
 vi.mock("../src/config.js", () => ({
   config: {
@@ -251,5 +258,103 @@ describe("when there is no agent wallet", () => {
     const { adoptDelegatedJobs: fresh } = await import("../src/agent/adoptDelegated.js");
     await expect(fresh()).resolves.toBe(0);
     vi.doUnmock("../src/circle/circleSigner.js");
+  });
+});
+
+/**
+ * NOT RESCANNING THE WHOLE CHAIN EVERY FIFTEEN SECONDS.
+ *
+ * This walked from the contract's deploy block on every sweep — about 780,000
+ * blocks in 9,000-block windows, so eighty-seven getLogs calls, four times a
+ * minute. The RPC began answering "rate limit exceeded" and every one of them
+ * failed, which meant a client handing a job to Autopilot was quietly never
+ * picked up. A sweep that found nothing looked exactly like a sweep with
+ * nothing to find.
+ */
+describe("how much chain it reads", () => {
+  beforeEach(() => {
+    getPollerInt.mockReturnValue(null);
+    getPollerText.mockReturnValue(null);
+  });
+
+  it("reads from the deploy block the first time", async () => {
+    chainSays();
+    await adoptDelegatedJobs();
+
+    const firstFrom = getLogs.mock.calls[0]?.[0]?.fromBlock;
+    expect(firstFrom).toBe(0n); // the test config's deploy block
+  });
+
+  it("remembers where it got to", async () => {
+    chainSays();
+    await adoptDelegatedJobs();
+
+    expect(setPollerInt).toHaveBeenCalledWith(
+      expect.stringContaining("scan_cursor:jobmanager:"),
+      100, // the mocked head
+    );
+  });
+
+  it("resumes from there rather than starting over", async () => {
+    getPollerInt.mockReturnValue(90_000);
+    chainSays();
+    getBlockNumber.mockResolvedValue(90_100n);
+
+    await adoptDelegatedJobs();
+
+    // Rewound a little, because a read at the tip can miss a reorg's blocks —
+    // re-reading a few thousand costs one request, missing an appointment
+    // costs somebody their job.
+    expect(getLogs.mock.calls[0][0].fromBlock).toBe(85_000n);
+
+    /* A caught-up daemon reads the last few windows and stops, rather than
+       walking the chain again. The cap on windows per sweep means "from
+       scratch" is also bounded now, so this asserts the cursor was used at all
+       — the fromBlock above is the real proof. */
+    expect(getLogs.mock.calls.length).toBeLessThanOrEqual(25);
+  });
+
+  it("keeps the ground a rate-limited sweep gained", async () => {
+    /*
+     * Saving the cursor only at the end was a deadlock: the first sweep has
+     * 780,000 blocks to read, the RPC refuses somewhere in the middle, the
+     * sweep throws, nothing is remembered — and the next one starts from the
+     * deploy block and fails in the same place, forever. Which is exactly what
+     * the daemon was doing.
+     */
+    getPollerInt.mockReturnValue(null);
+    getBlockNumber.mockResolvedValue(1_000n);
+    let calls = 0;
+    getLogs.mockImplementation(async () => {
+      if (++calls > 3) throw new Error("rate limit exceeded");
+      return [];
+    });
+
+    await adoptDelegatedJobs();
+
+    /* It moved the mark despite failing, so the next sweep resumes rather than
+       repeating. Three windows from 0 with a 50-block limit: 0-50, 51-101,
+       102-152. */
+    expect(setPollerInt).toHaveBeenCalledWith(
+      expect.stringContaining("scan_cursor:jobmanager:"),
+      152,
+    );
+  });
+
+  it("keeps appointments seen in earlier sweeps", async () => {
+    // The window they appeared in is long behind the cursor; forgetting them
+    // would un-adopt a job the agent is actively running.
+    getPollerInt.mockReturnValue(90_000);
+    getPollerText.mockReturnValue(JSON.stringify(["4"]));
+    getBlockNumber.mockResolvedValue(90_100n);
+    getLogs.mockResolvedValue([]);
+    readContract.mockResolvedValue(AGENT);
+
+    await adoptDelegatedJobs();
+
+    expect(setPollerText).toHaveBeenCalledWith(
+      expect.stringContaining("scan_seen:jobmanager:"),
+      expect.stringContaining("4"),
+    );
   });
 });

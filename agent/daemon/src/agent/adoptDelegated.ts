@@ -51,23 +51,96 @@ async function delegatedTo(manager: `0x${string}`): Promise<bigint[]> {
   } as const;
 
   const latest = await client.getBlockNumber();
-  const seen = new Set<bigint>();
 
-  // Windowed because public RPCs cap a getLogs range and refuse a wide one
-  // outright rather than truncating it.
-  for (let from = config.atelierDeployBlock; from <= latest; from += config.logRangeLimit + 1n) {
+  /*
+   * REMEMBER WHERE THE LAST SWEEP GOT TO.
+   *
+   * This rescanned from the contract's deploy block every time — about 780,000
+   * blocks in 9,000-block windows, so eighty-seven getLogs calls, every fifteen
+   * seconds. The RPC started answering "rate limit exceeded" and every one of
+   * them failed, which meant a client handing a job to Autopilot was quietly
+   * never picked up. The sweep that found nothing looked exactly like a sweep
+   * with nothing to find.
+   *
+   * An appointment, once seen, stays true — the mapping below is what decides
+   * whether it still holds. So the ids are accumulated across sweeps and only
+   * the new blocks are read, which turns eighty-seven requests into one.
+   *
+   * Deliberately rewound a little each time: a log read right at the tip can
+   * miss a reorg's worth of blocks, and re-reading a few thousand costs one
+   * request while missing an appointment costs somebody their job.
+   */
+  const CURSOR_KEY = `scan_cursor:jobmanager:${manager.toLowerCase()}`;
+  const SEEN_KEY = `scan_seen:jobmanager:${manager.toLowerCase()}`;
+  const REWIND = 5_000n;
+
+  const seen = new Set<bigint>();
+  try {
+    const saved = store.getPollerText(SEEN_KEY);
+    if (saved) for (const id of JSON.parse(saved) as string[]) seen.add(BigInt(id));
+  } catch {
+    /* a corrupt cursor just means one full rescan */
+  }
+
+  const savedCursor = store.getPollerInt(CURSOR_KEY);
+  const startFrom =
+    savedCursor && BigInt(savedCursor) > config.atelierDeployBlock
+      ? BigInt(savedCursor) - REWIND
+      : config.atelierDeployBlock;
+
+  /*
+   * Bounded work, and keep whatever ground it gains.
+   *
+   * Saving the cursor only at the end was a deadlock: the first sweep has
+   * 780,000 blocks to read, the RPC rate-limits somewhere in the middle, the
+   * whole sweep throws, and nothing is remembered — so the next sweep starts
+   * from the deploy block and fails in exactly the same place, forever.
+   *
+   * Each window is committed as it succeeds, so a sweep that dies half way
+   * still moves the mark. And a sweep only does so much: catching up happens
+   * over a few passes instead of one impossible one, while a daemon that is
+   * already caught up does a single window and stops.
+   */
+  const MAX_WINDOWS_PER_SWEEP = 25;
+
+  let cursor = startFrom;
+  let windows = 0;
+  let rateLimited = false;
+
+  for (let from = startFrom; from <= latest; from += config.logRangeLimit + 1n) {
+    if (windows >= MAX_WINDOWS_PER_SWEEP) break;
     const to = from + config.logRangeLimit > latest ? latest : from + config.logRangeLimit;
-    const logs = await client.getLogs({
-      address: config.atelierAddress,
-      event,
-      args: { manager },
-      fromBlock: from,
-      toBlock: to,
-    });
-    for (const log of logs) {
-      const id = (log as { args?: { escrowId?: bigint } }).args?.escrowId;
-      if (id !== undefined) seen.add(id);
+
+    try {
+      const logs = await client.getLogs({
+        address: config.atelierAddress,
+        event,
+        args: { manager },
+        fromBlock: from,
+        toBlock: to,
+      });
+      for (const log of logs) {
+        const id = (log as { args?: { escrowId?: bigint } }).args?.escrowId;
+        if (id !== undefined) seen.add(id);
+      }
+      cursor = to;
+      windows++;
+    } catch (err) {
+      /* Stop on the first refusal rather than hammering through the rest —
+         they will all be refused too, and the next sweep resumes here. */
+      rateLimited = true;
+      console.warn(
+        `[adopt] log scan paused at block ${from} (${err instanceof Error ? err.message.split("\n")[0] : err})`,
+      );
+      break;
     }
+  }
+
+  store.setPollerInt(CURSOR_KEY, Number(cursor));
+  store.setPollerText(SEEN_KEY, JSON.stringify([...seen].map(String)));
+
+  if (rateLimited || cursor < latest) {
+    console.log(`[adopt] caught up to block ${cursor} of ${latest}; resuming next sweep`);
   }
 
   // The event says we were appointed once; the mapping says whether we still

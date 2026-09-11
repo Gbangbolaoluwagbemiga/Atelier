@@ -389,6 +389,9 @@ export interface DisputeResolutionNote {
   milestone_index: number;
   arbiter_address: string;
   reason: string;
+  /** The split, copied from the event so reading it never needs a log scan. */
+  freelancer_amount?: number | null;
+  client_amount?: number | null;
   resolved_at: string;
 }
 
@@ -427,6 +430,9 @@ export async function saveDisputeResolutionNote(input: {
   milestoneIndex: number;
   arbiter: string;
   reason: string;
+  /** What each side received, so the record does not depend on a log scan. */
+  freelancerAmount?: number;
+  clientAmount?: number;
   signMessageAsync: (args: { message: string }) => Promise<string>;
 }): Promise<void> {
   const base = getApiBase();
@@ -453,6 +459,8 @@ export async function saveDisputeResolutionNote(input: {
       milestone_index: String(input.milestoneIndex),
       arbiter_address: input.arbiter,
       reason: input.reason,
+      freelancer_amount: input.freelancerAmount,
+      client_amount: input.clientAmount,
       signature,
       timestamp: String(timestamp),
     }),

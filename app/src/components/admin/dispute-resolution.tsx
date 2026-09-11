@@ -226,6 +226,10 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
             milestoneIndex: Number(selectedDispute.milestoneIndex),
             arbiter: wallet.address,
             reason: resolutionReason.trim(),
+            /* Written with the reason so the record of the decision is one row,
+               not a row plus a log scan that stops finding the amounts. */
+            freelancerAmount: Number(freelancerAmount),
+            clientAmount: Number(clientAmount),
             signMessageAsync,
           });
         } catch (e) {

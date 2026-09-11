@@ -23,9 +23,12 @@ vi.mock("../../src/lib/supabase.js", () => ({ getSupabase: () => supabaseInstanc
 
 const verifyMessage = vi.fn();
 const getLogs = vi.fn();
+/* The lookup walks backwards from the head in windows — "earliest" is refused
+   outright by the RPC, so it has to know where the head is. */
+const getBlockNumber = vi.fn(async () => 1_000_000n);
 vi.mock("viem", async (orig) => ({
   ...(await orig<typeof import("viem")>()),
-  createPublicClient: () => ({ getLogs }),
+  createPublicClient: () => ({ getLogs, getBlockNumber }),
   verifyMessage: (a: unknown) => verifyMessage(a),
 }));
 
@@ -57,6 +60,7 @@ beforeEach(() => {
   supabaseInstance = makeSupabaseMock({ from: () => chainableResult({ data: null, error: null }) });
   verifyMessage.mockResolvedValue(true);
   getLogs.mockResolvedValue([{ blockNumber: 1n }]); // they did resolve it
+  getBlockNumber.mockResolvedValue(1_000_000n);
 });
 
 describe("recording why a dispute was settled", () => {
@@ -132,5 +136,27 @@ describe("reading them back", () => {
     const res = await request(app).get("/v1/disputes/resolution?escrow_id=7");
     expect(res.status).toBe(200);
     expect(res.body.resolutions).toEqual([]);
+  });
+});
+
+
+describe("how it looks for the resolution", () => {
+  it("never asks the RPC for the whole chain", async () => {
+    // `fromBlock: "earliest"` comes back as a failure rather than a truncated
+    // result, so this returned false for every caller — including the real
+    // arbiter. The write path could not have worked at all.
+    await request(app).post("/v1/disputes/resolution").send(note());
+
+    for (const [args] of getLogs.mock.calls) {
+      expect(args.fromBlock).not.toBe("earliest");
+      expect(typeof args.fromBlock).toBe("bigint");
+    }
+  });
+
+  it("stops as soon as it finds it, rather than walking the rest", async () => {
+    await request(app).post("/v1/disputes/resolution").send(note());
+    // A note is written seconds after the resolution it describes, so the match
+    // is in the first window it looks at.
+    expect(getLogs).toHaveBeenCalledTimes(1);
   });
 });

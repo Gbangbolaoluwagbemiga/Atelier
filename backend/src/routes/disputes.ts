@@ -40,6 +40,12 @@ const DISPUTE_RESOLVED = parseAbiItem(
   "event DisputeResolved(uint256 indexed escrowId, uint256 indexed milestoneIndex, address indexed arbiter, uint256 freelancerAmount, uint256 clientAmount, uint256 timestamp)",
 );
 
+/* How far back to look for the resolution being described. Windowed because a
+   public RPC refuses a wide getLogs range outright rather than truncating it,
+   and refuses "earliest" altogether. */
+const LOG_RANGE = 9000n;
+const SEARCH_WINDOWS = 40n; // ~360k blocks — far more than the minutes this needs
+
 /** How long a signed resolution note stays valid. */
 const AUTH_MAX_AGE_MS = 10 * 60 * 1000;
 const MAX_REASON = 2000;
@@ -73,19 +79,42 @@ async function isTheArbiter(
   address: string,
 ): Promise<boolean> {
   if (!CONTRACT_ADDRESS) return false;
+
+  /*
+   * Searched backwards in windows, not in one sweep from the genesis block.
+   *
+   * `fromBlock: "earliest"` is refused outright by the RPC — the request comes
+   * back as a failure, not a truncated result, so this returned false for
+   * EVERY caller including the real arbiter. The write path could never have
+   * worked, and the unit tests did not catch it because they mock getLogs.
+   *
+   * Backwards because a note is written seconds after the resolution it
+   * describes, so the match is almost always in the first window. The bound
+   * stops an unanswerable request turning into an unbounded scan.
+   */
   try {
-    const logs = await publicClient.getLogs({
-      address: CONTRACT_ADDRESS,
-      event: DISPUTE_RESOLVED,
-      args: {
-        escrowId: BigInt(escrowId),
-        milestoneIndex: BigInt(milestoneIndex),
-        arbiter: address as `0x${string}`,
-      },
-      fromBlock: "earliest",
-      toBlock: "latest",
-    });
-    return logs.length > 0;
+    const latest = await publicClient.getBlockNumber();
+    const args = {
+      escrowId: BigInt(escrowId),
+      milestoneIndex: BigInt(milestoneIndex),
+      arbiter: address as `0x${string}`,
+    };
+
+    for (let i = 0n; i < SEARCH_WINDOWS; i++) {
+      const to = latest - i * LOG_RANGE;
+      if (to <= 0n) break;
+      const from = to > LOG_RANGE ? to - LOG_RANGE : 0n;
+
+      const logs = await publicClient.getLogs({
+        address: CONTRACT_ADDRESS,
+        event: DISPUTE_RESOLVED,
+        args,
+        fromBlock: from,
+        toBlock: to,
+      });
+      if (logs.length > 0) return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -104,6 +133,10 @@ disputesRouter.post("/resolution", async (req, res) => {
   const signature = String(req.body?.signature ?? "");
   const timestamp = String(req.body?.timestamp ?? "");
   const reason = String(req.body?.reason ?? "").trim();
+  /* Optional: the split, so reading a settled dispute never depends on a log
+     scan that only looks back a fixed and surprisingly short distance. */
+  const freelancerAmount = req.body?.freelancer_amount;
+  const clientAmount = req.body?.client_amount;
 
   if (!/^\d+$/.test(escrowId) || !/^\d+$/.test(milestoneIndex)) {
     res.status(400).json({ error: "escrow_id and milestone_index are required" });
@@ -155,6 +188,8 @@ disputesRouter.post("/resolution", async (req, res) => {
           milestone_index: Number(milestoneIndex),
           arbiter_address: arbiter.toLowerCase(),
           reason,
+          freelancer_amount: freelancerAmount != null ? Number(freelancerAmount) : null,
+          client_amount: clientAmount != null ? Number(clientAmount) : null,
           resolved_at: new Date().toISOString(),
         },
         { onConflict: "escrow_id,milestone_index" },
@@ -190,7 +225,7 @@ disputesRouter.get("/resolution", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("dispute_resolutions")
-      .select("milestone_index, arbiter_address, reason, resolved_at")
+      .select("milestone_index, arbiter_address, reason, freelancer_amount, client_amount, resolved_at")
       .eq("escrow_id", Number(escrowId));
 
     if (error) {

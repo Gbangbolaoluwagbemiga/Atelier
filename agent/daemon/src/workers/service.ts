@@ -982,51 +982,73 @@ export async function deliveryTarget(escrowId: string): Promise<{
     /* a verdict we cannot read is not worth failing a delivery over */
   }
 
+  /*
+   * THE RECORDED DECISION FIRST, THE LOG SCAN ONLY AS A FALLBACK.
+   *
+   * This read the split out of the DisputeResolved event through a windowed
+   * getLogs scan — and that scan looks back a fixed number of chunks named
+   * CHUNKS_PER_DAY, which is roughly 108,000 blocks and nothing like a day on
+   * Arc. About an hour after escrow 7 was settled the amounts simply stopped
+   * being found, so a freelancer's record of what had been decided about their
+   * own payment quietly emptied out.
+   *
+   * The arbiter writes the split with their reasoning now, which makes one row
+   * the whole decision and makes reading it a lookup rather than a search. The
+   * scan stays for disputes settled before there was anywhere to write it, and
+   * those are exactly the ones recent enough for it to still find.
+   */
   let disputeOutcome:
     | { freelancerUsdc: number; clientUsdc: number; reason: string | null }
     | null = null;
-  try {
-    const awards = await atelier.disputeAwards(BigInt(escrowId));
-    const mine = awards.find((a) => Number(a.milestoneIndex) === index);
-    if (mine) {
-      /* disputeAwards already returns USDC, not base units — dividing here too
-         turned a 2 USDC refund into 0.000002. */
-      /*
-       * And what they wrote, if anywhere. The contract's event carries the
-       * amounts but not the words, so the reasoning lives in the API — which
-       * answers with nothing for a dispute settled before it had somewhere to
-       * put it, and that is a truthful nothing rather than a failure.
-       */
-      let reason: string | null = null;
-      if (config.apiUrl) {
-        try {
-          const r = await fetch(
-            `${config.apiUrl}/v1/disputes/resolution?escrow_id=${escrowId}`,
-            {
-              headers: config.apiSecret ? { authorization: `Bearer ${config.apiSecret}` } : {},
-              signal: AbortSignal.timeout(5000),
-            },
-          );
-          if (r.ok) {
-            const body = (await r.json()) as {
-              resolutions?: { milestone_index: number; reason: string }[];
-            };
-            reason =
-              body.resolutions?.find((n) => Number(n.milestone_index) === index)?.reason ?? null;
-          }
-        } catch {
-          /* the split still renders without it */
+
+  if (config.apiUrl) {
+    try {
+      const r = await fetch(`${config.apiUrl}/v1/disputes/resolution?escrow_id=${escrowId}`, {
+        headers: config.apiSecret ? { authorization: `Bearer ${config.apiSecret}` } : {},
+        signal: AbortSignal.timeout(5000),
+      });
+      if (r.ok) {
+        const body = (await r.json()) as {
+          resolutions?: {
+            milestone_index: number;
+            reason: string;
+            freelancer_amount: number | null;
+            client_amount: number | null;
+          }[];
+        };
+        const mine = body.resolutions?.find((n) => Number(n.milestone_index) === index);
+        if (mine && mine.freelancer_amount != null && mine.client_amount != null) {
+          disputeOutcome = {
+            freelancerUsdc: Number(mine.freelancer_amount),
+            clientUsdc: Number(mine.client_amount),
+            reason: mine.reason || null,
+          };
+        } else if (mine) {
+          /* A note without amounts — recorded before the split was stored. Keep
+             the words and let the chain supply the numbers below. */
+          disputeOutcome = { freelancerUsdc: 0, clientUsdc: 0, reason: mine.reason || null };
         }
       }
-
-      disputeOutcome = {
-        freelancerUsdc: mine.freelancerAmount,
-        clientUsdc: mine.clientAmount,
-        reason,
-      };
+    } catch {
+      /* fall through to the chain */
     }
-  } catch {
-    /* a log scan that fails leaves the row without the split, not broken */
+  }
+
+  if (!disputeOutcome || (disputeOutcome.freelancerUsdc === 0 && disputeOutcome.clientUsdc === 0)) {
+    try {
+      const awards = await atelier.disputeAwards(BigInt(escrowId));
+      const mine = awards.find((a) => Number(a.milestoneIndex) === index);
+      if (mine) {
+        /* disputeAwards already returns USDC, not base units. */
+        disputeOutcome = {
+          freelancerUsdc: mine.freelancerAmount,
+          clientUsdc: mine.clientAmount,
+          reason: disputeOutcome?.reason ?? null,
+        };
+      }
+    } catch {
+      /* a log scan that fails leaves the row without the split, not broken */
+    }
   }
 
   return {
