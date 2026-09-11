@@ -331,3 +331,61 @@ describe("what the reviewer actually decided", () => {
     expect(screen.queryByText("25/100")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * ONE HALF AT A TIME.
+ *
+ * "What do I owe" and "what could I take on" are different questions, asked at
+ * different moments. Stacked they read as one long list and the committed work
+ * scrolls off the top as soon as a few jobs are open; side by side each gets
+ * half a screen it does not need.
+ */
+describe("switching between work and the open board", () => {
+  it("shows the work tab by default when there is work on the bench", async () => {
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    expect(await screen.findByText("fireball")).toBeVisible();
+    expect(screen.getByRole("tab", { name: /your work/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("opens on the job board when the bench is empty", async () => {
+    // The useful answer on a first visit is "here is what you could take on",
+    // not an empty panel.
+    myWork.mockResolvedValue([]);
+    quests.mockResolvedValue([
+      { escrowId: "9", title: "A job", budget: 3, durationDays: 2, criteria: [], milestones: [], applied: false },
+    ]);
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: /open jobs/i })).toHaveAttribute("aria-selected", "true"),
+    );
+  });
+
+  it("lets them switch, and keeps a half-typed delivery when they come back", async () => {
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /send work/i }));
+    await userEvent.type(screen.getByRole("textbox"), "half a sentence");
+
+    await userEvent.click(screen.getByRole("tab", { name: /open jobs/i }));
+    await userEvent.click(screen.getByRole("tab", { name: /your work/i }));
+
+    // Both panels stay mounted on purpose — losing a draft to a tab click is
+    // the kind of thing people do not forgive.
+    expect(screen.getByRole("textbox")).toHaveValue("half a sentence");
+  });
+
+  it("says the bench is empty rather than showing a blank panel", async () => {
+    myWork.mockResolvedValue([]);
+    quests.mockResolvedValue([]);
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("tab", { name: /your work/i }));
+
+    expect(screen.getByText(/nothing on your bench/i)).toBeInTheDocument();
+  });
+});

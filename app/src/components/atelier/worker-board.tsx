@@ -12,9 +12,10 @@
  * that way — see lib/atelier/actor.ts.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { Clock, Loader2, Send, Wallet } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Clock, Hammer, Loader2, Search, Send, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +36,8 @@ import {
   type WorkItem,
 } from "@/lib/atelier/worker";
 
+type BoardTab = "work" | "open";
+
 export function WorkerBoard({
   worker,
   onWorkerChanged,
@@ -43,6 +46,12 @@ export function WorkerBoard({
   onWorkerChanged: (w: Worker) => void;
 }) {
   const { toast } = useToast();
+  /* Which half they are looking at. Defaults to work in progress, and moves
+     itself to the open board when there is none — the useful answer on a first
+     visit is "here is what you could take on", not an empty bench. */
+  const [tab, setTab] = useState<BoardTab>("work");
+  const pickedTab = useRef(false);
+
   const [quests, setQuests] = useState<Quest[]>([]);
   const [work, setWork] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +112,14 @@ export function WorkerBoard({
     return () => clearInterval(id);
   }, [refresh]);
 
+  /* Once, after the first load. Any later move is the person's own, and a poll
+     that yanked them back to the other tab mid-typing would be maddening. */
+  useEffect(() => {
+    if (loading || pickedTab.current) return;
+    pickedTab.current = true;
+    if (work.length === 0 && quests.length > 0) setTab("open");
+  }, [loading, work.length, quests.length]);
+
   async function sendDelivery(escrowId: string) {
     setBusy(true);
     try {
@@ -160,20 +177,38 @@ export function WorkerBoard({
       <Earnings worker={worker} onWithdrawn={() => void refresh()} />
 
       {/*
-        TWO COLUMNS: what you owe, and what you could take on.
+        ONE AT A TIME, THE WAY MY JOBS DOES IT.
 
-        Stacked, these two read as one long list and the work you have already
-        committed to scrolls off the top the moment there are a few jobs open.
-        They answer different questions — "what do I owe" and "what could I
-        take on" — and a freelancer looks at one or the other, never both at
-        once. Side by side on a wide screen, stacked on a narrow one, with the
-        work first either way because it is the half with a deadline on it.
+        These answer different questions — "what do I owe" and "what could I
+        take on" — and a freelancer is doing one or the other, never both at
+        once. Stacked they read as one long list and the committed work scrolls
+        off the top as soon as a few jobs are open; side by side each gets half
+        a screen it does not need.
       */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 items-start">
-      {work.length > 0 && (
+      <Tabs value={tab} onValueChange={(v) => setTab(v as BoardTab)}>
+        <TabsList className="overflow-x-auto justify-start max-w-full">
+          <TabsTrigger value="work" className="gap-2 shrink-0">
+            <Hammer className="h-4 w-4" aria-hidden="true" />
+            Your work
+            {work.length > 0 && (
+              <span className="ml-1 text-xs text-muted-foreground">{work.length}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="open" className="gap-2 shrink-0">
+            <Search className="h-4 w-4" aria-hidden="true" />
+            Open jobs
+            {quests.length > 0 && (
+              <span className="ml-1 text-xs text-muted-foreground">{quests.length}</span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Both stay mounted. Switching tabs must not throw away a half-typed
+            delivery or re-fetch a board that was already loaded. */}
+        <TabsContent value="work" forceMount hidden={tab !== "work"} className="mt-6">
         <section className="min-w-0">
-          <h2 className="font-display text-2xl font-semibold">Your work</h2>
-          <div className="space-y-3 mt-4">
+          <h2 className="sr-only">Your work</h2>
+          <div className="space-y-3">
             {work.map((w) => (
               <div key={w.escrowId} className="rounded-xl glass p-4">
                 <div className="flex items-center justify-between gap-4">
@@ -380,11 +415,22 @@ export function WorkerBoard({
               </div>
             ))}
           </div>
-        </section>
-      )}
 
-      <section className={work.length > 0 ? "min-w-0" : "min-w-0 lg:col-span-2"}>
-        <h2 className="font-display text-2xl font-semibold">Open jobs</h2>
+          {/* Said plainly rather than shown as an empty panel — a freelancer
+              with nothing on should be pointed at the tab that has something
+              on it. */}
+          {work.length === 0 && (
+            <div className="rounded-xl glass p-8 text-center text-sm text-muted-foreground">
+              Nothing on your bench right now. Anything you are hired for shows
+              up here, with what it needs and what it pays.
+            </div>
+          )}
+        </section>
+        </TabsContent>
+
+        <TabsContent value="open" forceMount hidden={tab !== "open"} className="mt-6">
+      <section className="min-w-0">
+        <h2 className="sr-only">Open jobs</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Apply with a sentence. No gas, no signature.
         </p>
@@ -489,7 +535,8 @@ export function WorkerBoard({
           </div>
         )}
       </section>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
