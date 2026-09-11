@@ -10,10 +10,30 @@
  *
  * Now the button is just a button. Reown owns everything behind it.
  *
- * What is kept is the trigger's own content — network, balance and address —
- * because that is the piece Reown does not render for you, and a wallet control
- * that shows nothing until you click it makes people click it to check they are
- * still connected.
+ * What is kept is the trigger's own content, because that is the piece Reown
+ * does not render for you, and a wallet control that shows nothing until you
+ * click it makes people click it to check they are still connected.
+ *
+ * WHAT IT SHOWS, AND WHAT IT STOPPED SHOWING
+ *
+ * It used to carry five things: a network icon, the balance, the word USDC, a
+ * separator, an identicon and a truncated address. Around 310px of a header
+ * that also holds a theme toggle, a message icon and a bell — enough to push
+ * the nav off centre and make the whole bar look mis-assembled.
+ *
+ * Two of them earn their place. The identicon IS the address — it is derived
+ * from it, so it changes the moment you switch accounts, and two accounts are
+ * quicker to tell apart by colour than by comparing 0x3Be7…8E41 against
+ * 0x8289…c423. The balance is the number people actually glance up to check.
+ *
+ * The rest went: the network icon, because this app speaks to one chain and a
+ * chain badge is noise until there are two; the word USDC, because Arc's native
+ * currency is USDC and "$" says it in one character; and the truncated address,
+ * because Reown's account modal already shows it in full with a copy button,
+ * one click behind this. It stays in the tooltip and the accessible name, so
+ * nobody who needs it has to go looking.
+ *
+ * ~110px, and the connected state still reads at a glance.
  */
 
 import { Button } from "@/components/ui/button";
@@ -25,7 +45,6 @@ import { ManagedWalletMenu } from "@/components/atelier/managed-wallet-menu";
 
 export function WalletButton() {
   const { wallet, connectWallet } = useWeb3();
-  const [networkIconError, setNetworkIconError] = useState(false);
   const [walletIconError, setWalletIconError] = useState(false);
   const { open } = useAppKit();
   const {
@@ -62,41 +81,19 @@ export function WalletButton() {
   }
 
   const short = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`;
+  const balance = Number(wallet.balance || 0).toFixed(2);
 
   return (
     <Button
       variant="secondary"
       onClick={() => void open({ view: "Account" })}
-      aria-label={`Wallet ${short} — open account`}
-      className="font-mono flex items-center gap-2 px-2.5 sm:px-3 md:px-4 bg-muted/50 hover:bg-muted/70 border border-border/40 max-w-[150px] sm:max-w-none"
+      title={wallet.address}
+      aria-label={`Wallet ${short}, ${balance} USDC — open account`}
+      className="font-mono flex items-center gap-2 px-2.5 sm:px-3 bg-muted/50 hover:bg-muted/70 border border-border/40"
     >
-      {/* Network + balance are desktop-only: on a phone the address alone has to
-          fit beside the menu button, and truncating everything to make room for
-          a 4px network dot helps nobody. */}
-      <span className="hidden lg:flex items-center gap-2">
-        <span className="w-4 h-4 rounded-full overflow-hidden flex items-center justify-center shrink-0">
-          {!networkIconError ? (
-            <img
-              src="/arc-icon.svg"
-              alt=""
-              aria-hidden="true"
-              className="w-full h-full object-contain"
-              onError={() => setNetworkIconError(true)}
-            />
-          ) : (
-            <span className="w-full h-full rounded-full bg-primary" />
-          )}
-        </span>
-
-        <span className="tabular-nums">
-          {Number(wallet.balance || 0).toFixed(2)} USDC
-        </span>
-        <span className="text-muted-foreground" aria-hidden="true">
-          ·
-        </span>
-      </span>
-
-      <span className="w-4 h-4 rounded-full overflow-hidden shrink-0">
+      {/* The identicon is the identity: derived from the address, so it changes
+          the instant you switch accounts. */}
+      <span className="w-5 h-5 rounded-full overflow-hidden shrink-0">
         {!walletIconError ? (
           <img
             src={`https://effigy.im/a/${wallet.address}.svg`}
@@ -110,9 +107,9 @@ export function WalletButton() {
         )}
       </span>
 
-      <span className="truncate" title={wallet.address}>
-        {short}
-      </span>
+      {/* Hidden on the narrowest screens, where the icon alone says connected
+          and the header has a menu button to fit beside. */}
+      <span className="hidden sm:inline tabular-nums">${balance}</span>
     </Button>
   );
 }

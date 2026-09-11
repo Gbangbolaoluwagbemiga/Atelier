@@ -76,15 +76,29 @@ export function ManagedWalletMenu({
       <DropdownMenuTrigger asChild>
         <Button
           variant="secondary"
-          className="actor-human font-mono flex items-center gap-2 px-2.5 sm:px-3 md:px-4 bg-muted/50 hover:bg-muted/70 border border-border/40 max-w-[170px] sm:max-w-none"
+          title={worker.address}
+          aria-label={`${worker.handle}, ${known ? `${balance} USDC` : "balance unavailable"} — open wallet menu`}
+          /*
+           * The same shape as the connected-wallet button, for the same reason:
+           * it was carrying a balance, the word USDC, a separator and a
+           * truncated address, and between them they unbalanced a header that
+           * also holds a theme toggle, a message icon and a bell.
+           *
+           * The dot and the handle are what a managed worker needs here — the
+           * dot marks them as the human actor, the handle is how they think of
+           * themselves, and it distinguishes two Google accounts far better
+           * than two truncated hex strings do. The full address is in the menu
+           * one click away, selectable, which is where somebody who wants to
+           * read an address goes anyway.
+           */
+          className="actor-human flex items-center gap-2 px-2.5 sm:px-3 bg-muted/50 hover:bg-muted/70 border border-border/40 max-w-[150px]"
         >
           <span className="actor-dot shrink-0" aria-hidden="true" />
-          <span className="hidden lg:inline tabular-nums">{balance} USDC</span>
-          <span className="hidden lg:inline text-muted-foreground" aria-hidden="true">
-            ·
-          </span>
-          <span className="truncate">
-            {worker.address.slice(0, 6)}…{worker.address.slice(-4)}
+          <span className="truncate">{worker.handle}</span>
+          {/* A dash, not "$—": the balance is unknown, and a currency symbol in
+              front of nothing reads like a number that failed to render. */}
+          <span className="hidden sm:inline tabular-nums text-muted-foreground font-mono">
+            {known ? `$${balance}` : "—"}
           </span>
         </Button>
       </DropdownMenuTrigger>
