@@ -682,12 +682,13 @@ const server = http.createServer(async (req, res) => {
     const escrowId = (url.searchParams.get("escrowId") ?? "").trim();
     if (!/^\d+$/.test(escrowId)) return json(res, 400, { error: "escrowId is required" });
     try {
-      const { criteria, title } = await handover.previewCriteria(escrowId);
+      const { criteria, title, titleConflict } = await handover.previewCriteria(escrowId);
       const prefs = handover.getPrefs(escrowId);
       return json(res, 200, {
         escrowId,
         title,
         criteria,
+        titleConflict: titleConflict ?? null,
         applicationWindowMinutes: prefs?.applicationWindowMinutes ?? config.applicationWindowMinutes,
         defaultWindowMinutes: config.applicationWindowMinutes,
         minWindowMinutes: handover.MIN_WINDOW_MINUTES,
@@ -1494,6 +1495,25 @@ const server = http.createServer(async (req, res) => {
       }
       const result = await workers.apply(b.workerId, b.escrowId, b.coverLetter, b.proposedTimelineDays, b.portfolioUrl);
       return json(res, 200, result);
+    } catch (err) {
+      return json(res, 500, { error: clientError(err) });
+    }
+  }
+
+  /*
+   * The stage a freelancer is about to deliver, and the rubric it faces.
+   *
+   * The delivery box used to ask "What did you deliver?" and say nothing about
+   * which milestone the answer would be filed against or what that milestone
+   * was meant to contain — while on an agent-run job a machine was about to
+   * approve or reject it against written criteria the freelancer had never
+   * been shown.
+   */
+  if (req.method === "GET" && url.pathname === "/api/worker/delivery") {
+    const escrowId = (url.searchParams.get("escrowId") ?? "").trim();
+    if (!/^\d+$/.test(escrowId)) return json(res, 400, { error: "escrowId is required" });
+    try {
+      return json(res, 200, await workers.deliveryTarget(escrowId));
     } catch (err) {
       return json(res, 500, { error: clientError(err) });
     }

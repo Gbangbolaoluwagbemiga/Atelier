@@ -62,6 +62,17 @@ export interface AcceptanceBrief {
   revisionRounds: number; // max revisions before human escalation
   /** Minutes the job stays open for applications before they are judged together. */
   applicationWindowMinutes?: number;
+  /**
+   * False when the title names work the description does not describe.
+   *
+   * The brief is always written from the description — the title is a label a
+   * client typed and may be shorthand or simply wrong. When the two genuinely
+   * disagree, only the client can say which they meant, so it is reported
+   * rather than resolved.
+   */
+  titleMatchesWork?: boolean;
+  /** One sentence naming what each of the two implies. Empty when they agree. */
+  titleConflict?: string;
   milestones: BriefMilestone[]; // splits the budget into independently-reviewed chunks
   briefHash?: `0x${string}`; // keccak256 of criteria JSON, posted on-chain in projectDescription
 }

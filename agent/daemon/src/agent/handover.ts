@@ -94,7 +94,12 @@ export async function readEscrow(escrowId: string): Promise<EscrowSummary> {
  * different standard every time the dialog was reopened, which is precisely the
  * unpredictability this is meant to remove.
  */
-export async function previewCriteria(escrowId: string): Promise<{ criteria: string[]; title: string }> {
+export async function previewCriteria(escrowId: string): Promise<{
+  criteria: string[];
+  title: string;
+  /** Set when the title names work the description does not describe. */
+  titleConflict?: string;
+}> {
   const esc = await readEscrow(escrowId);
 
   /*
@@ -139,6 +144,12 @@ export async function previewCriteria(escrowId: string): Promise<{ criteria: str
   const out = {
     criteria: (brief.criteria ?? []).map((c) => String(c)).filter(Boolean),
     title: esc.projectTitle,
+    /* Carried through so the client sees it before signing. A brief written
+       from a description that contradicts its own title is not wrong, but the
+       client is the only one who can say which they meant. */
+    ...(brief.titleMatchesWork === false && brief.titleConflict
+      ? { titleConflict: String(brief.titleConflict) }
+      : {}),
   };
   store.setPollerText(previewKey(escrowId), JSON.stringify(out));
   return out;

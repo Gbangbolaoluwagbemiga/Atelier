@@ -205,6 +205,32 @@ export async function apply(input: {
   });
 }
 
+export interface DeliveryTarget {
+  escrowId: string;
+  /** Zero-based index of the stage this delivery will be filed against. */
+  index: number;
+  count: number;
+  description: string;
+  amountUsdc: number | null;
+  criteria: string[];
+  /** True when an agent, not the client, reviews this submission. */
+  agentReviewed: boolean;
+}
+
+/**
+ * Which stage a freelancer is about to deliver, and the rubric it faces.
+ *
+ * The delivery box asked "What did you deliver?" and said nothing about which
+ * milestone that answer went to — on a two-stage job it silently picked one —
+ * or what the stage was meant to contain. On an agent-run job a machine then
+ * approved or rejected it against criteria the freelancer had never seen.
+ */
+export async function deliveryTarget(escrowId: string): Promise<DeliveryTarget> {
+  return call<DeliveryTarget>(
+    `/api/worker/delivery?escrowId=${encodeURIComponent(escrowId)}`,
+  );
+}
+
 export async function submit(input: {
   workerId: string;
   escrowId: string;

@@ -23,7 +23,7 @@ import {
   type HandoverPreview,
 } from "@/lib/atelier/agent-api";
 import { motion } from "framer-motion";
-import { Bot, Loader2, User, Clock, ListChecks } from "lucide-react";
+import { Bot, Loader2, User, Clock, ListChecks, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useJobManager } from "@/hooks/use-job-manager";
@@ -425,6 +425,34 @@ export function AutopilotControl({
                 <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
                 It approves or rejects against
               </div>
+
+              {/*
+                THE TITLE AND THE JOB DISAGREE.
+
+                Raised rather than resolved, because only the client knows which
+                they meant. A job titled "fireball" whose description asks for a
+                Discord role to be removed was read as a vector illustration
+                commission on one run and an account recovery job on another —
+                and a freelancer's application scored 25 against one and 70
+                against the other. The brief is now always written from the
+                description; this is the client's chance to say that was wrong.
+              */}
+              {preview?.titleConflict && (
+                <div className="mb-2 rounded-md border border-[var(--actor-agent)]/40 bg-[var(--actor-agent)]/10 px-3 py-2">
+                  <div className="font-medium text-xs uppercase tracking-wide flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                    Your title and your description ask for different things
+                  </div>
+                  <p className="text-muted-foreground mt-1">
+                    {preview.titleConflict}
+                  </p>
+                  <p className="text-muted-foreground mt-1.5">
+                    The criteria below were written from your description, not
+                    your title. If that is the wrong way round, take the job back
+                    and repost it — a freelancer will be judged against these.
+                  </p>
+                </div>
+              )}
 
               {/*
                 Generated from the escrow before the signature, not after it.

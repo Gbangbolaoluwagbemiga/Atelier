@@ -27,6 +27,8 @@ import {
   myWork,
   quests as fetchQuests,
   submit as submitWork,
+  deliveryTarget,
+  type DeliveryTarget,
   withdraw,
   type Quest,
   type Worker,
@@ -54,6 +56,28 @@ export function WorkerBoard({
      route to delivering was the Telegram bot. */
   const [deliveringTo, setDeliveringTo] = useState<string | null>(null);
   const [delivery, setDelivery] = useState("");
+
+  /* What the stage is and what it will be marked against. Loaded when the box
+     opens rather than for every row: it is a chain read per job, and most
+     viewings of this board never open one. */
+  const [target, setTarget] = useState<DeliveryTarget | null>(null);
+
+  function openDelivery(escrowId: string) {
+    setDeliveringTo(escrowId);
+    setTarget(null);
+    void deliveryTarget(escrowId)
+      .then(setTarget)
+      .catch(() => {
+        /* Left null: the box still submits, and the daemon still resolves the
+           stage. Better to deliver without the detail than not at all. */
+      });
+  }
+
+  function closeDelivery() {
+    setDeliveringTo(null);
+    setDelivery("");
+    setTarget(null);
+  }
 
   const refresh = useCallback(async () => {
     try {
@@ -91,8 +115,7 @@ export function WorkerBoard({
         description:
           "It is on-chain and waiting on review. You will hear as soon as the milestone is approved and paid.",
       });
-      setDeliveringTo(null);
-      setDelivery("");
+      closeDelivery();
       await refresh();
     } catch (e) {
       toast(toastError("Could not submit your work", e));
@@ -152,7 +175,7 @@ export function WorkerBoard({
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="actor-figure figure-md">${w.budget}</span>
                     {w.state === "hired" && deliveringTo !== w.escrowId && (
-                      <Button size="sm" onClick={() => setDeliveringTo(w.escrowId)}>
+                      <Button size="sm" onClick={() => openDelivery(w.escrowId)}>
                         <Send className="h-4 w-4 mr-2" aria-hidden="true" />
                         Send work
                       </Button>
@@ -161,7 +184,64 @@ export function WorkerBoard({
                 </div>
 
                 {w.state === "hired" && deliveringTo === w.escrowId && (
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-3">
+                    {/*
+                      WHICH STAGE, AND WHAT IT HAS TO MEET.
+
+                      This box used to be a bare textarea. On a two-stage job it
+                      silently chose a milestone for you, and on an agent-run job
+                      a machine then approved or rejected what you wrote against
+                      criteria you had never been shown.
+                    */}
+                    {target && (
+                      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                              {target.count > 1
+                                ? `Milestone ${target.index + 1} of ${target.count}`
+                                : "This job pays in one stage"}
+                            </div>
+                            {target.description && (
+                              <p className="text-sm mt-1 wrap-break-word">
+                                {target.description}
+                              </p>
+                            )}
+                          </div>
+                          {target.amountUsdc !== null && (
+                            <span className="actor-figure figure-sm shrink-0">
+                              ${target.amountUsdc}
+                            </span>
+                          )}
+                        </div>
+
+                        {target.criteria.length > 0 && (
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
+                              {target.agentReviewed
+                                ? "An agent approves or rejects against"
+                                : "The client is looking for"}
+                            </div>
+                            <ul className="space-y-1">
+                              {target.criteria.map((c, i) => (
+                                <li key={i} className="flex gap-2 text-xs text-muted-foreground">
+                                  <span className="actor-dot mt-1" aria-hidden="true" />
+                                  <span className="min-w-0">{c}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {target.count > 1 && (
+                          <p className="text-xs text-muted-foreground">
+                            Only this stage is being delivered. The rest stay
+                            funded and are sent separately.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     <Label htmlFor={`wk-${w.escrowId}`} className="text-xs">
                       What did you deliver?
                     </Label>
@@ -177,10 +257,7 @@ export function WorkerBoard({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          setDeliveringTo(null);
-                          setDelivery("");
-                        }}
+                        onClick={closeDelivery}
                         disabled={busy}
                       >
                         Cancel

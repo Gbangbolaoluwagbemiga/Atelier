@@ -168,3 +168,37 @@ describe("a preview taken before the job was adopted", () => {
     expect(generateBrief).toHaveBeenCalledTimes(1); // no second generation either
   });
 });
+
+describe("a brief whose title fights its description", () => {
+  it("carries the conflict through to the client, rather than swallowing it", async () => {
+    generateBrief.mockResolvedValue({
+      brief: {
+        criteria: ["The \"sus\" role is removed"],
+        titleMatchesWork: false,
+        titleConflict: 'The title "fireball" implies an illustration; the description asks for a Discord role removal.',
+      },
+    });
+
+    const out = await h.previewCriteria("7");
+
+    expect(out.titleConflict).toMatch(/fireball/);
+    // The brief itself still comes from the description — the title never wins.
+    expect(out.criteria).toEqual(['The "sus" role is removed']);
+  });
+
+  it("says nothing when the two agree", async () => {
+    generateBrief.mockResolvedValue({
+      brief: { criteria: ["SVG + PNG"], titleMatchesWork: true, titleConflict: "" },
+    });
+
+    expect((await h.previewCriteria("7")).titleConflict).toBeUndefined();
+  });
+
+  it("says nothing when the model omits the fields entirely", async () => {
+    // An older cached brief, or a model that dropped the field. Absence is not
+    // a conflict, and a warning nobody can act on is worse than silence.
+    generateBrief.mockResolvedValue({ brief: { criteria: ["SVG + PNG"] } });
+
+    expect((await h.previewCriteria("7")).titleConflict).toBeUndefined();
+  });
+})

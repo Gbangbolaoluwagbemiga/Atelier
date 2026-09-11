@@ -491,3 +491,48 @@ describe("handing over a job that is already assigned", () => {
     expect(await screen.findByRole("button", { name: /24 hours/i })).toBeInTheDocument();
   });
 });
+
+/**
+ * WHEN THE TITLE AND THE JOB DISAGREE.
+ *
+ * Escrow 7 was titled "fireball" and described a Discord role problem. Nothing
+ * told the generator which to believe, so it chose — and chose differently on
+ * different runs, producing a vector illustration commission once and an
+ * account recovery job the next time. The same cover letter scored 25 against
+ * one and 70 against the other, and the 70 hired them.
+ *
+ * The brief is now always written from the description. The contradiction is
+ * raised rather than resolved, because only the client knows which they meant.
+ */
+describe("a job whose title contradicts its description", () => {
+  it("warns the client before they sign it over", async () => {
+    fetchHandoverPreview.mockResolvedValue({
+      escrowId: "7",
+      title: "fireball",
+      criteria: ["Discord \"sus\" role is removed"],
+      titleConflict:
+        'The title "fireball" implies an illustration, while the description asks for a Discord role to be removed.',
+      applicationWindowMinutes: 3,
+      defaultWindowMinutes: 3,
+      minWindowMinutes: 1,
+      maxWindowMinutes: 10080,
+      approved: false,
+    });
+
+    render(<AutopilotControl escrowId={7} isClient projectDescription="…" />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+
+    expect(await screen.findByText(/ask for different things/i)).toBeInTheDocument();
+    expect(screen.getByText(/implies an illustration/i)).toBeInTheDocument();
+    // Says which one won, and what to do if that is the wrong one.
+    expect(screen.getByText(/written from your description, not/i)).toBeInTheDocument();
+  });
+
+  it("stays quiet when the title and description agree", async () => {
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+
+    await screen.findByRole("button", { name: /24 hours/i });
+    expect(screen.queryByText(/ask for different things/i)).not.toBeInTheDocument();
+  });
+});

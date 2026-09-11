@@ -491,6 +491,17 @@ export async function hiredEscrowsFor(who: `0x${string}`): Promise<bigint[]> {
 }
 
 /** Every milestone with its amount and status — the only reliable answer to "is money still at stake". */
+/** The agent managing this job, or null when the client runs it themselves. */
+export async function jobManagerOf(escrowId: bigint): Promise<`0x${string}` | null> {
+  const who = (await getPublicClient().readContract({
+    address: config.atelierAddress,
+    abi,
+    functionName: "jobManager",
+    args: [escrowId],
+  })) as `0x${string}`;
+  return /^0x0+$/i.test(who) ? null : who;
+}
+
 export async function getMilestones(escrowId: bigint) {
   return getPublicClient().readContract({
     address: config.atelierAddress,

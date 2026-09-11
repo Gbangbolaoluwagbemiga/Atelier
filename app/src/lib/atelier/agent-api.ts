@@ -432,6 +432,14 @@ export interface HandoverPreview {
   title: string;
   /** The acceptance criteria Autopilot generated from what is on-chain. */
   criteria: string[];
+  /**
+   * Set when the job's title names work its description does not describe.
+   *
+   * The brief is always written from the description; the title is a label the
+   * client typed. When the two genuinely disagree only the client can say which
+   * they meant, so it is reported here rather than guessed at.
+   */
+  titleConflict?: string | null;
   applicationWindowMinutes: number;
   defaultWindowMinutes: number;
   minWindowMinutes: number;

@@ -15,6 +15,7 @@
 
 import crypto from "node:crypto";
 import * as store from "../store.js";
+import { criteriaFor as handoverCriteriaFor } from "../agent/handover.js";
 import * as atelier from "../web3/atelier.js";
 import { createSignerFor } from "../circle/circleSigner.js";
 import { config } from "../config.js";
@@ -372,14 +373,33 @@ const MS_SUBMITTED = 1;
 const MS_APPROVED = 2;
 
 async function resolveMilestone(escrowId: string): Promise<number> {
-  const task = store.listTasks(100).find((t) => t.escrowId === escrowId);
-  let expected = 1;
-  if (task?.briefJson) {
-    try {
-      const b = JSON.parse(task.briefJson);
-      if (Array.isArray(b.milestones) && b.milestones.length > 0) expected = b.milestones.length;
-    } catch {
-      /* a malformed brief just means we assume one stage */
+  /*
+   * How many stages there are is a chain fact.
+   *
+   * This counted the milestones in the daemon's own brief and assumed one when
+   * there was no task row — so on a job the daemon holds no brief for (hired
+   * on-chain, or taken back off Autopilot) every delivery was filed against
+   * stage one, including the second stage of a two-stage job. The escrow knows
+   * how many it has.
+   */
+  let expected = 0;
+  try {
+    const onChain = (await atelier.getMilestones(BigInt(escrowId))) as readonly unknown[];
+    expected = onChain.length;
+  } catch {
+    /* fall through to the brief */
+  }
+
+  if (expected === 0) {
+    const task = store.listTasks(100).find((t) => t.escrowId === escrowId);
+    expected = 1;
+    if (task?.briefJson) {
+      try {
+        const b = JSON.parse(task.briefJson);
+        if (Array.isArray(b.milestones) && b.milestones.length > 0) expected = b.milestones.length;
+      } catch {
+        /* a malformed brief just means we assume one stage */
+      }
     }
   }
   if (expected === 1) return 0;
@@ -534,6 +554,68 @@ export async function myWork(
     out.push({ escrowId, title, budget, status, icon, state });
   }
   return out;
+}
+
+/**
+ * WHAT THE FREELANCER IS ABOUT TO DELIVER, AND WHAT IT WILL BE JUDGED BY.
+ *
+ * The delivery box asked "What did you deliver?" and said nothing about which
+ * stage of the job that answer was going to be filed against, or what the stage
+ * was supposed to contain. On a two-stage job the freelancer was typing into a
+ * box that silently picked a milestone for them.
+ *
+ * Worse on an agent-run job, where an agent approves or rejects this submission
+ * against written criteria. Being marked against a rubric is survivable; being
+ * marked against one nobody showed you is not. The criteria already existed and
+ * were already readable — they were just never put in front of the person whose
+ * payment depended on meeting them.
+ */
+export async function deliveryTarget(escrowId: string): Promise<{
+  escrowId: string;
+  index: number;
+  count: number;
+  description: string;
+  amountUsdc: number | null;
+  criteria: string[];
+  /** True when an agent, not the client, will review this. */
+  agentReviewed: boolean;
+}> {
+  const index = await resolveMilestone(escrowId);
+
+  let description = "";
+  let amountUsdc: number | null = null;
+  let count = 1;
+
+  try {
+    const onChain = (await atelier.getMilestones(BigInt(escrowId))) as readonly {
+      amount: bigint;
+      requirements: string;
+      description: string;
+    }[];
+    count = onChain.length || 1;
+    const m = onChain[index];
+    if (m) {
+      // `requirements` is what the client agreed the stage must contain;
+      // `description` is the shorter label. Prefer the one being judged.
+      description = m.requirements || m.description || "";
+      amountUsdc = Number(m.amount) / 1e6;
+    }
+  } catch {
+    /* a chain hiccup must not stop someone delivering — the box still works */
+  }
+
+  const { criteria } = handoverCriteriaFor(escrowId);
+
+  /* Whether an agent reviews this decides how the criteria should be read: as
+     the exact rubric a machine scores against, or as the client's notes. */
+  let agentReviewed = false;
+  try {
+    agentReviewed = (await atelier.jobManagerOf(BigInt(escrowId))) !== null;
+  } catch {
+    /* unknown — say nothing rather than promise a reviewer we cannot confirm */
+  }
+
+  return { escrowId, index, count, description, amountUsdc, criteria, agentReviewed };
 }
 
 /**

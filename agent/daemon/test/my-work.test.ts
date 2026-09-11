@@ -43,6 +43,12 @@ vi.mock("../src/web3/atelier.js", () => ({
   getEscrow: (id: bigint) => getEscrow(id),
 }));
 
+/* service.ts reads a job's criteria through handover, which imports the brief
+   generator and therefore the Groq client. Nothing here needs a model. */
+vi.mock("../src/agent/handover.js", () => ({
+  criteriaFor: () => ({ criteria: [], source: "none" }),
+}));
+
 vi.mock("../src/config.js", () => ({ config: { applicationWindowMinutes: 3 } }));
 vi.mock("../src/graph/client.js", () => ({ graphQuery: vi.fn() }));
 
