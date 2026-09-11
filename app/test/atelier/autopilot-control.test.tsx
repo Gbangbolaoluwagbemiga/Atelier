@@ -30,8 +30,9 @@ vi.mock("@/hooks/use-job-manager", () => ({
   useJobManager: () => hookState,
 }));
 
+const toast = vi.fn();
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast }),
 }));
 
 const fetchLimits = vi.fn().mockResolvedValue({ applicationWindowMinutes: 3 });
@@ -89,6 +90,7 @@ beforeEach(() => {
   };
   delegate.mockClear();
   revoke.mockClear();
+  toast.mockClear();
 
   /* Reset the resolved values too, not just the call lists. A test that sets a
      persistent mockRejectedValue otherwise leaks its outage into every test
@@ -316,6 +318,45 @@ describe("choosing the review window", () => {
     // nothing is exactly the noise they complained about.
     expect(signMessageAsync).not.toHaveBeenCalled();
     expect(saveHandoverPrefs).not.toHaveBeenCalled();
+  });
+
+  it("saves the window even when the criteria draft failed", async () => {
+    /*
+     * The save was gated on the preview — a language-model call that drafts
+     * acceptance criteria. When that failed, which it does whenever the model
+     * is busy, the client's chosen window was silently discarded and the job
+     * ran on the three-minute default. Nothing told them; the toast
+     * congratulated them on the four hours they had picked.
+     */
+    fetchHandoverPreview.mockRejectedValue(new Error("model busy"));
+
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await screen.findByText(/could not be reached to draft criteria/i);
+    await userEvent.click(await screen.findByRole("button", { name: /^4 hours/i }));
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(saveHandoverPrefs).toHaveBeenCalled());
+    expect(saveHandoverPrefs.mock.calls[0][0]).toMatchObject({
+      applicationWindowMinutes: 240,
+    });
+  });
+
+  it("says what the window actually is, not what was asked for", async () => {
+    // The toast read the picker straight off, so it announced four hours
+    // whether or not anything was recorded. A confirmation that confirms your
+    // intention rather than the outcome is why nobody noticed.
+    saveHandoverPrefs.mockRejectedValue(new Error("offline"));
+
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /^4 hours/i }));
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    const said = toast.mock.calls.map((c) => JSON.stringify(c[0])).join(" ");
+    expect(said).toMatch(/could not be saved/i);
+    expect(said).not.toMatch(/stay open for 4 hours/i);
   });
 
   it("records a changed window against the job, signed", async () => {

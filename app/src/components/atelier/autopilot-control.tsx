@@ -211,11 +211,28 @@ export function AutopilotControl({
        * delegation did not work when it plainly did. They lose the custom
        * window, not the job, so say exactly that.
        */
+      /*
+       * The window is the client's choice, not a rider on the criteria.
+       *
+       * This required `preview !== null` — and the preview is a language-model
+       * call that drafts acceptance criteria. When that failed, which it does
+       * whenever the model is busy, the client's chosen window was silently
+       * discarded and the job quietly ran on the three-minute default. They
+       * were never told; the toast congratulated them on the four hours they
+       * had picked.
+       *
+       * The two are independent. A window with no drafted criteria is still a
+       * window somebody chose.
+       */
+      const defaultWindow = preview?.defaultWindowMinutes ?? windowMinutes;
       const wantsCustom =
         !hasFreelancer &&
-        preview !== null &&
         chosenWindow !== null &&
-        chosenWindow !== preview.defaultWindowMinutes;
+        defaultWindow !== null &&
+        chosenWindow !== defaultWindow;
+
+      let windowSaved = false;
+      let windowProblem: string | null = null;
 
       if (wantsCustom && wallet.address) {
         try {
@@ -223,28 +240,35 @@ export function AutopilotControl({
           const signature = await signMessageAsync({ message });
           await saveHandoverPrefs({
             escrowId,
-            criteria: preview.criteria,
+            criteria: preview?.criteria ?? [],
             applicationWindowMinutes: chosenWindow,
             address: wallet.address,
             message,
             signature,
           });
+          windowSaved = true;
         } catch (e) {
-          toast({
-            title: "Autopilot is running this job",
-            description: `Your review window wasn't saved (${humanMessage(e)}), so it will use the default. Everything else is set.`,
-          });
-          return;
+          windowProblem = humanMessage(e);
         }
       }
 
-      const windowLabel =
-        chosenWindow !== null ? describeWindow(chosenWindow) : null;
+      /*
+       * Report what happened, not what was asked for.
+       *
+       * The toast used to read the chosen window straight off the picker, so it
+       * announced four hours whether or not anything had been recorded. A
+       * confirmation that confirms your intention rather than the outcome is
+       * worse than none: it is the reason nobody noticed.
+       */
+      const effective = windowSaved ? chosenWindow : defaultWindow;
+      const windowLabel = effective !== null ? describeWindow(effective) : null;
+
       toast({
         title: "Autopilot is running this job",
-        description:
-          (windowLabel ? `Applications stay open for ${windowLabel}. ` : "") +
-          "It can hire, review and pay. It can never move your money elsewhere, and disputes stay yours.",
+        description: windowProblem
+          ? `Your review window could not be saved (${windowProblem}), so it stays at ${windowLabel ?? "the default"}. Everything else is set — you can hand it over again to retry.`
+          : (windowLabel ? `Applications stay open for ${windowLabel}. ` : "") +
+            "It can hire, review and pay. It can never move your money elsewhere, and disputes stay yours.",
       });
     } catch (e) {
       toast(toastError("Could not hand over the job", e));

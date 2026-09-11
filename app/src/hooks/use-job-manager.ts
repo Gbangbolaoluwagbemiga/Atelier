@@ -48,9 +48,32 @@ export interface JobManagerState {
 const managerCache = new Map<number, string | null>();
 const managerWatchers = new Map<number, Set<(v: string | null) => void>>();
 
+/**
+ * Told to everyone, including surfaces that do not use this hook.
+ *
+ * The job board reads which jobs Autopilot runs from the DAEMON's task table,
+ * not the chain — one request for the whole board instead of one RPC call per
+ * card. That is the right trade, and it means the board lags a hand-over by
+ * the agent's next sweep: up to fifteen seconds in which the client has just
+ * acted and nothing on the board has changed.
+ *
+ * So a delegation the client makes themselves is announced, and the board
+ * applies it immediately and lets the next poll confirm it. Optimistic only
+ * for the person who did it — everyone else waits for the daemon, which is the
+ * honest source for what the agent is actually working on.
+ */
+export const JOB_MANAGER_EVENT = "atelier:job-manager";
+
 function publishManager(escrowId: number, value: string | null): void {
   managerCache.set(escrowId, value);
   for (const fn of managerWatchers.get(escrowId) ?? []) fn(value);
+  try {
+    window.dispatchEvent(
+      new CustomEvent(JOB_MANAGER_EVENT, { detail: { escrowId, managed: value !== null } }),
+    );
+  } catch {
+    /* no window (tests, SSR) — the watchers above already fired */
+  }
 }
 
 function watchManager(escrowId: number, fn: (v: string | null) => void): () => void {

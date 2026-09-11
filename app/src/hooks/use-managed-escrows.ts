@@ -32,6 +32,7 @@ import {
   AUTOPILOT_CONFIGURED,
   fetchManagedEscrowIds,
 } from "@/lib/atelier/agent-api";
+import { JOB_MANAGER_EVENT } from "@/hooks/use-job-manager";
 
 /** Below the daemon's own 15s adoption sweep — see the note above. */
 const POLL_MS = 10_000;
@@ -47,6 +48,32 @@ export function useManagedEscrows(): {
   const [tick, setTick] = useState(0);
 
   const refresh = useCallback(() => setTick((n) => n + 1), []);
+
+  /*
+   * The client's own hand-over, applied at once.
+   *
+   * This polls the daemon, which only learns about a delegation on its next
+   * sweep — so for up to fifteen seconds after somebody hands a job over, the
+   * board they are looking at still shows it unmanaged, and pressing Refresh
+   * cannot help. Their own action is one thing we know before the daemon does.
+   *
+   * Optimistic for them alone; the next poll reconciles, and if the delegation
+   * did not actually land the badge goes away again on its own.
+   */
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const d = (e as CustomEvent<{ escrowId: number; managed: boolean }>).detail;
+      if (!d) return;
+      setManaged((prev) => {
+        const next = new Set(prev);
+        if (d.managed) next.add(String(d.escrowId));
+        else next.delete(String(d.escrowId));
+        return next;
+      });
+    };
+    window.addEventListener(JOB_MANAGER_EVENT, onChange);
+    return () => window.removeEventListener(JOB_MANAGER_EVENT, onChange);
+  }, []);
 
   useEffect(() => {
     if (!AUTOPILOT_CONFIGURED) {
