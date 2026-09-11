@@ -276,6 +276,9 @@ export async function cancelJob(escrowId: bigint, as: CircleSigner = createCircl
  * most recent chunk, and the wider passes only exist so a daemon that was
  * asleep still finds it.
  */
+/* Above this many escrows, asking each one is worse than walking the logs. */
+const MAX_DIRECT_ESCROW_SCAN = 400n;
+
 export interface DisputeAward {
   milestoneIndex: number;
   freelancerAmount: number;
@@ -458,6 +461,52 @@ export async function hasApplied(escrowId: bigint, who: `0x${string}`): Promise<
  */
 export async function hiredEscrowsFor(who: `0x${string}`): Promise<bigint[]> {
   const client = getPublicClient();
+
+  /*
+   * ASK THE ESCROWS DIRECTLY BEFORE WALKING LOGS.
+   *
+   * The log walk below reads FreelancerAccepted from the deploy block, and both
+   * public RPCs refuse a scan that size — one outright, one by rate limit. So
+   * when the subgraph was also rate-limited, this returned an empty array and a
+   * freelancer's finished job simply vanished off their board. An unavailable
+   * source and an empty result looked identical, which is the same mistake that
+   * cost an afternoon on applications.
+   *
+   * `beneficiary` is a plain read on a struct, and nextEscrowId bounds how many
+   * there are. For a marketplace this size that is a handful of cheap calls
+   * that work when nothing else does. The log walk stays for the day there are
+   * too many escrows to ask one at a time.
+   */
+  try {
+    const next = (await client.readContract({
+      address: config.atelierAddress,
+      abi,
+      functionName: "nextEscrowId",
+    })) as bigint;
+
+    if (next <= MAX_DIRECT_ESCROW_SCAN) {
+      const ids = Array.from({ length: Number(next) - 1 }, (_, i) => BigInt(i + 1));
+      const escrows = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const e = (await client.readContract({
+              address: config.atelierAddress,
+              abi,
+              functionName: "getEscrow",
+              args: [id],
+            })) as { beneficiary?: string };
+            return e.beneficiary?.toLowerCase() === who.toLowerCase() ? id : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return escrows.filter((id): id is bigint => id !== null);
+    }
+  } catch {
+    /* fall through to the log walk */
+  }
+
   const event = {
     type: "event",
     name: "FreelancerAccepted",

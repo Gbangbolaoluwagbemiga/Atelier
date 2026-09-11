@@ -289,3 +289,40 @@ describe("a job where every stage is approved", () => {
     expect(row.status).toMatch(/send the next stage/i);
   });
 });
+
+/**
+ * AN EMPTY BOARD HAS TO BE EARNED.
+ *
+ * The hire list used to end in `.catch(() => [])`, so a rate-limited subgraph
+ * and a refusing RPC together produced an empty array — and a freelancer's
+ * finished job vanished off their board with nothing to say anything had gone
+ * wrong. "Nobody answered" and "you have no work" looked identical, which is
+ * the third time that shape of bug has cost a day here.
+ */
+describe("when no source can answer", () => {
+  it("fails rather than claiming the bench is empty", async () => {
+    hiredEscrowsFor.mockRejectedValue(new Error("rate limit exceeded"));
+    listTasks.mockReturnValue([]);
+
+    await expect(myWork("w1")).rejects.toThrow(/read problem/i);
+  });
+
+  it("still renders what the daemon knows when only the chain is down", async () => {
+    // A partial answer is worth showing. Silence is not.
+    hiredEscrowsFor.mockRejectedValue(new Error("rate limit exceeded"));
+    listTasks.mockReturnValue([
+      { escrowId: "9", status: "posted", briefJson: JSON.stringify({ title: "Other job", budget: 2 }) },
+    ]);
+    hasApplied.mockResolvedValue(true);
+
+    const work = await myWork("w1");
+    expect(work[0].escrowId).toBe("9");
+  });
+
+  it("renders an empty bench happily when a source genuinely said so", async () => {
+    hiredEscrowsFor.mockResolvedValue([]);
+    listTasks.mockReturnValue([]);
+
+    await expect(myWork("w1")).resolves.toEqual([]);
+  });
+});

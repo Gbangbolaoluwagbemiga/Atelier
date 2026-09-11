@@ -531,7 +531,7 @@ export interface WorkRow {
  * "everything", which is the submission, not the work. Counts and statuses stay
  * on the chain, where there are only ever a handful of rows to read.
  */
-async function hiredEscrowIds(me: `0x${string}`): Promise<string[]> {
+async function hiredEscrowIds(me: `0x${string}`): Promise<{ ids: string[]; answered: boolean }> {
   try {
     const { graphQuery, isGraphConfigured } = await import("../graph/client.js");
     if (isGraphConfigured()) {
@@ -540,7 +540,7 @@ async function hiredEscrowIds(me: `0x${string}`): Promise<string[]> {
         GET_JOBS_FOR_FREELANCER,
         { who: me.toLowerCase() },
       );
-      return (res.escrows ?? []).map((e) => String(e.escrowId));
+      return { ids: (res.escrows ?? []).map((e) => String(e.escrowId)), answered: true };
     }
   } catch (err) {
     console.warn(
@@ -549,10 +549,24 @@ async function hiredEscrowIds(me: `0x${string}`): Promise<string[]> {
     );
   }
 
-  /* Slow, and correct. Worth it when the index is unreachable; not worth it
-     every time somebody opens their board. */
-  const ids = await atelier.hiredEscrowsFor(me).catch(() => [] as bigint[]);
-  return ids.map((id) => id.toString());
+  try {
+    const ids = await atelier.hiredEscrowsFor(me);
+    return { ids: ids.map((id) => id.toString()), answered: true };
+  } catch (err) {
+    /*
+     * NOBODY ANSWERED — which is not the same as "you have no work".
+     *
+     * This used to `.catch(() => [])`, so a rate-limited subgraph and a
+     * refusing RPC together produced an empty array, and a freelancer's
+     * finished job vanished off their board with no sign anything had gone
+     * wrong. The caller needs to be able to tell the difference.
+     */
+    console.warn(
+      "[work] neither the subgraph nor the chain could list hires:",
+      err instanceof Error ? err.message : err,
+    );
+    return { ids: [], answered: false };
+  }
 }
 
 export async function myWork(workerId: string): Promise<WorkRow[]> {
@@ -571,7 +585,8 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
    * escrow with no way to see it, while the client's screen showed it assigned
    * to them.
    */
-  const hiredFor = new Set(await hiredEscrowIds(me));
+  const { ids: hiredIds, answered } = await hiredEscrowIds(me);
+  const hiredFor = new Set(hiredIds);
 
   /*
    * Candidates are the union of what the agent knows about and what the chain
@@ -646,6 +661,18 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
       }
     }),
   );
+
+  /*
+   * An empty board has to be earned.
+   *
+   * If nothing could tell us what this person was hired for and the daemon
+   * holds no task rows either, we know nothing — and rendering "nothing on your
+   * bench" would be a claim we cannot make. Failing is the honest answer; the
+   * board shows it could not load and tries again on the next poll.
+   */
+  if (!answered && tasks.length === 0) {
+    throw new Error("Could not reach the job index or the chain — your work is safe, this is a read problem.");
+  }
 
   const out: WorkRow[] = [];
   for (const [i, escrowId] of candidateIds.entries()) {

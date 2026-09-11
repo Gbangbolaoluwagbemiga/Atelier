@@ -633,3 +633,52 @@ describe("opening a finished job", () => {
     expect(await screen.findByText(/approved and paid in full/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * A JOB MUST NEVER JUST DISAPPEAR.
+ *
+ * The subgraph was rate-limited, the chain fallback was refused, the hire list
+ * came back empty, and a freelancer's finished job vanished off their board
+ * with nothing to say why. Their work and their money both looked gone. It is
+ * the worst thing this page can do, and the read was a `.catch(() => [])`.
+ */
+describe("when the board cannot be loaded", () => {
+  const JOB = {
+    escrowId: "7", title: "fireball", budget: 3, status: "All 2 stage(s) approved and paid",
+    icon: "✅", state: "completed", awaitingReview: 0, approved: 2, needsRevision: 0,
+    milestoneCount: 2, canSubmit: false, reviewer: "agent" as const,
+  };
+
+  it("keeps showing what it had, rather than emptying the list", async () => {
+    myWork.mockResolvedValueOnce([JOB]).mockRejectedValue(new Error("read problem"));
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    expect(await screen.findByText("fireball")).toBeInTheDocument();
+
+    // The board polls; a failed poll must not take the job off the screen.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByText("fireball")).toBeInTheDocument();
+  });
+
+  it("says the list is incomplete, not that the bench is empty", async () => {
+    myWork.mockRejectedValue(new Error("read problem"));
+    quests.mockResolvedValue([]);
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("tab", { name: /your work/i }));
+
+    expect(await screen.findByText(/incomplete rather than empty/i)).toBeInTheDocument();
+    // And reassures them about the part that actually matters.
+    expect(screen.getByText(/on-chain either way/i)).toBeInTheDocument();
+  });
+
+  it("says the bench is empty when that is genuinely the answer", async () => {
+    myWork.mockResolvedValue([]);
+    quests.mockResolvedValue([]);
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("tab", { name: /your work/i }));
+
+    expect(await screen.findByText(/nothing on your bench/i)).toBeInTheDocument();
+  });
+});

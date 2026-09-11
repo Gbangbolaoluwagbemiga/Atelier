@@ -57,6 +57,8 @@ export function WorkerBoard({
   const [quests, setQuests] = useState<Quest[]>([]);
   const [work, setWork] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
+  /* True only when we have nothing to show AND could not find out why. */
+  const [unreachable, setUnreachable] = useState(false);
   const [applyingTo, setApplyingTo] = useState<string | null>(null);
   const [coverLetter, setCoverLetter] = useState("");
   const [busy, setBusy] = useState(false);
@@ -106,13 +108,23 @@ export function WorkerBoard({
       setQuests(q);
       setWork(w);
       onWorkerChanged(m);
+      setUnreachable(false);
     } catch {
-      /* Left silent on purpose: this polls, and a toast every few seconds
-         because the daemon blinked would be worse than a stale board. */
+      /*
+       * Still no toast — this polls, and one every few seconds because the
+       * daemon blinked would be worse than a stale board. But the LIST must
+       * not be emptied on a failed read: the daemon now refuses to answer at
+       * all rather than claim an empty bench, and clearing `work` here would
+       * reintroduce exactly the disappearance it was changed to prevent.
+       *
+       * A job vanishing without explanation is the worst thing this page can
+       * do — somebody's work and their money look gone.
+       */
+      setUnreachable((was) => was || work.length === 0);
     } finally {
       setLoading(false);
     }
-  }, [worker.id, onWorkerChanged]);
+  }, [worker.id, onWorkerChanged, work.length]);
 
   useEffect(() => {
     void refresh();
@@ -621,8 +633,18 @@ export function WorkerBoard({
               on it. */}
           {work.length === 0 && (
             <div className="rounded-xl glass p-8 text-center text-sm text-muted-foreground">
-              Nothing on your bench right now. Anything you are hired for shows
-              up here, with what it needs and what it pays.
+              {unreachable ? (
+                <>
+                  We could not reach the job index just now, so this list is
+                  incomplete rather than empty. Nothing has happened to your
+                  work or your money — it is on-chain either way. Trying again.
+                </>
+              ) : (
+                <>
+                  Nothing on your bench right now. Anything you are hired for
+                  shows up here, with what it needs and what it pays.
+                </>
+              )}
             </div>
           )}
         </section>
