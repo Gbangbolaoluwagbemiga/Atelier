@@ -44,10 +44,18 @@ Contracts need OpenZeppelin fetched — see
 ## Start
 
 ```bash
-(cd backend && npm run dev)   # :8787
-(cd agent/daemon     && npm start)      # :8080
-(cd app        && npm run dev)    # :5173 or :5174
+(cd backend      && npm run dev)   # :8787
+(cd agent/daemon && npm run dev)   # :8080  — `npm start` does NOT watch
+(cd app          && npm run dev)   # :5173 or :5174
 ```
+
+`npm run dev` for the daemon, not `npm start`. `start` is `tsx src/index.ts`
+with no watcher, so it keeps serving the code it was launched with and nothing
+says so. An afternoon went into debugging a fix that had already landed and was
+simply not running — and the same afternoon produced the Vite version of the
+same trap, which is written up in
+[`docs/daemon-hosting.md`](docs/daemon-hosting.md). If a change appears to have
+no effect, check what is actually running before you check the change.
 
 Check all three:
 

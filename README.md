@@ -210,8 +210,24 @@ The trade is stated where someone can act on it rather than buried: **we hold
 the keys.** Withdraw to an address you own, or bring your own wallet from the
 start and sign everything yourself.
 
+Behind the door is a board that has to work for somebody holding no wallet at
+all: the stage they are delivering against and the criteria it will be judged
+on, the reviewer's verdict criterion by criterion when work comes back, an
+arbiter's split when a dispute took a stage off them, and a delivery box that
+takes a file — the daemon signs the upload authorisation with their managed
+wallet, because the backend rightly demands a signature from the escrow's
+beneficiary and a managed worker holds no key to produce one.
+
+Clients and freelancers can also message each other directly, which matters
+most for the half of the marketplace that has no other channel.
+
+And anyone can ask the app how it works — **Ask Atelier** answers from
+hand-written knowledge of this specific product rather than a model's guess
+about escrow in general.
+
 [`worker.ts`](app/src/lib/atelier/worker.ts) ·
-[`google-auth.ts`](agent/daemon/src/workers/google-auth.ts)
+[`google-auth.ts`](agent/daemon/src/workers/google-auth.ts) ·
+[`knowledge.ts`](agent/daemon/src/assistant/knowledge.ts)
 
 ---
 
@@ -304,7 +320,7 @@ would mean the agent stops when you close your laptop.
 | Path | |
 |---|---|
 | [`app/`](app) | The web app — one deployable Vite project, plus the contracts it talks to |
-| [`app/contracts/solidity/`](app/contracts/solidity) | `Atelier.sol`, the yield controller and adapters, 107 Foundry tests |
+| [`app/contracts/solidity/`](app/contracts/solidity) | `Atelier.sol`, the yield controller and adapters, 165 Foundry tests |
 | [`backend/`](backend) | The Express API — uploads, messaging, the gasless relayer |
 | [`subgraph/`](subgraph) | The Graph subgraph — escrows, milestones, manager events |
 | [`agent/daemon/`](agent/daemon) | Autopilot: the LLM loop, Circle wallets, x402, Telegram |
@@ -339,21 +355,28 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**649 tests.** The contract suite went from zero.
+**887 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
 | Contract | **165** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
-| Frontend | **305** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job |
-| Backend | **54** | Route handlers, which browsers may call them, and what they do when the database is unreachable |
-| Daemon | **77** | Who the agent tells, who it hires, which jobs it picks up, and whether it pays |
+| Frontend | **424** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job, and what the board does when a read fails |
+| Backend | **71** | Route handlers, which browsers may call them, what they do when the database is unreachable, and that two spellings of an address are one person |
+| Daemon | **179** | Who the agent tells, who it hires, which jobs it picks up, whether it pays — and the difference between "nothing" and "could not find out" |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
+
+A disproportionate share of the recent ones are about a single failure shape:
+a read that cannot reach its source, returning an empty or zero answer that is
+indistinguishable from a real one. It has cost more time here than every other
+class of bug combined — an empty job board, a finished job reported as unstarted,
+a freelancer asked to redo work they had already been paid for — so each place
+it has been found now has a test naming the incident.
 
 ```bash
 (cd app/contracts/solidity && forge test)   # 165
-(cd app && npm test)                        # 305
-(cd backend && npx vitest run)              # 54
-(cd agent/daemon && npm test)               # 77
+(cd app && npm test)                        # 424
+(cd backend && npx vitest run)              # 71
+(cd agent/daemon && npm test)               # 179
 (cd app && npm run e2e)                     # 48 — needs all three services up
 
 # Typecheck the web app with `npm run typecheck`, never `tsc --noEmit`:
@@ -529,6 +552,29 @@ with `GRAPH_URL` unset nothing was ever scored or hired and the daemon looked
 merely idle. Single-escrow reads now fall back to the chain, and the subgraph is
 what makes the loop fast rather than what makes it work.
 
+**The binding constraint is the free RPC, and it is worth naming.** Subgraph
+Studio returns 429 under ordinary use and `rpc.testnet.arc.network` rate-limits
+a plain `eth_call`. Neither is a code problem, but both are where this app's
+worst bugs came from — not because a read failed, but because of what the code
+did next.
+
+A failed read returning zero is indistinguishable from a real zero, and that one
+shape has produced, at various times, an empty job board, a freelancer's
+finished job vanishing, a paid-in-full job reported as unstarted with a button
+inviting them to redo it, and a direct message that could be delivered and not
+read. Every one of those was a `catch` that answered instead of admitting it did
+not know.
+
+So the rule the codebase now holds to, and tests: **an unavailable source is not
+an empty answer.** A read that cannot reach its source says so, the screen says
+so, and the retry happens on its own. Where a batch can replace N requests it
+does — Arc has multicall3 at the canonical address, which neither chain
+definition declared until it was measured, so every batched read in the app had
+been silently falling back to a loop.
+
+A paid endpoint removes the pressure. It does not remove the requirement, which
+is why the handling is the part that got the tests.
+
 ---
 
 ## Roadmap
@@ -538,9 +584,11 @@ what makes the loop fast rather than what makes it work.
 - [ ] Size a job so the freelancer's share is reachable — see Status
 - [ ] Arc mainnet deployment, and attach the v4 adapter to a live pool there
 - [x] Host the Autopilot daemon on an always-on container with a persistent volume
-- [ ] Broaden the daemon's test suite past the four modules that move money
+- [x] Broaden the daemon's test suite past the four modules that move money — 12 modules, 179 tests
 - [x] Notifications raised by the agent, not only by a browser that happens to be open
 - [ ] Identity or stake, so two colluding wallets cannot rate each other
+- [ ] A paid RPC endpoint. The public one rate-limits under ordinary use, and
+      every read this app makes has to decide what to do when it does
 
 ---
 
