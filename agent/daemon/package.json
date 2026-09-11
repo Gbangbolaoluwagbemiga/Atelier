@@ -13,7 +13,8 @@
     "seed:submission": "tsx scripts/seed-submission.ts",
     "e2e": "tsx scripts/e2e-loop.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "circle:dev-wallet": "tsx src/circle/dev-wallet.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
