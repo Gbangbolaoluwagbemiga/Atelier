@@ -20,7 +20,7 @@
 import { getAddress, type Abi } from "viem";
 import atelierAbi from "../web3/AtelierABI.json" with { type: "json" };
 import { config } from "../config.js";
-import { getPublicClient } from "../web3/atelier.js";
+import { getLogClient, getPublicClient } from "../web3/atelier.js";
 import type { GQLApplication, GQLEscrow, GQLMilestone } from "./queries.js";
 
 const abi = atelierAbi as Abi;
@@ -55,7 +55,8 @@ interface RawMilestone {
 async function applicationDetails(
   escrowId: string,
 ): Promise<Map<string, { coverLetter: string; proposedTimeline: string; timestamp: string }>> {
-  const client = getPublicClient();
+  /* A log walk, so the endpoint that answers log walks. */
+  const client = getLogClient();
   const event = {
     type: "event",
     name: "ApplicationSubmitted",

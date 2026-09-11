@@ -2,7 +2,38 @@ import "dotenv/config";
 import { defineChain } from "viem";
 
 /** Arc Testnet — Circle's stablecoin-native L1. USDC is the native currency (6 decimals). */
+/**
+ * TWO ENDPOINTS, BECAUSE NEITHER DOES BOTH.
+ *
+ * Measured, not guessed, and the numbers are the whole argument:
+ *
+ *   drpc                      plain reads fine, 8/8 under load, multicall fine
+ *                             getLogs capped somewhere between 100 and 200
+ *                             blocks — its refusal claims "over 10000 blocks",
+ *                             which is simply untrue, so the message is no
+ *                             guide at all
+ *
+ *   rpc.testnet.arc.network   the only one that will answer a wide getLogs
+ *                             at all, and it rate-limits a bare eth_call
+ *                             under ordinary use
+ *
+ * The daemon pointed everything at the second one, because logs are the thing
+ * that has no alternative — and so every balance read, every escrow lookup and
+ * every milestone fetch queued behind the endpoint that is always busy. A
+ * freelancer's dashboard showed a dash where their money should be, and their
+ * board could not list a job they had finished, while the browser sitting next
+ * to it read the same chain through drpc without trouble.
+ *
+ * So: reads go to the endpoint that answers reads, logs go to the one that
+ * answers logs. Logs are asked for rarely — the delegation sweep keeps a cursor
+ * and only walks forward — which is exactly the access pattern the busy
+ * endpoint can still serve.
+ */
 export const rpcUrl = process.env.ARC_RPC_URL?.trim() || "https://rpc.drpc.testnet.arc.network";
+
+/** Where `eth_getLogs` goes. Falls back to the read URL when unset. */
+export const logRpcUrl =
+  process.env.ARC_LOG_RPC_URL?.trim() || "https://rpc.testnet.arc.network";
 
 export const arcTestnet = defineChain({
   id: Number(process.env.ARC_CHAIN_ID ?? 5042002),

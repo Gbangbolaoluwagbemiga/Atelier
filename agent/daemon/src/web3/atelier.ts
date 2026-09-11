@@ -11,7 +11,7 @@
 
 import { createPublicClient, http, zeroAddress, type Abi, type PublicClient } from "viem";
 import atelierAbi from "./AtelierABI.json" with { type: "json" };
-import { arcTestnet, config, rpcUrl } from "../config.js";
+import { arcTestnet, config, logRpcUrl, rpcUrl } from "../config.js";
 import { createCircleSigner, type CircleSigner } from "../circle/circleSigner.js";
 
 // Cast to viem's `Abi` type (not a tighter `as const` literal, since this is loaded
@@ -43,6 +43,29 @@ export function getPublicClient(): PublicClient {
     publicClient = createPublicClient({ chain: arcTestnet, transport: http(rpcUrl) });
   }
   return publicClient;
+}
+
+let logClient: PublicClient | null = null;
+/**
+ * The client for `eth_getLogs`, which is a different endpoint on purpose.
+ *
+ * See the note in config.ts: drpc answers reads all day and caps a log range at
+ * somewhere under 200 blocks; rpc.testnet.arc.network is the only one that will
+ * walk a real range and it rate-limits a bare eth_call. Pointing everything at
+ * the second one to get logs is what put a freelancer's balance behind the
+ * busiest queue on the network.
+ *
+ * Reads are constant and logs are occasional, so they are separated by how
+ * often they happen rather than by what they return.
+ */
+export function getLogClient(): PublicClient {
+  if (!logClient) {
+    logClient =
+      logRpcUrl === rpcUrl
+        ? getPublicClient()
+        : createPublicClient({ chain: arcTestnet, transport: http(logRpcUrl) });
+  }
+  return logClient;
 }
 
 export interface CreateEscrowParams {
@@ -318,7 +341,7 @@ async function scanDisputes(
   chunks: number,
   escrowId?: bigint,
 ): Promise<Map<string, Map<number, DisputeAward>>> {
-  const pc = getPublicClient();
+  const pc = getLogClient();
   const head = await pc.getBlockNumber();
   const found = new Map<string, Map<number, DisputeAward>>();
 
@@ -544,14 +567,17 @@ export async function hiredEscrowsFor(who: `0x${string}`): Promise<bigint[]> {
     ],
   } as const;
 
-  const latest = await client.getBlockNumber();
+  /* The walk, not the reads above: a different endpoint, because the one that
+     answers reads caps a log range under 200 blocks. */
+  const logs_ = getLogClient();
+  const latest = await logs_.getBlockNumber();
   const found = new Set<bigint>();
 
   // Windowed: public RPCs cap a getLogs range and refuse a wide one outright
   // rather than truncating it.
   for (let from = config.atelierDeployBlock; from <= latest; from += config.logRangeLimit + 1n) {
     const to = from + config.logRangeLimit > latest ? latest : from + config.logRangeLimit;
-    const logs = await client.getLogs({
+    const logs = await logs_.getLogs({
       address: config.atelierAddress,
       event,
       args: { freelancer: who },

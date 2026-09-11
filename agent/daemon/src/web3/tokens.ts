@@ -9,7 +9,7 @@
 import { erc20Abi, getAddress, type Abi } from "viem";
 import atelierAbi from "./AtelierABI.json" with { type: "json" };
 import { config } from "../config.js";
-import { getPublicClient } from "./atelier.js";
+import { getLogClient, getPublicClient } from "./atelier.js";
 
 const abi = atelierAbi as Abi;
 
@@ -51,7 +51,7 @@ async function readTokenMeta(address: `0x${string}`): Promise<{ symbol: string; 
 export async function listWhitelistedTokens(): Promise<WhitelistedToken[]> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.tokens;
 
-  const client = getPublicClient();
+  const client = getLogClient();
   const event = {
     type: "event",
     name: "TokenWhitelisted",

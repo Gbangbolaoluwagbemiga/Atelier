@@ -31,7 +31,12 @@ const listTasks = vi.fn(() => [] as any[]);
 const generateBrief = vi.fn();
 
 vi.mock("../src/web3/atelier.js", () => ({
+  /* Reads and logs go to different endpoints now — drpc answers reads and caps
+     a log range under 200 blocks; the Arc RPC is the only one that will walk a
+     real range. Same fakes behind both here: this suite is about what the sweep
+     decides, not about which host answered. */
   getPublicClient: () => ({ readContract, getBlockNumber, getLogs }),
+  getLogClient: () => ({ readContract, getBlockNumber, getLogs }),
 }));
 vi.mock("../src/circle/circleSigner.js", () => ({
   createCircleSigner: () => ({ address: AGENT }),

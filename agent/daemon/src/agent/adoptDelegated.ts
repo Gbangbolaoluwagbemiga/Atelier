@@ -19,7 +19,7 @@
 import { getAddress, type Abi } from "viem";
 import atelierAbi from "../web3/AtelierABI.json" with { type: "json" };
 import { config } from "../config.js";
-import { getPublicClient } from "../web3/atelier.js";
+import { getLogClient, getPublicClient } from "../web3/atelier.js";
 import { createCircleSigner } from "../circle/circleSigner.js";
 import * as store from "../store.js";
 import { generateBrief } from "./BriefGenerator.js";
@@ -42,7 +42,7 @@ interface RawEscrow {
 async function delegatedTo(
   manager: `0x${string}`,
 ): Promise<{ ids: bigint[]; complete: boolean }> {
-  const client = getPublicClient();
+  const client = getLogClient();
   const event = {
     type: "event",
     name: "JobManagerSet",
@@ -206,6 +206,8 @@ export async function adoptDelegatedJobs(): Promise<number> {
 
   const tasks = store.listTasks(500);
   const known = new Set(tasks.map((t) => String(t.escrowId)));
+  /* Reads only — every `client.` below this is a readContract. The log walk
+     lives in the scan above and uses the other endpoint. */
   const client = getPublicClient();
   let adopted = 0;
 

@@ -586,7 +586,26 @@ async function hiredEscrowIds(me: `0x${string}`): Promise<{ ids: string[]; answe
         GET_JOBS_FOR_FREELANCER,
         { who: me.toLowerCase() },
       );
-      return { ids: (res.escrows ?? []).map((e) => String(e.escrowId)), answered: true };
+      const ids = (res.escrows ?? []).map((e) => String(e.escrowId));
+
+      /*
+       * AN INDEX SAYING "NONE" IS NOT THE CHAIN SAYING "NONE".
+       *
+       * A non-empty list is trustworthy — it found real hires, and finding them
+       * is the whole reason the subgraph is faster than walking the chain. An
+       * EMPTY list is the one answer a lagging index produces that looks
+       * exactly like the truth: Studio rate-limits this project under ordinary
+       * use, and an index that is behind, re-syncing, or has not reached a
+       * recent block returns no escrows and a perfectly valid 200.
+       *
+       * This was trusted absolutely, so a freelancer's finished job blinked off
+       * their board roughly one poll in six while the chain, asked directly in
+       * the same second, listed it. The fix is not to distrust the subgraph; it
+       * is to confirm the single answer that cannot be told apart from a
+       * failure. The chain check below is one multicall and only runs when the
+       * index claims there is nothing.
+       */
+      if (ids.length > 0) return { ids, answered: true };
     }
   } catch (err) {
     console.warn(
@@ -596,6 +615,8 @@ async function hiredEscrowIds(me: `0x${string}`): Promise<{ ids: string[]; answe
   }
 
   try {
+    /* Reached either because the subgraph is unavailable, or because it said
+       "none" and that is the one answer worth a second opinion. */
     const ids = await atelier.hiredEscrowsFor(me);
     return { ids: ids.map((id) => id.toString()), answered: true };
   } catch (err) {

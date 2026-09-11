@@ -54,7 +54,12 @@ vi.mock("../src/agent/handover.js", () => ({
 }));
 
 vi.mock("../src/config.js", () => ({ config: { applicationWindowMinutes: 3 } }));
-vi.mock("../src/graph/client.js", () => ({ graphQuery: vi.fn() }));
+const graphQuery = vi.fn();
+const isGraphConfigured = vi.fn(() => false);
+vi.mock("../src/graph/client.js", () => ({
+  graphQuery: (...a: unknown[]) => graphQuery(...a),
+  isGraphConfigured: () => isGraphConfigured(),
+}));
 
 const { myWork } = await import("../src/workers/service.js");
 
@@ -68,6 +73,8 @@ beforeEach(() => {
   getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 5_000_000n, status: 0 });
   getMilestones.mockResolvedValue([{ status: 0 }, { status: 0 }]);
   jobManagerOf.mockResolvedValue(null);
+  isGraphConfigured.mockReturnValue(false);
+  graphQuery.mockRejectedValue(new Error("GraphQL HTTP 429"));
 });
 
 describe("a job the client hired for by hand", () => {
@@ -527,5 +534,64 @@ describe("a stage an arbiter took off the freelancer", () => {
     expect(row.state).toBe("hired");
     expect(row.canSubmit).toBe(true);
     expect(row.status).toMatch(/0 of 2 approved, 1 settled by an arbiter/i);
+  });
+});
+
+/**
+ * AN INDEX SAYING "NONE" IS NOT THE CHAIN SAYING "NONE".
+ *
+ * The subgraph was asked first and believed absolutely. A non-empty list is
+ * trustworthy — it found real hires, which is the whole reason it is faster
+ * than walking the chain. An empty list is the one answer a lagging index
+ * produces that looks exactly like the truth.
+ *
+ * Subgraph Studio rate-limits this project under ordinary use ("Too many
+ * requests", in plain text, not even JSON), and an index that is behind or
+ * re-syncing returns no escrows with a perfectly valid 200. So a freelancer's
+ * finished job blinked off their board about one poll in six, while the chain —
+ * asked in the same second — listed it without hesitating.
+ */
+describe("when the index says you have never been hired", () => {
+  beforeEach(() => {
+    isGraphConfigured.mockReturnValue(true);
+    getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 3_000_000n, status: 2 });
+    getMilestones.mockResolvedValue([{ status: 2, amount: 3_000_000n, resolvedAt: 0n }]);
+  });
+
+  it("asks the chain before believing it", async () => {
+    graphQuery.mockResolvedValue({ escrows: [] });
+    hiredEscrowsFor.mockResolvedValue([7n]);
+
+    const work = await myWork("w1");
+
+    expect(hiredEscrowsFor).toHaveBeenCalled();
+    expect(work.map((w) => w.escrowId)).toEqual(["7"]);
+  });
+
+  it("takes the index at its word when it actually found something", async () => {
+    // Confirming a non-empty answer would spend a chain read to learn nothing —
+    // the index cannot invent a hire, only miss one.
+    graphQuery.mockResolvedValue({ escrows: [{ escrowId: "7" }] });
+
+    const work = await myWork("w1");
+
+    expect(hiredEscrowsFor).not.toHaveBeenCalled();
+    expect(work.map((w) => w.escrowId)).toEqual(["7"]);
+  });
+
+  it("reports an empty bench when BOTH sources agree there is nothing", async () => {
+    graphQuery.mockResolvedValue({ escrows: [] });
+    hiredEscrowsFor.mockResolvedValue([]);
+    listTasks.mockReturnValue([]);
+
+    await expect(myWork("w1")).resolves.toEqual([]);
+  });
+
+  it("refuses to answer when the index says none and the chain cannot be reached", async () => {
+    graphQuery.mockResolvedValue({ escrows: [] });
+    hiredEscrowsFor.mockRejectedValue(new Error("rate limit exceeded"));
+    listTasks.mockReturnValue([]);
+
+    await expect(myWork("w1")).rejects.toThrow(/read problem/i);
   });
 });
