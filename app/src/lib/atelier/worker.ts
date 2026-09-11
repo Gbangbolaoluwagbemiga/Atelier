@@ -382,3 +382,24 @@ export async function recover(idToken: string): Promise<Worker> {
   rememberWorker(worker.id);
   return worker;
 }
+
+/**
+ * An authorisation to attach one file to one milestone, signed by the daemon
+ * with the worker's own managed wallet.
+ *
+ * The freelancer holds no key, so they cannot produce this themselves — and the
+ * backend is right to demand it. Without this, the only way for a managed
+ * worker to send a screenshot was the Telegram bot: on the web they could
+ * describe their work but never show it, while the agent reviewing it has a
+ * vision model and was being handed prose about images it could have looked at.
+ */
+export async function uploadAuth(input: {
+  workerId: string;
+  escrowId: string;
+  milestoneIndex: number;
+}): Promise<{ address: string; message: string; signature: string; timestamp: string }> {
+  return call("/api/worker/upload-auth", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

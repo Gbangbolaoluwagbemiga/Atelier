@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clock, Hammer, Loader2, Search, Send, Wallet } from "lucide-react";
+import { Clock, Hammer, Loader2, Paperclip, Search, Send, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { toastError } from "@/lib/atelier/errors";
+import { uploadMilestoneFileWithAuth, isApiConfigured } from "@/lib/api";
 import {
   apply,
   me as fetchMe,
@@ -28,6 +29,7 @@ import {
   myWork,
   quests as fetchQuests,
   submit as submitWork,
+  uploadAuth,
   deliveryTarget,
   type DeliveryTarget,
   withdraw,
@@ -71,6 +73,10 @@ export function WorkerBoard({
      viewings of this board never open one. */
   const [target, setTarget] = useState<DeliveryTarget | null>(null);
 
+  /* The actual work, when it is a file rather than a sentence. */
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   function openDelivery(escrowId: string) {
     setDeliveringTo(escrowId);
     setTarget(null);
@@ -86,6 +92,8 @@ export function WorkerBoard({
     setDeliveringTo(null);
     setDelivery("");
     setTarget(null);
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   const refresh = useCallback(async () => {
@@ -123,10 +131,31 @@ export function WorkerBoard({
   async function sendDelivery(escrowId: string) {
     setBusy(true);
     try {
+      let description = delivery.trim();
+
+      /*
+       * Upload first, and let a failure here stop the submission.
+       *
+       * The file IS the deliverable — submitting the sentence without it would
+       * put work in front of a reviewer with the evidence missing, and the
+       * reviewer would rightly reject it for exactly that. Better to fail
+       * before anything reaches the chain than to deliver half of it.
+       *
+       * The attachment is appended in the form the rest of Atelier already
+       * reads, so the client's card renders it and the agent's vision reviewer
+       * can open it.
+       */
+      if (file) {
+        const index = target?.index ?? 0;
+        const auth = await uploadAuth({ workerId: worker.id, escrowId, milestoneIndex: index });
+        const uploaded = await uploadMilestoneFileWithAuth(file, escrowId, index, auth);
+        description = `${description}\n\n[Attachment: ${uploaded.filename ?? file.name}](${uploaded.url})`.trim();
+      }
+
       /* No milestoneIndex on purpose — the daemon resolves which stage actually
          needs delivering. Hard-coding 0 filed a second milestone's work
          against the first. */
-      await submitWork({ workerId: worker.id, escrowId, description: delivery.trim() });
+      await submitWork({ workerId: worker.id, escrowId, description });
       toast({
         title: "Work submitted",
         description:
@@ -407,6 +436,65 @@ export function WorkerBoard({
                       placeholder="Describe what you produced and where it is — a link, a file, a repo. This is what gets reviewed against the job's criteria."
                       className="text-sm resize-none"
                     />
+                    {/*
+                      THE WORK ITSELF, not a description of it.
+
+                      A designer delivering a logo had no way to send the logo:
+                      this box took a sentence, and the only route for a file was
+                      the Telegram bot. Meanwhile the agent reviewing it has a
+                      vision model and was being handed prose about an image it
+                      could have opened — and then failing the submission for
+                      having no deliverable, which is exactly what happened here.
+                    */}
+                    {isApiConfigured() && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          className="sr-only"
+                          id={`file-${w.escrowId}`}
+                          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,application/zip,.doc,.docx"
+                          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Paperclip className="h-4 w-4 mr-2" aria-hidden="true" />
+                          {file ? "Change file" : "Attach a file"}
+                        </Button>
+
+                        {file ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs rounded-full border px-2.5 py-1 min-w-0">
+                            <span className="truncate max-w-[12rem]">{file.name}</span>
+                            <span className="text-muted-foreground shrink-0">
+                              {(file.size / 1024 / 1024).toFixed(1)} MB
+                            </span>
+                            <button
+                              type="button"
+                              aria-label="Remove file"
+                              disabled={busy}
+                              onClick={() => {
+                                setFile(null);
+                                if (fileInputRef.current) fileInputRef.current.value = "";
+                              }}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-3 w-3" aria-hidden="true" />
+                            </button>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Images, PDF, zip or a doc — up to 10 MB. The reviewer
+                            opens it.
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex gap-2 justify-end">
                       <Button
                         variant="ghost"
@@ -419,7 +507,7 @@ export function WorkerBoard({
                       <Button
                         size="sm"
                         onClick={() => void sendDelivery(w.escrowId)}
-                        disabled={busy || delivery.trim().length === 0}
+                        disabled={busy || (delivery.trim().length === 0 && !file)}
                       >
                         {busy && (
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />

@@ -279,6 +279,63 @@ export function buildUploadAuthMessage(
   ].join("\n");
 }
 
+export interface UploadAuth {
+  address: string;
+  message: string;
+  signature: string;
+  timestamp: string;
+}
+
+/**
+ * Upload a deliverable using an authorisation somebody else produced.
+ *
+ * A managed freelancer holds no key, so they cannot sign in the browser — and
+ * the backend rightly refuses an upload without a signature from the escrow's
+ * beneficiary. The daemon signs on their instruction with the Circle wallet it
+ * already holds for them, and this posts the file with that signature attached.
+ *
+ * The backend's rule does not change and is not softened: it still verifies a
+ * real EIP-191 signature from the real beneficiary, over this escrow, this
+ * milestone and a timestamp that expires. Only the hand holding the pen differs.
+ */
+export async function uploadMilestoneFileWithAuth(
+  file: File,
+  escrowId: string | number,
+  milestoneIndex: number,
+  auth: UploadAuth,
+): Promise<UploadedFile> {
+  const base = getApiBase();
+  if (!base) throw new Error("VITE_API_URL is not set");
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("escrow_id", String(escrowId));
+  form.append("milestone_index", String(milestoneIndex));
+  form.append("wallet_address", auth.address);
+  form.append("signature", auth.signature);
+  form.append("timestamp", auth.timestamp);
+
+  const secret = apiSecret();
+  const headers: Record<string, string> = {};
+  if (secret) headers.Authorization = `Bearer ${secret}`;
+
+  const res = await fetch(`${base}/v1/upload/milestone`, { method: "POST", body: form, headers });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    let message = res.statusText;
+    try {
+      const j = JSON.parse(errBody) as { error?: string };
+      if (j.error) message = j.error;
+    } catch {
+      if (errBody) message = errBody;
+    }
+    throw new Error(message);
+  }
+
+  return res.json() as Promise<UploadedFile>;
+}
+
 export async function uploadMilestoneFile(
   file: File,
   escrowId: string | number,

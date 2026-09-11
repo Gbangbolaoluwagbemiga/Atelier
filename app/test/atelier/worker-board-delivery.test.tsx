@@ -16,6 +16,8 @@ const quests = vi.fn();
 const me = vi.fn();
 const submit = vi.fn();
 const deliveryTarget = vi.fn();
+const uploadAuth = vi.fn();
+const uploadMilestoneFileWithAuth = vi.fn();
 
 vi.mock("@/lib/atelier/worker", () => ({
   myWork: (id: string) => myWork(id),
@@ -23,6 +25,7 @@ vi.mock("@/lib/atelier/worker", () => ({
   me: (id: string) => me(id),
   submit: (input: unknown) => submit(input),
   deliveryTarget: (id: string) => deliveryTarget(id),
+  uploadAuth: (i: unknown) => uploadAuth(i),
   apply: vi.fn(),
   withdraw: vi.fn(),
   minutesUntilClose: () => 0,
@@ -30,6 +33,11 @@ vi.mock("@/lib/atelier/worker", () => ({
 
 const toast = vi.fn();
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }) }));
+
+vi.mock("@/lib/api", () => ({
+  isApiConfigured: () => true,
+  uploadMilestoneFileWithAuth: (...a: unknown[]) => uploadMilestoneFileWithAuth(...a),
+}));
 
 const { WorkerBoard } = await import("@/components/atelier/worker-board");
 
@@ -46,6 +54,10 @@ beforeEach(() => {
   quests.mockResolvedValue([]);
   me.mockResolvedValue(WORKER);
   submit.mockResolvedValue({ txHash: "0xtx" });
+  uploadAuth.mockResolvedValue({ address: "0x8289", message: "m", signature: "0xsig", timestamp: "1" });
+  uploadMilestoneFileWithAuth.mockResolvedValue({
+    url: "https://files.test/logo.png", filename: "logo.png", size: 1024, mimeType: "image/png",
+  });
   deliveryTarget.mockResolvedValue({
     escrowId: "7",
     index: 1,
@@ -387,5 +399,92 @@ describe("switching between work and the open board", () => {
     await userEvent.click(await screen.findByRole("tab", { name: /your work/i }));
 
     expect(screen.getByText(/nothing on your bench/i)).toBeInTheDocument();
+  });
+});
+
+
+/**
+ * SENDING THE WORK ITSELF.
+ *
+ * A designer delivering a logo had no way to send the logo — this box took a
+ * sentence, and the only route for a file was the Telegram bot. Meanwhile the
+ * agent reviewing it has a vision model and was being handed prose about an
+ * image it could have opened, then failing the submission for having no
+ * deliverable. Which is exactly what happened on escrow 7.
+ */
+describe("attaching a file", () => {
+  const open = async () => {
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /send work/i }));
+  };
+
+  const pick = async (name = "logo.png", type = "image/png") => {
+    const input = document.getElementById("file-7") as HTMLInputElement;
+    await userEvent.upload(input, new File(["x"], name, { type }));
+  };
+
+  it("offers a way to attach, and says the reviewer opens it", async () => {
+    await open();
+    expect(await screen.findByRole("button", { name: /attach a file/i })).toBeInTheDocument();
+    expect(screen.getByText(/the reviewer\s+opens it/i)).toBeInTheDocument();
+  });
+
+  it("shows what is attached, and lets it be removed", async () => {
+    await open();
+    await pick();
+
+    expect(await screen.findByText("logo.png")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /remove file/i }));
+    expect(screen.queryByText("logo.png")).not.toBeInTheDocument();
+  });
+
+  it("uploads against the stage being delivered, then appends it to the submission", async () => {
+    await open();
+    await pick();
+    await userEvent.type(screen.getByRole("textbox"), "The logo, final.");
+    await userEvent.click(screen.getByRole("button", { name: /submit for review/i }));
+
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+
+    // Signed for milestone 2 — the one actually in flight, not index 0.
+    expect(uploadAuth).toHaveBeenCalledWith({ workerId: "w1", escrowId: "7", milestoneIndex: 1 });
+    // In the form the client's card and the agent's reviewer already read.
+    expect(submit.mock.calls[0][0].description).toContain(
+      "[Attachment: logo.png](https://files.test/logo.png)",
+    );
+  });
+
+  it("treats a file on its own as a delivery", async () => {
+    // Sometimes the work IS the file and there is nothing to say about it.
+    await open();
+    expect(screen.getByRole("button", { name: /submit for review/i })).toBeDisabled();
+
+    await pick();
+    expect(screen.getByRole("button", { name: /submit for review/i })).toBeEnabled();
+  });
+
+  it("does not submit when the upload fails", async () => {
+    // The file IS the deliverable. Sending the sentence without it puts work in
+    // front of a reviewer with the evidence missing, and it gets rejected for
+    // exactly that.
+    uploadMilestoneFileWithAuth.mockRejectedValue(new Error("storage is down"));
+
+    await open();
+    await pick();
+    await userEvent.type(screen.getByRole("textbox"), "Here it is.");
+    await userEvent.click(screen.getByRole("button", { name: /submit for review/i }));
+
+    await waitFor(() => expect(uploadMilestoneFileWithAuth).toHaveBeenCalled());
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("still sends a plain text delivery when nothing is attached", async () => {
+    await open();
+    await userEvent.type(screen.getByRole("textbox"), "Done, see the repo.");
+    await userEvent.click(screen.getByRole("button", { name: /submit for review/i }));
+
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect(uploadAuth).not.toHaveBeenCalled();
+    expect(submit.mock.calls[0][0].description).toBe("Done, see the repo.");
   });
 });

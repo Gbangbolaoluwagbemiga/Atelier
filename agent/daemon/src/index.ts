@@ -1665,6 +1665,36 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  /*
+   * Authorise one file upload, as the worker.
+   *
+   * The daemon signs rather than carrying the file: multipart in a node:http
+   * handler is a parser nobody should write twice, and the backend already
+   * stores uploads correctly. It hands back a signature the browser sends with
+   * the file, so the backend's rule — a real signature from the real
+   * beneficiary — is enforced exactly as before.
+   */
+  if (req.method === "POST" && url.pathname === "/api/worker/upload-auth") {
+    try {
+      const b = JSON.parse(await readBody(req)) as {
+        workerId?: string;
+        escrowId?: string;
+        milestoneIndex?: number;
+      };
+      if (!b.workerId || !b.escrowId) {
+        return json(res, 400, { error: "workerId and escrowId are required" });
+      }
+      const auth = await workers.signUploadAuth(
+        b.workerId,
+        String(b.escrowId),
+        Number(b.milestoneIndex ?? 0),
+      );
+      return json(res, 200, auth);
+    } catch (err) {
+      return json(res, 400, { error: clientError(err) });
+    }
+  }
+
   if (req.method === "POST" && url.pathname === "/api/worker/submit") {
     try {
       const b = JSON.parse(await readBody(req)) as {

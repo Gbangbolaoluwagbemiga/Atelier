@@ -14,6 +14,11 @@ const { createEIP1193Provider } = nodeRequire(
   "@circle-fin/developer-controlled-wallets/evm",
 ) as typeof import("@circle-fin/developer-controlled-wallets/evm");
 
+/* Same reason, same fix — the root package resolves the same way. */
+const { initiateDeveloperControlledWalletsClient } = nodeRequire(
+  "@circle-fin/developer-controlled-wallets",
+) as typeof import("@circle-fin/developer-controlled-wallets");
+
 /**
  * Custody via Circle Programmable Wallets (developer-controlled, MPC).
  *
@@ -60,6 +65,38 @@ export function circleCustodyReady(): boolean {
  * wallet, and have real transactions signed on their instruction, without ever
  * holding a key. See AGENT_INBOX.md.
  */
+/**
+ * Sign a plain message as one of our wallets — an EIP-191 personal_sign.
+ *
+ * Not through the EIP-1193 provider, which does not implement personal_sign at
+ * all: viem's walletClient.signMessage comes straight back as "Method
+ * personal_sign is not supported". Circle's own API does it, addressed by
+ * wallet id rather than address, so this is the one signing path that does not
+ * go through viem.
+ *
+ * Used to let a managed freelancer authorise a file upload. They hold no key,
+ * so they cannot sign in a browser, and the backend rightly refuses an upload
+ * without a signature from the escrow's beneficiary. The daemon signs on their
+ * instruction, exactly as it already does to put their work on-chain.
+ */
+export async function signMessageAsWallet(walletId: string, message: string): Promise<`0x${string}`> {
+  if (!config.circleApiKey || !config.circleEntitySecret) {
+    throw new Error("Circle custody needs CIRCLE_API_KEY + CIRCLE_ENTITY_SECRET in daemon/.env");
+  }
+
+  const client = initiateDeveloperControlledWalletsClient({
+    apiKey: config.circleApiKey,
+    entitySecret: config.circleEntitySecret,
+  });
+
+  const res = (await client.signMessage({ walletId, message })) as {
+    data?: { signature?: string };
+  };
+  const signature = res?.data?.signature;
+  if (!signature) throw new Error("Circle returned no signature");
+  return signature as `0x${string}`;
+}
+
 export function createSignerFor(address: `0x${string}`): CircleSigner {
   if (!config.circleApiKey || !config.circleEntitySecret) {
     throw new Error("Circle custody needs CIRCLE_API_KEY + CIRCLE_ENTITY_SECRET in daemon/.env");

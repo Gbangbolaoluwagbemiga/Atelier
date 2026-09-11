@@ -18,7 +18,7 @@ import * as store from "../store.js";
 import { publishWorkerEvent } from "../events.js";
 import { criteriaFor as handoverCriteriaFor, previewCriteria } from "../agent/handover.js";
 import * as atelier from "../web3/atelier.js";
-import { createSignerFor } from "../circle/circleSigner.js";
+import { createSignerFor, signMessageAsWallet } from "../circle/circleSigner.js";
 import { config } from "../config.js";
 import { categoryLabel, categoryOf } from "../categories.js";
 import { dripGas, provisionWorkerWallet, workerBalance, withdrawTo } from "./wallets.js";
@@ -745,6 +745,69 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
     });
   }
   return out;
+}
+
+/**
+ * SIGN A FILE UPLOAD AS THE WORKER, so a managed freelancer can attach work.
+ *
+ * WHY IT LIVES HERE
+ *
+ * The backend accepts an upload only against a signature from the escrow's
+ * beneficiary — the right rule, and one a managed worker cannot satisfy from a
+ * browser, because the whole point of a managed wallet is that they hold no
+ * key. So the only route for them to send a screenshot or a mockup was the
+ * Telegram bot, and on the web they could describe their work but never show
+ * it. The agent has a vision reviewer; it was being handed prose about images
+ * it could have looked at.
+ *
+ * The daemon holds their Circle wallet, so it signs on their instruction — the
+ * same thing it already does to submit their work on-chain. Nothing about the
+ * backend's rule changes: it still verifies a real signature from the real
+ * beneficiary. Only the hand holding the pen is different.
+ *
+ * The signature covers the escrow, the milestone and a timestamp, so it
+ * authorises one upload to one stage of one job and expires.
+ */
+export async function signUploadAuth(
+  workerId: string,
+  escrowId: string,
+  milestoneIndex: number,
+): Promise<{ address: string; message: string; signature: string; timestamp: string }> {
+  const worker = store.getWorker(workerId);
+  if (!worker?.walletAddress) throw new UserFacingError("We do not know that account.");
+  if (worker.mode !== "managed") {
+    /* Somebody with their own keys signs for themselves; asking us to do it
+       would be asking us to hold something we deliberately do not have. */
+    throw new UserFacingError("Your own wallet signs this one — approve it in your wallet.");
+  }
+
+  const me = worker.walletAddress as `0x${string}`;
+
+  /*
+   * Only for a job that is actually theirs. Without this, a worker id would
+   * authorise an upload against any escrow number somebody cared to type, and
+   * escrow numbers are printed on every card.
+   */
+  const esc = (await atelier.getEscrow(BigInt(escrowId))) as { beneficiary?: string };
+  if ((esc.beneficiary ?? "").toLowerCase() !== me.toLowerCase()) {
+    throw new UserFacingError("That job is not yours to deliver to.");
+  }
+
+  const timestamp = String(Date.now());
+  const message = [
+    "Atelier file upload authorization",
+    `Escrow: ${escrowId}`,
+    `Milestone: ${milestoneIndex}`,
+    `Wallet: ${me.toLowerCase()}`,
+    `Timestamp: ${timestamp}`,
+  ].join("\n");
+
+  /* Circle's API, not the EIP-1193 provider — that one does not implement
+     personal_sign and answers "Method personal_sign is not supported". */
+  if (!worker.walletId) throw new UserFacingError("That account has no managed wallet to sign with.");
+  const signature = await signMessageAsWallet(worker.walletId, message);
+
+  return { address: me, message, signature, timestamp };
 }
 
 /**
