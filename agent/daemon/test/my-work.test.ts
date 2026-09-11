@@ -327,6 +327,24 @@ describe("when no source can answer", () => {
     await expect(myWork("w1")).rejects.toThrow(/read problem/i);
   });
 
+  it("fails rather than dropping every task row it cannot ask about", async () => {
+    /*
+     * The narrower guard above only covers a daemon holding no task rows. With
+     * task rows and an unreachable chain, each candidate fell through to
+     * hasApplied, each of those failed, each became "not involved", and the loop
+     * dropped all of them — an empty board returned as a 200, directly under the
+     * log line saying nothing could list hires. Caught while verifying the fix
+     * for the narrower version of itself.
+     */
+    hiredEscrowsFor.mockRejectedValue(new Error("rate limit exceeded"));
+    listTasks.mockReturnValue([
+      { escrowId: "9", status: "posted", briefJson: JSON.stringify({ title: "Other job", budget: 2 }) },
+    ]);
+    hasApplied.mockRejectedValue(new Error("rate limit exceeded"));
+
+    await expect(myWork("w1")).rejects.toThrow(/read problem/i);
+  });
+
   it("still renders what the daemon knows when only the chain is down", async () => {
     // A partial answer is worth showing. Silence is not.
     hiredEscrowsFor.mockRejectedValue(new Error("rate limit exceeded"));
@@ -407,5 +425,107 @@ describe("when the stages cannot be read", () => {
     expect(row.stagesKnown).toBe(true);
     expect(row.canSubmit).toBe(true);
     expect(row.status).toMatch(/send your work/i);
+  });
+});
+
+/**
+ * "APPROVED" ON CHAIN DOES NOT MEAN THE WORK WAS ACCEPTED.
+ *
+ * `resolveDispute` sets `m.status = MilestoneStatus.Approved` whoever won. The
+ * contract uses Approved to mean "settled" and records who got the money in
+ * `resolutionFreelancerAmount` / `resolutionClientAmount`.
+ *
+ * Reading the status alone, escrow 7 looked finished and fully paid. What
+ * actually happened: stage one approved for 3 USDC, stage two disputed, taken
+ * off the freelancer by an arbiter, and 2 USDC returned to the client. Their
+ * board said "All 2 stage(s) approved and paid" and their dashboard counted a
+ * job "paid in full". They earned 3 of 5 and were congratulated on 5.
+ *
+ * Wrong in the freelancer's favour is still wrong, and it is the direction that
+ * gets noticed last.
+ */
+describe("a stage an arbiter took off the freelancer", () => {
+  /** Escrow 7 exactly as the chain reports it. */
+  const ESCROW_7 = [
+    {
+      status: 2, amount: 3_000_000n, resolvedAt: 0n,
+      resolutionFreelancerAmount: 0n, resolutionClientAmount: 0n,
+    },
+    {
+      status: 2, amount: 2_000_000n, resolvedAt: 1_789_131_680n,
+      resolutionFreelancerAmount: 0n, resolutionClientAmount: 2_000_000n,
+    },
+  ];
+
+  beforeEach(() => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 3_000_000n, status: 2 });
+    getMilestones.mockResolvedValue(ESCROW_7);
+  });
+
+  it("does not count it as approved work", async () => {
+    const [row] = await myWork("w1");
+    expect(row.approved).toBe(1);
+    expect(row.arbitrated).toBe(1);
+  });
+
+  it("does not tell them every stage was approved and paid", async () => {
+    const [row] = await myWork("w1");
+    expect(row.status).not.toMatch(/all 2 stage/i);
+    expect(row.status).not.toMatch(/approved and paid$/i);
+  });
+
+  it("says an arbiter settled it", async () => {
+    const [row] = await myWork("w1");
+    expect(row.status).toMatch(/arbiter/i);
+  });
+
+  it("reports what actually reached them, not the job's face value", async () => {
+    const [row] = await myWork("w1");
+    expect(row.earnedUsdc).toBe(3);
+  });
+
+  it("still treats the job as over — there is nothing left to send", async () => {
+    const [row] = await myWork("w1");
+    expect(row.state).toBe("completed");
+    expect(row.canSubmit).toBe(false);
+  });
+
+  it("keeps saying paid in full when every stage really was approved", async () => {
+    getMilestones.mockResolvedValue([
+      { status: 2, amount: 3_000_000n, resolvedAt: 0n, resolutionFreelancerAmount: 0n, resolutionClientAmount: 0n },
+      { status: 2, amount: 2_000_000n, resolvedAt: 0n, resolutionFreelancerAmount: 0n, resolutionClientAmount: 0n },
+    ]);
+
+    const [row] = await myWork("w1");
+    expect(row.arbitrated).toBe(0);
+    expect(row.status).toMatch(/All 2 stage\(s\) approved and paid/i);
+    expect(row.earnedUsdc).toBe(5);
+  });
+
+  it("credits an arbiter's split when it went the freelancer's way", async () => {
+    // The same read has to work when the arbiter awards them part of it.
+    getMilestones.mockResolvedValue([
+      { status: 2, amount: 3_000_000n, resolvedAt: 0n, resolutionFreelancerAmount: 0n, resolutionClientAmount: 0n },
+      { status: 2, amount: 2_000_000n, resolvedAt: 1n, resolutionFreelancerAmount: 1_500_000n, resolutionClientAmount: 500_000n },
+    ]);
+
+    const [row] = await myWork("w1");
+    expect(row.earnedUsdc).toBe(4.5);
+    expect(row.status).toMatch(/\$4\.50 of \$5\.00/);
+  });
+
+  it("does not count a settled stage as one still waiting for work", async () => {
+    // Mid-job: stage one settled by an arbiter, stage two untouched.
+    getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 5_000_000n, status: 1 });
+    getMilestones.mockResolvedValue([
+      { status: 2, amount: 3_000_000n, resolvedAt: 1n, resolutionFreelancerAmount: 1_000_000n, resolutionClientAmount: 2_000_000n },
+      { status: 0, amount: 2_000_000n, resolvedAt: 0n, resolutionFreelancerAmount: 0n, resolutionClientAmount: 0n },
+    ]);
+
+    const [row] = await myWork("w1");
+    expect(row.state).toBe("hired");
+    expect(row.canSubmit).toBe(true);
+    expect(row.status).toMatch(/0 of 2 approved, 1 settled by an arbiter/i);
   });
 });

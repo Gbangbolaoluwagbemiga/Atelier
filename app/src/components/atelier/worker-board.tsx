@@ -147,6 +147,10 @@ export function WorkerBoard({
   const finished = work.filter((w) => w.state === "completed").length;
   const inProgress = work.filter((w) => w.state === "hired").length;
   const applied = work.filter((w) => w.state === "applied").length;
+  /* Finished jobs where an arbiter, not the reviewer, closed a stage. */
+  const arbitratedJobs = work.filter(
+    (w) => w.state === "completed" && (w.arbitrated ?? 0) > 0,
+  ).length;
 
   /* Once, after the first load. Any later move is the person's own, and a poll
      that yanked them back to the other tab mid-typing would be maddening. */
@@ -245,7 +249,14 @@ export function WorkerBoard({
         cannot disagree with the list they are describing.
       */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Stat label="Finished" value={String(finished)} hint="paid in full" />
+        {/* "paid in full" was a flat claim about every finished job. One of
+            them had a stage taken off the freelancer by an arbiter, so the hint
+            says what is actually true of the set. */}
+        <Stat
+          label="Finished"
+          value={String(finished)}
+          hint={arbitratedJobs > 0 ? `${arbitratedJobs} went to an arbiter` : "paid in full"}
+        />
         <Stat label="In progress" value={String(inProgress)} hint="on your bench" />
         <Stat label="Applied" value={String(applied)} hint="awaiting a decision" />
         <Stat
@@ -378,6 +389,24 @@ export function WorkerBoard({
                       {target.disputeOutcome ? "An arbiter decided this stage" : "How this stage ended"}
                     </div>
 
+                    {/*
+                      The job-level summary, when an arbiter was involved in ANY
+                      stage. The panel below describes one stage; this line stops
+                      the good stage speaking for the whole job. Escrow 7's first
+                      stage was approved and its second was taken off the
+                      freelancer, and the panel said "Approved and paid in full".
+                    */}
+                    {(w.arbitrated ?? 0) > 0 && typeof w.earnedUsdc === "number" && (
+                      <p className="text-xs text-muted-foreground">
+                        Across this job you were paid{" "}
+                        <span className="text-foreground font-medium">
+                          ${w.earnedUsdc.toFixed(2)}
+                        </span>{" "}
+                        — {w.approved ?? 0} of {w.milestoneCount ?? 0} stage(s)
+                        approved, {w.arbitrated} settled by an arbiter.
+                      </p>
+                    )}
+
                     {target.disputeOutcome ? (
                       <>
                         <div className="flex justify-between gap-3">
@@ -407,6 +436,15 @@ export function WorkerBoard({
 
 
                       </>
+                    ) : (w.arbitrated ?? 0) > 0 ? (
+                      /* Some other stage went to an arbiter. Saying "paid in
+                         full" about this one, on a job where they were not, is
+                         the claim that started this. */
+                      <p className="text-muted-foreground">
+                        This stage was approved and paid. Another stage on this
+                        job went to an arbiter — the figures above are what you
+                        actually received.
+                      </p>
                     ) : (
                       <p className="text-muted-foreground">
                         Approved and paid in full. Nothing further is needed from

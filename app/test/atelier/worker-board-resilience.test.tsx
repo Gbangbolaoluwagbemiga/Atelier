@@ -103,3 +103,61 @@ describe("the board when one read fails", () => {
     await waitFor(() => expect(onWorkerChanged).toHaveBeenCalledWith(WORKER));
   });
 });
+
+/**
+ * A JOB HALF-TAKEN-OFF YOU IS NOT A JOB PAID IN FULL.
+ *
+ * Escrow 7: stage one approved for 3 USDC, stage two disputed and resolved by
+ * an arbiter, 2 USDC returned to the client and nothing to the freelancer.
+ *
+ * Their board read "All 2 stage(s) approved and paid", the dashboard counted a
+ * job "paid in full", and opening the details said "Approved and paid in full.
+ * Nothing further is needed from you on this one." Three separate sentences,
+ * all congratulating somebody on money they did not receive.
+ */
+describe("a finished job an arbiter ruled on", () => {
+  const ARBITRATED = {
+    escrowId: "7",
+    title: "fireball",
+    budget: 3,
+    status: "1 of 2 approved · 1 settled by an arbiter — you were paid $3.00 of $5.00",
+    icon: "⚖️",
+    state: "completed",
+    approved: 1,
+    arbitrated: 1,
+    milestoneCount: 2,
+    earnedUsdc: 3,
+    canSubmit: false,
+  };
+
+  it("does not describe the set as paid in full", async () => {
+    myWork.mockResolvedValue([ARBITRATED]);
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    await screen.findByText(/fireball/);
+    expect(screen.queryByText(/paid in full/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/went to an arbiter/i)).toBeInTheDocument();
+  });
+
+  it("counts the job as finished — it is over, whichever way it went", async () => {
+    myWork.mockResolvedValue([ARBITRATED]);
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    await screen.findByText(/fireball/);
+    expect(screen.getByText(/settled by an arbiter/i)).toBeInTheDocument();
+  });
+
+  it("still says paid in full when every stage really was approved", async () => {
+    myWork.mockResolvedValue([
+      { ...ARBITRATED, status: "All 2 stage(s) approved and paid", icon: "✅",
+        approved: 2, arbitrated: 0, earnedUsdc: 5 },
+    ]);
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    await screen.findByText(/fireball/);
+    expect(screen.getByText(/paid in full/i)).toBeInTheDocument();
+  });
+});

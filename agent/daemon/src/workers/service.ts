@@ -440,9 +440,24 @@ async function resolveMilestone(escrowId: string): Promise<number> {
    * how many it has.
    */
   let expected = 0;
+  /*
+   * The same read answers both questions, so it is kept.
+   *
+   * The status walk below used to re-ask the SUBGRAPH which stages were done,
+   * with `catch { return 0 }` around it — so a 429 pointed every delivery, and
+   * every "how did this end" panel, at stage one. That is how a freelancer
+   * whose SECOND stage had been taken off them by an arbiter was shown "Approved
+   * and paid in full. Nothing further is needed from you on this one": the panel
+   * was reading the wrong stage, and the wrong stage had gone fine.
+   *
+   * The chain has already answered here. Asking a second, flakier source the
+   * same question was only ever a way to get a worse answer.
+   */
+  let onChainStatuses: number[] | null = null;
   try {
-    const onChain = (await atelier.getMilestones(BigInt(escrowId))) as readonly unknown[];
+    const onChain = (await atelier.getMilestones(BigInt(escrowId))) as readonly { status: number }[];
     expected = onChain.length;
+    onChainStatuses = onChain.map((m) => Number(m.status));
   } catch {
     /* fall through to the brief */
   }
@@ -461,20 +476,27 @@ async function resolveMilestone(escrowId: string): Promise<number> {
   }
   if (expected === 1) return 0;
 
-  try {
-    const { graphQuery } = await import("../graph/client.js");
-    const { GET_JOB_BY_ID } = await import("../graph/queries.js");
-    const result = await graphQuery<{ escrow: { milestones: { milestoneIndex: number; status: number }[] } | null }>(GET_JOB_BY_ID, { escrowId });
-    const byIndex = new Map((result.escrow?.milestones ?? []).map((m) => [Number(m.milestoneIndex), Number(m.status)]));
+  const pick = (byIndex: Map<number, number>): number => {
     for (let i = 0; i < expected; i++) {
       const status = byIndex.get(i) ?? 0; // never touched = still to do
       if (status !== MS_SUBMITTED && status !== MS_APPROVED) return i; // pending or sent back for revision
     }
-    // Everything is either awaiting review or already approved. Re-sending the
-    // last stage is the only sensible reading of "here is my work".
+    // Everything is either awaiting review or already settled. The last stage is
+    // the only sensible reading of both "here is my work" and "how did this end".
     return expected - 1;
+  };
+
+  if (onChainStatuses) {
+    return pick(new Map(onChainStatuses.map((status, i) => [i, status])));
+  }
+
+  try {
+    const { graphQuery } = await import("../graph/client.js");
+    const { GET_JOB_BY_ID } = await import("../graph/queries.js");
+    const result = await graphQuery<{ escrow: { milestones: { milestoneIndex: number; status: number }[] } | null }>(GET_JOB_BY_ID, { escrowId });
+    return pick(new Map((result.escrow?.milestones ?? []).map((m) => [Number(m.milestoneIndex), Number(m.status)])));
   } catch {
-    return 0; // subgraph down: the old behaviour, which is right for most jobs
+    return 0; // nothing could say: stage one is right for most jobs
   }
 }
 
@@ -508,6 +530,16 @@ export interface WorkRow {
   milestoneCount: number;
   /** Stages sent back for changes. */
   needsRevision: number;
+  /**
+   * Stages a human arbiter closed, whoever won.
+   *
+   * Separate from `approved` because the contract is not: `resolveDispute` sets
+   * the milestone to Approved either way, so counting on status alone reports a
+   * stage taken off the freelancer as work they were paid for.
+   */
+  arbitrated: number;
+  /** USDC that actually reached this freelancer, or null if the stages were unread. */
+  earnedUsdc: number | null;
   /** False when every stage has been delivered — nothing left to send. */
   canSubmit: boolean;
   /**
@@ -618,11 +650,15 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
   // to wait for it.
   const involvement = await Promise.all(
     candidateIds.map(async (escrowId) => {
-      if (hiredFor.has(escrowId)) return { hired: true, applied: true };
+      if (hiredFor.has(escrowId)) return { hired: true, applied: true, known: true };
       try {
-        return { hired: false, applied: await atelier.hasApplied(BigInt(escrowId), me) };
+        return { hired: false, applied: await atelier.hasApplied(BigInt(escrowId), me), known: true };
       } catch {
-        return { hired: false, applied: false }; // a chain hiccup hides a row, never breaks the list
+        /* A hiccup hides THIS row rather than breaking the list — but it is
+           recorded as not-known, because "we could not ask" and "they are not
+           involved" produce the same row and must not produce the same answer
+           about the whole board. See the check after the loop. */
+        return { hired: false, applied: false, known: false };
       }
     }),
   );
@@ -651,18 +687,67 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
    * stage with no idea whether the first had even been looked at. Two
    * deliveries, one of them made blind.
    */
-  const progress = new Map<string, { awaiting: number; approved: number; rejected: number; count: number }>();
+  /*
+   * "APPROVED" ON CHAIN DOES NOT MEAN THE WORK WAS ACCEPTED.
+   *
+   * `resolveDispute` sets `m.status = MilestoneStatus.Approved` whoever won —
+   * the contract uses Approved to mean "settled", and records who actually got
+   * the money in `resolutionFreelancerAmount` / `resolutionClientAmount`.
+   *
+   * Counting those as approved told a freelancer that escrow 7 was "All 2
+   * stage(s) approved and paid", when stage two had been resolved against them
+   * and paid 2 USDC back to the client. They earned 3 of 5 and their board
+   * congratulated them on earning all of it. A settled stage and a stage the
+   * reviewer accepted are different facts, so they are counted separately and
+   * `resolvedAt` is what tells them apart.
+   */
+  const progress = new Map<string, {
+    awaiting: number;
+    approved: number;
+    rejected: number;
+    arbitrated: number;
+    count: number;
+    /** USDC that actually reached this freelancer, across all stages. */
+    earnedUsdc: number;
+    /** USDC an arbiter sent back to the client instead. */
+    lostUsdc: number;
+  }>();
   const reviewers = new Map<string, "agent" | "client">();
   await Promise.all(
     candidateIds.map(async (escrowId, i) => {
       if (!involvement[i]!.hired) return;
       try {
-        const ms = (await atelier.getMilestones(BigInt(escrowId))) as readonly { status: number }[];
+        const ms = (await atelier.getMilestones(BigInt(escrowId))) as readonly {
+          status: number;
+          amount: bigint;
+          resolvedAt: bigint;
+          resolutionFreelancerAmount: bigint;
+          resolutionClientAmount: bigint;
+        }[];
+        /* An arbiter touched it — whatever the status now says. */
+        const arbitrated = (m: (typeof ms)[number]) => Number(m.resolvedAt ?? 0n) > 0;
+        const usdc = (v: bigint | undefined) => Number(v ?? 0n) / 1e6;
+
         progress.set(escrowId, {
           awaiting: ms.filter((m) => Number(m.status) === MS_SUBMITTED).length,
-          approved: ms.filter((m) => Number(m.status) === MS_APPROVED).length,
+          approved: ms.filter((m) => Number(m.status) === MS_APPROVED && !arbitrated(m)).length,
           rejected: ms.filter((m) => Number(m.status) === MS_REJECTED).length,
+          arbitrated: ms.filter(arbitrated).length,
           count: ms.length,
+          earnedUsdc: ms.reduce(
+            (sum, m) =>
+              sum +
+              (arbitrated(m)
+                ? usdc(m.resolutionFreelancerAmount)
+                : Number(m.status) === MS_APPROVED
+                  ? usdc(m.amount)
+                  : 0),
+            0,
+          ),
+          lostUsdc: ms.reduce(
+            (sum, m) => sum + (arbitrated(m) ? usdc(m.resolutionClientAmount) : 0),
+            0,
+          ),
         });
       } catch {
         /* a chain hiccup leaves the row without a stage summary, not missing */
@@ -685,7 +770,39 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
    * board shows it could not load and tries again on the next poll.
    */
   if (!answered && tasks.length === 0) {
-    throw new Error("Could not reach the job index or the chain — your work is safe, this is a read problem.");
+    /* UserFacingError, not Error: clientError() replaces a plain message with a
+       generic "Could not open this commission", and the whole point of this
+       throw is the sentence it carries. Somebody whose board has just emptied
+       needs to read "your work is safe", not a logging notice. */
+    throw new UserFacingError(
+      "Could not reach the job index or the chain just now — nothing is lost, this is a read problem. It will retry on its own.",
+    );
+  }
+
+  /*
+   * The same rule, for the other way in.
+   *
+   * The guard above only covers a daemon with no task rows at all. With task
+   * rows and an unreachable chain, every candidate fell through to
+   * `hasApplied`, every one of those failed, each became "not involved", and
+   * the loop below dropped all of them — an empty board, returned as an answer,
+   * a 200, with the log line "neither the subgraph nor the chain could list
+   * hires" sitting right above it. Watched it happen once while verifying the
+   * fix for the narrower version of itself.
+   *
+   * Nobody could say what this person is hired for and nobody could say what
+   * they applied to. That is not an empty bench, it is no information.
+   */
+  const nothingCouldBeAsked =
+    !answered && candidateIds.length > 0 && involvement.every((v) => !v.known);
+  if (nothingCouldBeAsked) {
+    /* UserFacingError, not Error: clientError() replaces a plain message with a
+       generic "Could not open this commission", and the whole point of this
+       throw is the sentence it carries. Somebody whose board has just emptied
+       needs to read "your work is safe", not a logging notice. */
+    throw new UserFacingError(
+      "Could not reach the job index or the chain just now — nothing is lost, this is a read problem. It will retry on its own.",
+    );
   }
 
   const out: WorkRow[] = [];
@@ -748,6 +865,10 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
     const approved = p?.approved ?? 0;
     const needsRevision = p?.rejected ?? 0;
     const milestoneCount = p?.count ?? 0;
+    /* Stages an arbiter closed — settled, but not accepted. */
+    const arbitrated = p?.arbitrated ?? 0;
+    /* Nothing further is owed on these, whichever way they went. */
+    const settled = approved + arbitrated;
 
     /*
      * FINISHED MEANS EVERY STAGE IS APPROVED — not that the escrow says so.
@@ -762,10 +883,12 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
      * The milestones are the work. When all of them are approved, the work is
      * done, whatever the escrow's own bookkeeping has caught up to.
      */
-    const everyStageApproved = milestoneCount > 0 && approved >= milestoneCount;
+    /* Nothing left to do — which is not the same as every stage having been
+       accepted, and must not be said as though it were. */
+    const everyStageSettled = milestoneCount > 0 && settled >= milestoneCount;
 
     const state: WorkState = hired
-      ? everyStageApproved
+      ? everyStageSettled
         ? "completed"
         : t
           ? t.status === "completed"
@@ -795,7 +918,8 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
      * single verdict. A rejected stage is different: that is precisely the
      * thing they are being asked to send again.
      */
-    const somethingToSend = milestoneCount === 0 || approved + awaitingReview < milestoneCount;
+    /* A stage an arbiter closed is not a stage still waiting for work. */
+    const somethingToSend = milestoneCount === 0 || settled + awaitingReview < milestoneCount;
     const canSubmit =
       stagesKnown && state === "hired" && awaitingReview === 0 && somethingToSend;
 
@@ -810,21 +934,38 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
     } else if (state === "hired" && awaitingReview > 0) {
       icon = "⏳";
       status =
-        approved + awaitingReview >= milestoneCount && milestoneCount > 0
+        settled + awaitingReview >= milestoneCount && milestoneCount > 0
           ? awaitingReview === 1
             ? "Delivered — waiting on review"
             : `All ${milestoneCount} stages delivered — waiting on review`
           : `${awaitingReview} with the reviewer — the next stage opens once this one is decided`;
-    } else if (state === "hired" && approved > 0 && milestoneCount > 0) {
-      status = `${approved} of ${milestoneCount} approved and paid — send the next stage`;
+    } else if (state === "hired" && settled > 0 && milestoneCount > 0) {
+      /* "Approved and paid" is the better sentence and stays the default; it is
+         only wrong when an arbiter closed one of the stages it is counting. */
+      status =
+        arbitrated > 0
+          ? `${approved} of ${milestoneCount} approved, ${arbitrated} settled by an arbiter — send the next stage`
+          : `${approved} of ${milestoneCount} approved and paid — send the next stage`;
     } else if (state === "completed" && milestoneCount > 0) {
-      status = `All ${milestoneCount} stage(s) approved and paid`;
+      /*
+       * Say what happened, not just that it is over.
+       *
+       * "All 2 stage(s) approved and paid" was shown for a job whose second
+       * stage an arbiter took off the freelancer and refunded to the client.
+       * Somebody reading their own board should not have to go and check the
+       * chain to find out they were not paid.
+       */
+      status = arbitrated > 0
+        ? `${approved} of ${milestoneCount} approved · ${arbitrated} settled by an arbiter — you were paid $${(p?.earnedUsdc ?? 0).toFixed(2)} of $${((p?.earnedUsdc ?? 0) + (p?.lostUsdc ?? 0)).toFixed(2)}`
+        : `All ${milestoneCount} stage(s) approved and paid`;
+      if (arbitrated > 0) icon = "⚖️";
     }
 
     out.push({
       escrowId, title, budget, status, icon, state,
       awaitingReview, approved, needsRevision, milestoneCount, canSubmit,
-      stagesKnown,
+      stagesKnown, arbitrated,
+      earnedUsdc: p?.earnedUsdc ?? null,
       reviewer: reviewers.get(escrowId) ?? null,
     });
   }
@@ -954,11 +1095,29 @@ export async function deliveryTarget(escrowId: string): Promise<{
   let amountUsdc: number | null = null;
   let count = 1;
 
+  /*
+   * The arbiter's split, taken off the milestone itself.
+   *
+   * `resolveDispute` writes the whole outcome into the struct —
+   * resolvedAt, both amounts, and the reason — and this function was already
+   * reading that struct for the stage description. It went looking for the same
+   * numbers in the backend and then in a `DisputeResolved` LOG SCAN, both of
+   * which fail exactly when the public RPC is under load. A plain read that is
+   * already in flight cannot.
+   */
+  let onChainResolution:
+    | { freelancerUsdc: number; clientUsdc: number; reason: string | null }
+    | null = null;
+
   try {
     const onChain = (await atelier.getMilestones(BigInt(escrowId))) as readonly {
       amount: bigint;
       requirements: string;
       description: string;
+      resolvedAt?: bigint;
+      resolutionFreelancerAmount?: bigint;
+      resolutionClientAmount?: bigint;
+      resolutionReason?: string;
     }[];
     count = onChain.length || 1;
     const m = onChain[index];
@@ -967,6 +1126,14 @@ export async function deliveryTarget(escrowId: string): Promise<{
       // `description` is the shorter label. Prefer the one being judged.
       description = m.requirements || m.description || "";
       amountUsdc = Number(m.amount) / 1e6;
+
+      if (Number(m.resolvedAt ?? 0n) > 0) {
+        onChainResolution = {
+          freelancerUsdc: Number(m.resolutionFreelancerAmount ?? 0n) / 1e6,
+          clientUsdc: Number(m.resolutionClientAmount ?? 0n) / 1e6,
+          reason: m.resolutionReason || null,
+        };
+      }
     }
   } catch {
     /* a chain hiccup must not stop someone delivering — the box still works */
@@ -1096,6 +1263,17 @@ export async function deliveryTarget(escrowId: string): Promise<{
     } catch {
       /* fall through to the chain */
     }
+  }
+
+  /* The struct is the most reliable source for the split, so it wins on the
+     numbers. The backend is kept for the arbiter's written note, which is only
+     stored there when they took the trouble to write one. */
+  if (onChainResolution) {
+    disputeOutcome = {
+      freelancerUsdc: onChainResolution.freelancerUsdc,
+      clientUsdc: onChainResolution.clientUsdc,
+      reason: disputeOutcome?.reason ?? onChainResolution.reason,
+    };
   }
 
   if (!disputeOutcome || (disputeOutcome.freelancerUsdc === 0 && disputeOutcome.clientUsdc === 0)) {

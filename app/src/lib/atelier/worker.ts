@@ -108,6 +108,16 @@ export interface WorkItem {
    * the chain for this job. The board must not reason from them.
    */
   stagesKnown?: boolean;
+  /**
+   * Stages a human arbiter closed — settled, but not accepted.
+   *
+   * The contract sets a milestone to Approved whoever won a dispute, so this is
+   * the only thing separating "they accepted your work" from "an arbiter took
+   * this stage off you and refunded the client".
+   */
+  arbitrated?: number;
+  /** USDC that actually reached this freelancer across the job. */
+  earnedUsdc?: number | null;
   /** Stages sent back for changes. */
   needsRevision?: number;
   /**
