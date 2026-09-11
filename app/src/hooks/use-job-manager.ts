@@ -78,6 +78,19 @@ export const JOB_MANAGER_EVENT = "atelier:job-manager";
  * what this browser read from the chain itself, which is the one thing it can
  * be more current about than the daemon.
  */
+/**
+ * Record managers read somewhere other than this hook — a batched board read.
+ *
+ * Publishing them here means the board's multicall also answers the panel's
+ * question, so opening a job you have just seen on the board renders the right
+ * mode immediately instead of asking again and flickering.
+ */
+export function rememberJobManagers(entries: Record<number, string | null>): void {
+  for (const [id, value] of Object.entries(entries)) {
+    publishManager(Number(id), value);
+  }
+}
+
 export function knownJobManagers(): { managed: Set<string>; unmanaged: Set<string> } {
   const managed = new Set<string>();
   const unmanaged = new Set<string>();

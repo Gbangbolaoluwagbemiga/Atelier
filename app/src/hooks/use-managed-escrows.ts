@@ -32,12 +32,17 @@ import {
   AUTOPILOT_CONFIGURED,
   fetchManagedEscrowIds,
 } from "@/lib/atelier/agent-api";
-import { JOB_MANAGER_EVENT, knownJobManagers } from "@/hooks/use-job-manager";
+import {
+  JOB_MANAGER_EVENT,
+  knownJobManagers,
+  rememberJobManagers,
+} from "@/hooks/use-job-manager";
+import { contractService } from "@/lib/web3/contract-service";
 
 /** Below the daemon's own 15s adoption sweep — see the note above. */
 const POLL_MS = 10_000;
 
-export function useManagedEscrows(): {
+export function useManagedEscrows(visibleEscrowIds: number[] = []): {
   managed: Set<string>;
   loaded: boolean;
   /** Ask again now. Wired to the board's Refresh, which otherwise did nothing. */
@@ -75,16 +80,56 @@ export function useManagedEscrows(): {
     return () => window.removeEventListener(JOB_MANAGER_EVENT, onChange);
   }, []);
 
+  /* Joined rather than passed as an array: a fresh array literal on every
+     render would restart the effect on every render. */
+  const visibleKey = visibleEscrowIds.join(",");
+
   useEffect(() => {
     if (!AUTOPILOT_CONFIGURED) {
       setLoaded(true);
       return;
     }
+    const visibleIds = visibleKey ? visibleKey.split(",").map(Number) : [];
     const controller = new AbortController();
     let cancelled = false;
 
-    const read = () =>
-      fetchManagedEscrowIds(controller.signal)
+    /*
+     * THE CHAIN FIRST, IN ONE REQUEST.
+     *
+     * multicall3 answers "who manages each of these" for every job on the page
+     * in a single round trip, which removes the reason this read the daemon at
+     * all. The badge is now as current as the chain rather than as current as
+     * the agent's housekeeping sweep — up to forty seconds of lag, gone.
+     *
+     * The daemon stays as the fallback, because it is the one source that
+     * survives an RPC refusing to answer, and a late badge beats no badge.
+     */
+    const readChain = async (): Promise<Set<string> | null> => {
+      /* Nothing on screen to ask about is not an answer — a caller that does
+         not pass a list still wants the daemon's view, not an empty board. */
+      if (visibleIds.length === 0) return null;
+      try {
+        const managers = await contractService.getJobManagersBatch(visibleIds);
+        /* Share it: the panel inside a card asks the same question. */
+        rememberJobManagers(managers);
+        return new Set(
+          Object.entries(managers)
+            .filter(([, v]) => v !== null)
+            .map(([id]) => id),
+        );
+      } catch {
+        return null;
+      }
+    };
+
+    const read = async () => {
+      const fromChain = await readChain();
+      if (fromChain && !cancelled) {
+        setManaged(fromChain);
+        setLoaded(true);
+        return;
+      }
+      return fetchManagedEscrowIds(controller.signal)
         .then((ids) => {
           if (cancelled) return;
           /*
@@ -110,6 +155,7 @@ export function useManagedEscrows(): {
         .finally(() => {
           if (!cancelled) setLoaded(true);
         });
+    };
 
     void read();
     const timer = setInterval(() => void read(), POLL_MS);
@@ -119,7 +165,7 @@ export function useManagedEscrows(): {
       clearInterval(timer);
       controller.abort();
     };
-  }, [tick]);
+  }, [tick, visibleKey]);
 
   return { managed, loaded, refresh };
 }

@@ -317,6 +317,47 @@ export class ContractService {
     return /^0x0{40}$/i.test(addr) ? null : addr;
   }
 
+  /**
+   * Who manages each of these jobs, in ONE round trip.
+   *
+   * The job board avoided reading this from the chain because doing it per card
+   * is a request per card. It read the daemon's task table instead — one
+   * request for the whole page, at the cost of lagging a hand-over by the
+   * agent's next sweep, which is thirty seconds plus the board's own poll.
+   *
+   * multicall3 makes that trade unnecessary: every visible job in a single
+   * call, straight from the contract, so the badge is as current as the chain
+   * rather than as current as the agent's housekeeping.
+   *
+   * Throws on failure. null in this map MEANS "the client runs this job", and a
+   * swallowed error becoming that value is the bug that told a client they had
+   * taken back control of a job the agent still managed.
+   */
+  async getJobManagersBatch(ids: number[]): Promise<Record<number, string | null>> {
+    if (ids.length === 0) return {};
+
+    const results = await this.client.multicall({
+      contracts: ids.map((id) => ({
+        address: this.addr,
+        abi: AtelierABI.abi as any,
+        functionName: "jobManager" as const,
+        args: [BigInt(id)] as const,
+      })),
+      allowFailure: true,
+    });
+
+    const out: Record<number, string | null> = {};
+    for (let i = 0; i < ids.length; i++) {
+      const r = results[i];
+      /* A single failed call is left OUT of the map rather than recorded as
+         null — absent means "unknown", null means "nobody manages it". */
+      if (r.status !== "success") continue;
+      const addr = String(r.result);
+      out[ids[i]] = /^0x0{40}$/i.test(addr) ? null : addr;
+    }
+    return out;
+  }
+
   async getUserEscrows(addr: string): Promise<number[]> {
     try {
       const ids = await this.contract.read.getUserEscrows([addr as Address]);

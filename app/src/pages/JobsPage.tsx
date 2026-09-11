@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
@@ -40,11 +40,20 @@ import { AlertCircle } from "lucide-react";
 export default function JobsPage() {
   const { wallet } = useWeb3();
   /* Which jobs the agent is running, for the Autopilot badge on each card. */
-  const { managed: managedEscrows, refresh: refreshManaged } = useManagedEscrows();
   const { writeContractAsync } = useWriteContract();
   const { toast } = useToast();
   const { addNotification } = useNotifications();
   const [jobs, setJobs] = useState<Escrow[]>([]);
+
+  /* The jobs on screen, so the badge can be read from the chain in one
+     multicall rather than waiting on the agent's housekeeping sweep. */
+  const visibleEscrowIds = useMemo(
+    () => jobs.map((j) => Number(j.id)).filter((n) => Number.isFinite(n)),
+    [jobs],
+  );
+  const { managed: managedEscrows, refresh: refreshManaged } =
+    useManagedEscrows(visibleEscrowIds);
+
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   /* Browsing by kind of work. "all" includes jobs posted before categories
