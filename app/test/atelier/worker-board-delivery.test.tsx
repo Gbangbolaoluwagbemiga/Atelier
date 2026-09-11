@@ -260,3 +260,74 @@ describe("a stage sent back for changes", () => {
     expect(screen.getByText(/send a link to the work itself/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * THE VERDICT, CRITERION BY CRITERION.
+ *
+ * The reviewer produced this every time and stored it every time. The
+ * freelancer — the only person who can act on it — saw a status change and
+ * nothing else. "Changes requested" tells you that you failed; this tells you
+ * what to fix.
+ */
+describe("what the reviewer actually decided", () => {
+  const REVIEWED = {
+    escrowId: "7", index: 0, count: 2, description: "Stage one",
+    amountUsdc: 3, criteria: ["A", "B"], agentReviewed: true,
+    previousFeedback: "No deliverable was included.",
+    lastReview: {
+      approved: false,
+      score: 25,
+      criteriaResults: [
+        { criterion: "Discord role is removed", passed: false, note: "No deliverable was provided." },
+        { criterion: "Screenshot is provided", passed: true, note: "Taken on the freelancer's word." },
+      ],
+    },
+  };
+
+  beforeEach(() => {
+    myWork.mockResolvedValue([{
+      escrowId: "7", title: "fireball", budget: 5,
+      status: "Changes requested — revise and send it again",
+      icon: "✏️", state: "hired", awaitingReview: 0, approved: 0,
+      needsRevision: 1, milestoneCount: 2, canSubmit: true, reviewer: "agent",
+    }]);
+    deliveryTarget.mockResolvedValue(REVIEWED);
+  });
+
+  it("marks each criterion pass or fail, with the reviewer's note", async () => {
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /send work/i }));
+
+    expect(await screen.findByText(/checked.*each criterion/i)).toBeInTheDocument();
+    expect(screen.getByText("Discord role is removed")).toBeInTheDocument();
+    expect(screen.getByText("No deliverable was provided.")).toBeInTheDocument();
+    expect(screen.getByText("Taken on the freelancer's word.")).toBeInTheDocument();
+  });
+
+  it("shows the score and says what to do next", async () => {
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /send work/i }));
+
+    expect(await screen.findByText("25/100")).toBeInTheDocument();
+    expect(screen.getByText(/fix the ones marked/i)).toBeInTheDocument();
+    // And that not delivering again does not cost them the job.
+    expect(screen.getByText(/budget\s+stays locked in escrow/i)).toBeInTheDocument();
+  });
+
+  it("says the client checked it when no agent is on the job", async () => {
+    deliveryTarget.mockResolvedValue({ ...REVIEWED, agentReviewed: false });
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /send work/i }));
+
+    expect(await screen.findByText(/the client checked/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the plain criteria list before any verdict exists", async () => {
+    deliveryTarget.mockResolvedValue({ ...REVIEWED, lastReview: null });
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /send work/i }));
+
+    expect(await screen.findByText(/an agent approves or rejects against/i)).toBeInTheDocument();
+    expect(screen.queryByText("25/100")).not.toBeInTheDocument();
+  });
+});

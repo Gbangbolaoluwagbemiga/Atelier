@@ -129,6 +129,44 @@ export function currentWorkerId(): string | null {
   }
 }
 
+/**
+ * The signed-in worker's wallet address, for surfaces that need an identity
+ * rather than a session.
+ *
+ * WHY THIS EXISTS
+ *
+ * The notification centre keys everything off a CONNECTED wallet. A managed
+ * worker signs in with Google and never connects one, so the bell was
+ * permanently empty for exactly the people who most need it — a freelancer is
+ * not sitting on a dashboard waiting to find out their work was rejected. The
+ * notification was written, stored and addressed to them; nothing could read it
+ * back because nothing knew who they were.
+ *
+ * Kept beside the session id and cleared with it, so signing out stops the bell
+ * as decisively as it stops everything else.
+ */
+const WORKER_ADDRESS_KEY = "atelier.worker.address";
+
+/** Fires when the signed-in worker changes, so React can re-read it. */
+export const WORKER_IDENTITY_EVENT = "atelier:worker-identity";
+
+export function currentWorkerAddress(): string | null {
+  try {
+    return localStorage.getItem(WORKER_ADDRESS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function rememberWorkerAddress(address: string): void {
+  try {
+    localStorage.setItem(WORKER_ADDRESS_KEY, address);
+    window.dispatchEvent(new Event(WORKER_IDENTITY_EVENT));
+  } catch {
+    /* Private mode — the bell falls back to empty, which is what it was. */
+  }
+}
+
 export function rememberWorker(id: string): void {
   try {
     localStorage.setItem(SESSION_KEY, id);
@@ -140,6 +178,8 @@ export function rememberWorker(id: string): void {
 export function forgetWorker(): void {
   try {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(WORKER_ADDRESS_KEY);
+    window.dispatchEvent(new Event(WORKER_IDENTITY_EVENT));
   } catch {
     /* ignore */
   }
@@ -252,6 +292,17 @@ export interface DeliveryTarget {
   agentReviewed: boolean;
   /** Why the last attempt at this stage was sent back, when it was. */
   previousFeedback?: string | null;
+  /**
+   * The reviewer's verdict, criterion by criterion.
+   *
+   * Always produced and always stored; never shown to the one person who has
+   * to act on it. "Changes requested" says you failed. This says what to fix.
+   */
+  lastReview?: {
+    approved: boolean;
+    score: number | null;
+    criteriaResults: { criterion: string; passed: boolean; note: string }[];
+  } | null;
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useWeb3 } from "./web3-context";
+import { currentWorkerAddress, WORKER_IDENTITY_EVENT } from "@/lib/atelier/worker";
 import { useToast } from "@/hooks/use-toast";
 import {
   getNotifications,
@@ -92,6 +93,35 @@ const NotificationContext = createContext<NotificationContextType | undefined>(
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { wallet } = useWeb3();
+
+  /*
+   * WHO THIS BELL BELONGS TO.
+   *
+   * Everything here keyed off a CONNECTED wallet, so a managed worker — who
+   * signs in with Google and never connects one — had a permanently empty bell.
+   * They are exactly the people who need it: a freelancer is not sitting on a
+   * dashboard waiting to learn their work came back. The notifications were
+   * written, stored and addressed to them; nothing could read them back because
+   * nothing knew who they were.
+   *
+   * A connected wallet still wins — that is the person actively using the app
+   * as a client.
+   */
+  const [workerAddress, setWorkerAddress] = useState<string | null>(() =>
+    currentWorkerAddress(),
+  );
+  useEffect(() => {
+    const sync = () => setWorkerAddress(currentWorkerAddress());
+    window.addEventListener(WORKER_IDENTITY_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(WORKER_IDENTITY_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
+  const identity = wallet.address ?? workerAddress ?? null;
+  const hasIdentity = Boolean(identity);
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const lastRemoteFingerprintRef = useRef<string>("");
@@ -101,7 +131,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const isCrossPartyRemoteNotification = useCallback(
     (row: RemoteNotificationRow): boolean => {
-      const current = wallet.address?.toLowerCase();
+      const current = identity?.toLowerCase();
       if (!current) return false;
 
       const source =
@@ -119,13 +149,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         row.type === "dispute"
       );
     },
-    [wallet.address],
+    [identity],
   );
 
   // Load notifications from localStorage on mount and when wallet changes
   useEffect(() => {
-    if (wallet.isConnected && wallet.address) {
-      const saved = localStorage.getItem(`notifications_${wallet.address}`);
+    if (hasIdentity) {
+      const saved = localStorage.getItem(`notifications_${identity}`);
       if (saved) {
         try {
           const parsedNotifications = JSON.parse(saved);
@@ -148,20 +178,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // If wallet not connected, clear notifications
       setNotifications([]);
     }
-  }, [wallet.isConnected, wallet.address]);
+  }, [hasIdentity, identity]);
 
   // Persist ALL notifications to localStorage (both local and remote)
   useEffect(() => {
-    if (wallet.isConnected && wallet.address && notifications.length > 0) {
+    if (hasIdentity && notifications.length > 0) {
       localStorage.setItem(
-        `notifications_${wallet.address}`,
+        `notifications_${identity}`,
         JSON.stringify(notifications),
       );
     }
-  }, [notifications, wallet.isConnected, wallet.address]);
+  }, [notifications, hasIdentity, identity]);
 
   const syncRemoteNotifications = useCallback(async () => {
-    if (!wallet.address || !isApiConfigured()) return;
+    if (!identity || !isApiConfigured()) return;
     
     // Prevent concurrent syncs and rate limit to once per 5 seconds minimum
     if (syncInProgressRef.current) return;
@@ -172,7 +202,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     lastSyncTimeRef.current = now;
     
     try {
-      const remote = await getNotifications(wallet.address);
+      const remote = await getNotifications(identity);
       const prevIds = lastRemoteIdsRef.current;
       const nextIds = new Set(remote.map((r) => r.id));
       const newRows = remote.filter((r) => !prevIds.has(r.id));
@@ -289,7 +319,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    if (!wallet.address || !isApiConfigured()) return;
+    if (!identity || !isApiConfigured()) return;
     lastRemoteFingerprintRef.current = "";
     lastRemoteIdsRef.current = new Set();
     void syncRemoteNotifications();

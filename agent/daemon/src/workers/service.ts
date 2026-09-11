@@ -772,6 +772,19 @@ export async function deliveryTarget(escrowId: string): Promise<{
   agentReviewed: boolean;
   /** Why the last attempt at this stage was sent back, when it was. */
   previousFeedback: string | null;
+  /**
+   * The reviewer's verdict on this stage, criterion by criterion.
+   *
+   * The reviewer has always produced this — which criteria passed, which did
+   * not, and a note on each — and stored it. The freelancer, who is the one
+   * person who has to act on it, was shown none of it. "Changes requested" tells
+   * you that you failed; this tells you what to fix.
+   */
+  lastReview: {
+    approved: boolean;
+    score: number | null;
+    criteriaResults: { criterion: string; passed: boolean; note: string }[];
+  } | null;
 }> {
   const index = await resolveMilestone(escrowId);
 
@@ -848,7 +861,33 @@ export async function deliveryTarget(escrowId: string): Promise<{
     /* feedback is a bonus; never block a delivery over it */
   }
 
-  return { escrowId, index, count, description, amountUsdc, criteria, agentReviewed, previousFeedback };
+  let lastReview: {
+    approved: boolean;
+    score: number | null;
+    criteriaResults: { criterion: string; passed: boolean; note: string }[];
+  } | null = null;
+  try {
+    const history = store.listReviews<{
+      approved?: boolean;
+      score?: number;
+      criteriaResults?: { criterion: string; passed: boolean; note: string }[];
+    }>(escrowId, String(index));
+    const latest = history[history.length - 1];
+    if (latest && Array.isArray(latest.criteriaResults) && latest.criteriaResults.length > 0) {
+      lastReview = {
+        approved: latest.approved === true,
+        score: typeof latest.score === "number" ? latest.score : null,
+        criteriaResults: latest.criteriaResults,
+      };
+    }
+  } catch {
+    /* a verdict we cannot read is not worth failing a delivery over */
+  }
+
+  return {
+    escrowId, index, count, description, amountUsdc, criteria,
+    agentReviewed, previousFeedback, lastReview,
+  };
 }
 
 /**

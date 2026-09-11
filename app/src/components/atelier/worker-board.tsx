@@ -159,8 +159,19 @@ export function WorkerBoard({
     <div className="space-y-10">
       <Earnings worker={worker} onWithdrawn={() => void refresh()} />
 
+      {/*
+        TWO COLUMNS: what you owe, and what you could take on.
+
+        Stacked, these two read as one long list and the work you have already
+        committed to scrolls off the top the moment there are a few jobs open.
+        They answer different questions — "what do I owe" and "what could I
+        take on" — and a freelancer looks at one or the other, never both at
+        once. Side by side on a wide screen, stacked on a narrow one, with the
+        work first either way because it is the half with a deadline on it.
+      */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 items-start">
       {work.length > 0 && (
-        <section>
+        <section className="min-w-0">
           <h2 className="font-display text-2xl font-semibold">Your work</h2>
           <div className="space-y-3 mt-4">
             {work.map((w) => (
@@ -259,7 +270,54 @@ export function WorkerBoard({
                           </div>
                         )}
 
-                        {target.criteria.length > 0 && (
+                        {/*
+                          THE VERDICT, CRITERION BY CRITERION.
+
+                          The reviewer produced this and stored it every time.
+                          The freelancer — the only person who can act on it —
+                          saw a status change and nothing else. Shown in place
+                          of the plain criteria list, because once there is a
+                          verdict the verdict IS the list.
+                        */}
+                        {target.lastReview ? (
+                          <div>
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1 flex items-center justify-between gap-2">
+                              <span>
+                                {target.agentReviewed ? "The agent checked" : "The client checked"}
+                                {" "}each criterion
+                              </span>
+                              {target.lastReview.score !== null && (
+                                <span className="font-mono">{target.lastReview.score}/100</span>
+                              )}
+                            </div>
+                            <ul className="space-y-1.5">
+                              {target.lastReview.criteriaResults.map((c, i) => (
+                                <li key={i} className="flex gap-2 text-xs">
+                                  <span
+                                    className={c.passed ? "text-green-500" : "text-red-500"}
+                                    aria-hidden="true"
+                                  >
+                                    {c.passed ? "✓" : "✗"}
+                                  </span>
+                                  <span className="min-w-0">
+                                    <span className={c.passed ? "text-muted-foreground" : "text-foreground"}>
+                                      {c.criterion}
+                                    </span>
+                                    {c.note && (
+                                      <span className="block text-muted-foreground/80">
+                                        {c.note}
+                                      </span>
+                                    )}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Fix the ones marked ✗ and send it again. The budget
+                              stays locked in escrow for you in the meantime.
+                            </p>
+                          </div>
+                        ) : target.criteria.length > 0 && (
                           <div>
                             <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
                               {target.agentReviewed
@@ -325,7 +383,7 @@ export function WorkerBoard({
         </section>
       )}
 
-      <section>
+      <section className={work.length > 0 ? "min-w-0" : "min-w-0 lg:col-span-2"}>
         <h2 className="font-display text-2xl font-semibold">Open jobs</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Apply with a sentence. No gas, no signature.
@@ -431,6 +489,7 @@ export function WorkerBoard({
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }

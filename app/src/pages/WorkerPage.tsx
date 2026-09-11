@@ -26,6 +26,7 @@ import {
   WORKER_DOOR_OPEN,
   currentWorkerId,
   forgetWorker,
+  rememberWorkerAddress,
   me as fetchMe,
   type Worker,
 } from "@/lib/atelier/worker";
@@ -36,6 +37,13 @@ const TELEGRAM_BOT = (
 
 export default function WorkerPage() {
   const [worker, setWorker] = useState<Worker | null>(null);
+
+  /* One place that records who is signed in, so every path into a worker —
+     resuming, joining, a board refresh — leaves the bell able to find them. */
+  const adopt = useCallback((w: Worker) => {
+    setWorker(w);
+    if (w?.address) rememberWorkerAddress(w.address);
+  }, []);
   const [checking, setChecking] = useState(true);
 
   /* Resume a session if this browser has one. A worker id is not a credential
@@ -48,7 +56,11 @@ export default function WorkerPage() {
       return;
     }
     try {
-      setWorker(await fetchMe(id));
+      const me = await fetchMe(id);
+      setWorker(me);
+      /* So the bell knows who this is. It keys off a connected wallet, and a
+         managed worker never connects one. */
+      if (me.address) rememberWorkerAddress(me.address);
     } catch {
       // The daemon no longer knows this id — a wiped dev database, usually.
       // Clear it rather than leaving someone stuck on a spinner forever.
@@ -132,7 +144,7 @@ export default function WorkerPage() {
             </Button>
           </div>
 
-          <WorkerBoard worker={worker} onWorkerChanged={setWorker} />
+          <WorkerBoard worker={worker} onWorkerChanged={adopt} />
 
           <TelegramCard handle={worker.handle} />
         </>
@@ -209,7 +221,7 @@ export default function WorkerPage() {
           </div>
 
           <div className="lg:sticky lg:top-24">
-            <WorkerJoin onJoined={setWorker} />
+            <WorkerJoin onJoined={adopt} />
           </div>
         </div>
       )}
