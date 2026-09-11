@@ -214,6 +214,29 @@ export async function recipientsFor(event: AgentEvent): Promise<WebNotification[
     }
 
     /*
+     * THE THING THE CLIENT PAID FOR HAS ARRIVED.
+     *
+     * This was filed under "progress is not news" and left silent, which was
+     * wrong in the one direction that matters: the client is the person who has
+     * to act. A submission sits there until somebody approves or rejects it,
+     * and nothing told them it existed. They reloaded the page on a hunch and
+     * found work that had been waiting.
+     */
+    case "work_submitted": {
+      const client = await clientOf(id);
+      if (client) {
+        out.push({
+          to: client,
+          type: "milestone",
+          title: "Your work has been delivered",
+          message:
+            "A milestone has been submitted and is waiting on your review. The money stays in escrow until you approve it.",
+        });
+      }
+      break;
+    }
+
+    /*
      * The freelancer's money moved. This is the single most important thing the
      * bell has ever had to say, and it was the one it could not say at all when
      * the agent was the one approving.

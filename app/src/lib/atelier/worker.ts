@@ -80,6 +80,19 @@ export interface WorkItem {
   status: string;
   icon: string;
   state: string;
+  /** Stages delivered and waiting on a verdict. */
+  awaitingReview?: number;
+  /** Stages already approved and paid. */
+  approved?: number;
+  milestoneCount?: number;
+  /**
+   * False when there is nothing left to send.
+   *
+   * The board offered "Send work" from the moment of hire until the job closed,
+   * whatever had already been delivered — so a freelancer could file the next
+   * stage without ever learning what happened to the last one.
+   */
+  canSubmit?: boolean;
 }
 
 /* ── Session ─────────────────────────────────────────────────────────────── */

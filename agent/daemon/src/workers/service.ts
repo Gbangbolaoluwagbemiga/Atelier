@@ -15,7 +15,8 @@
 
 import crypto from "node:crypto";
 import * as store from "../store.js";
-import { criteriaFor as handoverCriteriaFor } from "../agent/handover.js";
+import { publishWorkerEvent } from "../events.js";
+import { criteriaFor as handoverCriteriaFor, previewCriteria } from "../agent/handover.js";
 import * as atelier from "../web3/atelier.js";
 import { createSignerFor } from "../circle/circleSigner.js";
 import { config } from "../config.js";
@@ -355,12 +356,57 @@ export async function submit(
 
   const signer = signerFor(worker);
   await ensureGas(worker);
+
+  /*
+   * Only start work that has not started.
+   *
+   * This sent startWork unconditionally and swallowed the revert, which meant
+   * every delivery after the first paid for a whole extra transaction — MPC
+   * signature, broadcast and wait — to be told something we could have read.
+   * On testnet that is most of the minute a freelancer spends watching a
+   * spinner after pressing submit.
+   *
+   * A failed read falls through to sending it, because the swallowed revert is
+   * still the safe outcome and a stalled delivery is not.
+   */
+  let alreadyStarted = false;
   try {
-    await atelier.startWork(BigInt(escrowId), signer);
+    const esc = (await atelier.getEscrow(BigInt(escrowId))) as { workStarted?: boolean };
+    alreadyStarted = esc.workStarted === true;
   } catch {
-    // already started — expected on every milestone after the first
+    /* unknown — send it and let the contract decide */
+  }
+
+  if (!alreadyStarted) {
+    try {
+      await atelier.startWork(BigInt(escrowId), signer);
+    } catch {
+      // already started — expected on every milestone after the first
+    }
   }
   const txHash = await atelier.submitMilestone(BigInt(escrowId), BigInt(index), text, signer);
+
+  /*
+   * Tell somebody. Nothing here did.
+   *
+   * A submission is on-chain the moment this returns, and it was announced
+   * nowhere: no bell in the web app, no Telegram message, no live update on the
+   * client's dashboard. The client had bought something, had no idea it had
+   * arrived, and found out by reloading the page on a hunch. The event type and
+   * its Telegram handler both already existed — nothing ever published one.
+   *
+   * After the transaction, deliberately: the work is delivered whether or not
+   * the announcement lands, and an undelivered courtesy must never fail a
+   * delivery that already happened.
+   */
+  publishWorkerEvent({
+    type: "work_submitted",
+    message: "A freelancer has delivered their work — it is waiting on review.",
+    escrowId: String(escrowId),
+    txHash,
+    timestamp: Date.now(),
+  });
+
   return { txHash };
 }
 
@@ -441,9 +487,24 @@ async function resolveMilestone(escrowId: string): Promise<number> {
  */
 export type WorkState = "applied" | "hired" | "completed" | "disputed" | "lost";
 
-export async function myWork(
-  workerId: string,
-): Promise<{ escrowId: string; title: string; budget: number; status: string; icon: string; state: WorkState }[]> {
+export interface WorkRow {
+  escrowId: string;
+  title: string;
+  budget: number;
+  status: string;
+  icon: string;
+  state: WorkState;
+  /** Milestones delivered and waiting on a verdict. */
+  awaitingReview: number;
+  /** Milestones already approved and paid. */
+  approved: number;
+  /** Total stages on this job. */
+  milestoneCount: number;
+  /** False when every stage has been delivered — nothing left to send. */
+  canSubmit: boolean;
+}
+
+export async function myWork(workerId: string): Promise<WorkRow[]> {
   const worker = store.getWorker(workerId);
   if (!worker?.walletAddress) return [];
   const me = worker.walletAddress as `0x${string}`;
@@ -502,7 +563,33 @@ export async function myWork(
     )),
   );
 
-  const out: { escrowId: string; title: string; budget: number; status: string; icon: string; state: WorkState }[] = [];
+  /*
+   * WHAT HAPPENED TO WHAT I ALREADY SENT.
+   *
+   * The row said "You were hired — send your work" from the moment of hire
+   * until the job closed, no matter what had been delivered. Someone submitted
+   * a milestone, saw the same sentence and the same button, and sent the next
+   * stage with no idea whether the first had even been looked at. Two
+   * deliveries, one of them made blind.
+   */
+  const progress = new Map<string, { awaiting: number; approved: number; count: number }>();
+  await Promise.all(
+    candidateIds.map(async (escrowId, i) => {
+      if (!involvement[i]!.hired) return;
+      try {
+        const ms = (await atelier.getMilestones(BigInt(escrowId))) as readonly { status: number }[];
+        progress.set(escrowId, {
+          awaiting: ms.filter((m) => Number(m.status) === MS_SUBMITTED).length,
+          approved: ms.filter((m) => Number(m.status) === MS_APPROVED).length,
+          count: ms.length,
+        });
+      } catch {
+        /* a chain hiccup leaves the row without a stage summary, not missing */
+      }
+    }),
+  );
+
+  const out: WorkRow[] = [];
   for (const [i, escrowId] of candidateIds.entries()) {
     const { hired, applied } = involvement[i]!;
     if (!hired && !applied) continue;
@@ -559,9 +646,33 @@ export async function myWork(
       applied: ["⏳", "Applied, waiting on the agent"],
       lost: ["—", "Applied, but someone else was hired"],
     };
-    const [icon, status] = presentation[state];
+    let [icon, status] = presentation[state];
 
-    out.push({ escrowId, title, budget, status, icon, state });
+    const p = progress.get(escrowId);
+    const awaitingReview = p?.awaiting ?? 0;
+    const approved = p?.approved ?? 0;
+    const milestoneCount = p?.count ?? 0;
+    /* Nothing left to send once every stage is delivered or paid. Offering the
+       button anyway invites a second delivery against a stage already sent. */
+    const canSubmit =
+      state === "hired" && (milestoneCount === 0 || approved + awaitingReview < milestoneCount);
+
+    if (state === "hired" && awaitingReview > 0) {
+      icon = "⏳";
+      status =
+        approved + awaitingReview >= milestoneCount && milestoneCount > 0
+          ? awaitingReview === 1
+            ? "Delivered — waiting on review"
+            : `All ${milestoneCount} stages delivered — waiting on review`
+          : `${awaitingReview} delivered and awaiting review — ${milestoneCount - approved - awaitingReview} still to send`;
+    } else if (state === "hired" && approved > 0 && milestoneCount > 0) {
+      status = `${approved} of ${milestoneCount} approved and paid — send the next stage`;
+    }
+
+    out.push({
+      escrowId, title, budget, status, icon, state,
+      awaitingReview, approved, milestoneCount, canSubmit,
+    });
   }
   return out;
 }
@@ -614,7 +725,25 @@ export async function deliveryTarget(escrowId: string): Promise<{
     /* a chain hiccup must not stop someone delivering — the box still works */
   }
 
-  const { criteria } = handoverCriteriaFor(escrowId);
+  /*
+   * Fall back to generating them, rather than showing a freelancer nothing.
+   *
+   * criteriaFor only knows about jobs the daemon holds a brief for. A job hired
+   * on-chain, or taken back off Autopilot, has no brief here — so the box that
+   * exists to say "this is what you are judged on" said nothing at all on
+   * exactly the jobs where the freelancer is most in the dark.
+   *
+   * previewCriteria answers from the escrow's own text and caches the result,
+   * so this is one model call per job, not one per time somebody opens the box.
+   */
+  let { criteria } = handoverCriteriaFor(escrowId);
+  if (criteria.length === 0) {
+    try {
+      criteria = (await previewCriteria(escrowId)).criteria;
+    } catch {
+      /* no criteria is a truthful answer; a failed read must not block delivery */
+    }
+  }
 
   /* Whether an agent reviews this decides how the criteria should be read: as
      the exact rubric a machine scores against, or as the client's notes. */

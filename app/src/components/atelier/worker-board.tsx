@@ -174,7 +174,7 @@ export function WorkerBoard({
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="actor-figure figure-md">${w.budget}</span>
-                    {w.state === "hired" && deliveringTo !== w.escrowId && (
+                    {w.state === "hired" && w.canSubmit !== false && deliveringTo !== w.escrowId && (
                       <Button size="sm" onClick={() => openDelivery(w.escrowId)}>
                         <Send className="h-4 w-4 mr-2" aria-hidden="true" />
                         Send work
@@ -183,7 +183,17 @@ export function WorkerBoard({
                   </div>
                 </div>
 
-                {w.state === "hired" && deliveringTo === w.escrowId && (
+                {/* What is already with the client, so a second delivery is never
+                    made in the dark. */}
+                {(w.awaitingReview ?? 0) > 0 && deliveringTo !== w.escrowId && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {w.awaitingReview === 1
+                      ? "One stage is with the reviewer. You will hear as soon as it is approved and paid."
+                      : `${w.awaitingReview} stages are with the reviewer. You will hear as each is approved and paid.`}
+                  </p>
+                )}
+
+                {w.state === "hired" && w.canSubmit !== false && deliveringTo === w.escrowId && (
                   <div className="mt-4 space-y-3">
                     {/*
                       WHICH STAGE, AND WHAT IT HAS TO MEET.

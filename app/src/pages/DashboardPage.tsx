@@ -563,6 +563,31 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
     fetchUserEscrows(true, true); // always hit RPC on manual refresh
   };
 
+  /*
+   * WATCH FOR WHAT THE OTHER SIDE DOES.
+   *
+   * This page fetched once when the wallet connected and then listened only for
+   * events its own tab dispatched. Everything the counterparty did was
+   * invisible: a freelancer delivered a milestone and the client's dashboard
+   * went on showing "pending" until they happened to reload. The one screen
+   * whose entire job is to tell you when something needs your attention was the
+   * one screen that never changed on its own.
+   *
+   * Straight to RPC rather than the subgraph, which lags ten to thirty seconds
+   * on testnet — polling a stale source would just be a slower way to show the
+   * wrong thing. Paused while the tab is hidden, because nobody is reading it.
+   */
+  const refreshRef = useRef(fetchUserEscrows);
+  refreshRef.current = fetchUserEscrows;
+  useEffect(() => {
+    if (!wallet.isConnected) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void refreshRef.current(false, true);
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [wallet.isConnected]);
+
+
   const disputeMilestone = async (escrowId: string, milestoneIndex: number) => {
     try {
       // SECURITY: Double-check that user is the depositor

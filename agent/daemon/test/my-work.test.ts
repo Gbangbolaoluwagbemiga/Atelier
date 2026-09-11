@@ -25,6 +25,7 @@ const listDecisions = vi.fn(() => [] as any[]);
 const hiredEscrowsFor = vi.fn();
 const hasApplied = vi.fn();
 const getEscrow = vi.fn();
+const getMilestones = vi.fn();
 
 vi.mock("../src/store.js", () => ({
   getWorker: (id: string) => getWorker(id),
@@ -41,6 +42,7 @@ vi.mock("../src/web3/atelier.js", () => ({
   hiredEscrowsFor: (a: string) => hiredEscrowsFor(a),
   hasApplied: (id: bigint, a: string) => hasApplied(id, a),
   getEscrow: (id: bigint) => getEscrow(id),
+  getMilestones: (id: bigint) => getMilestones(id),
 }));
 
 /* service.ts reads a job's criteria through handover, which imports the brief
@@ -62,6 +64,7 @@ beforeEach(() => {
   hiredEscrowsFor.mockResolvedValue([]);
   hasApplied.mockResolvedValue(false);
   getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 5_000_000n, status: 0 });
+  getMilestones.mockResolvedValue([{ status: 0 }, { status: 0 }]);
 });
 
 describe("a job the client hired for by hand", () => {
@@ -153,5 +156,66 @@ describe("when the chain will not answer", () => {
     getEscrow.mockRejectedValue(new Error("rpc down"));
 
     expect(await myWork("w1")).toEqual([]);
+  });
+});
+
+
+/**
+ * WHAT HAPPENED TO WHAT I ALREADY SENT.
+ *
+ * The row read "You were hired — send your work" from the moment of hire until
+ * the job closed, whatever had been delivered. Somebody submitted a milestone,
+ * saw the same sentence and the same button, and sent the next stage with no
+ * idea whether the first had been looked at. Two deliveries, one made blind.
+ */
+describe("a job with work already delivered", () => {
+  it("says a stage is with the reviewer instead of asking again", async () => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockResolvedValue([{ status: 1 }, { status: 0 }]); // 1 = submitted
+
+    const [row] = await myWork("w1");
+
+    expect(row.awaitingReview).toBe(1);
+    expect(row.status).toMatch(/awaiting review/i);
+    // One stage is still unsent, so there is still something to do.
+    expect(row.canSubmit).toBe(true);
+  });
+
+  it("stops offering the button when every stage is delivered", async () => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockResolvedValue([{ status: 1 }, { status: 1 }]);
+
+    const [row] = await myWork("w1");
+
+    expect(row.canSubmit).toBe(false);
+    expect(row.status).toMatch(/waiting on review/i);
+  });
+
+  it("counts what has actually been paid, and asks for the rest", async () => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockResolvedValue([{ status: 2 }, { status: 0 }]); // 2 = approved
+
+    const [row] = await myWork("w1");
+
+    expect(row.approved).toBe(1);
+    expect(row.status).toMatch(/1 of 2 approved and paid/i);
+    expect(row.canSubmit).toBe(true);
+  });
+
+  it("nothing left to send once all stages are approved", async () => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockResolvedValue([{ status: 2 }, { status: 2 }]);
+
+    expect((await myWork("w1"))[0].canSubmit).toBe(false);
+  });
+
+  it("still offers the button when the chain will not say", async () => {
+    // Unknown must not mean "you are finished" — that would strand a delivery.
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockRejectedValue(new Error("rpc down"));
+
+    const [row] = await myWork("w1");
+    expect(row.canSubmit).toBe(true);
+    expect(row.milestoneCount).toBe(0);
   });
 });

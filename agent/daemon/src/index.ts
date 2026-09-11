@@ -19,6 +19,7 @@ import { notifyWeb } from "./notify/web.js";
 import { createAtelierGateway } from "./circle/gateway.js";
 import { listWhitelistedTokens } from "./web3/tokens.js";
 import { adoptDelegatedJobs } from "./agent/adoptDelegated.js";
+import { onWorkerEvent } from "./events.js";
 import * as handover from "./agent/handover.js";
 import { createAtelierPaywall, ORDER_FEE_USDC } from "./circle/x402-seller.js";
 import * as atelier from "./web3/atelier.js";
@@ -76,6 +77,31 @@ function getGateway() {
   if (!gatewayInstance) gatewayInstance = createAtelierGateway();
   return gatewayInstance;
 }
+
+/*
+ * Things PEOPLE do, routed the same way as things the agent does.
+ *
+ * Everything below hangs off AgentClient's callback, which only fires for the
+ * agent's own actions — so a freelancer delivering their work reached none of
+ * it. The worker layer publishes onto its own bus; this hands those events to
+ * exactly the same announcers, so a delivery gets the bell, the Telegram
+ * message and the live update that a hire already got.
+ */
+onWorkerEvent((event) => {
+  broadcast(event);
+  void notifyWeb(event);
+  if (event.escrowId) {
+    void telegram.notifyClientForEscrow(
+      event.escrowId,
+      [
+        "📦 <b>Your work has been delivered.</b>",
+        "",
+        "It's waiting on review.",
+        `${config.publicAppUrl}/jobs/${event.escrowId}`,
+      ].join("\n"),
+    );
+  }
+});
 
 const agent = new AgentClient((event) => {
   broadcast(event);
@@ -884,11 +910,32 @@ const server = http.createServer(async (req, res) => {
   // before posting a job, and where to send funds to top it up.
   if (req.method === "GET" && url.pathname === "/api/wallet") {
     try {
-      const publicClient = createPublicClient({ chain: arcTestnet, transport: viemHttp(rpcUrl) });
-      const balance = await publicClient.getBalance({ address: config.circleWalletAddress as `0x${string}` });
+      /*
+       * The address must survive a bad RPC. The balance need not.
+       *
+       * This read the balance first and 500'd the whole endpoint when that
+       * failed — and handing a job to Autopilot asks this endpoint which key
+       * the agent signs with. So a momentary RPC hiccup, on a call that has
+       * nothing to do with delegation, came back as "Could not hand over the
+       * job — Autopilot returned 500 for /api/wallet" and the client could do
+       * nothing but try again and hope.
+       *
+       * The address is configuration. It cannot fail, so it must not be behind
+       * something that can.
+       */
+      let balance: string | null = null;
+      try {
+        const publicClient = createPublicClient({ chain: arcTestnet, transport: viemHttp(rpcUrl) });
+        balance = formatEther(
+          await publicClient.getBalance({ address: config.circleWalletAddress as `0x${string}` }),
+        );
+      } catch (err) {
+        console.warn("[wallet] balance read failed:", err instanceof Error ? err.message : err);
+      }
+
       return json(res, 200, {
         address: config.circleWalletAddress,
-        balance: formatEther(balance),
+        balance,
         explorerUrl: `https://testnet.arcscan.app/address/${config.circleWalletAddress}`,
       });
     } catch (err) {

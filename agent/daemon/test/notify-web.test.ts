@@ -239,11 +239,29 @@ describe("telling an applicant what they scored", () => {
 });
 
 /**
+ * A DELIVERY IS NOT PROGRESS — IT IS SOMETHING THE CLIENT MUST ACT ON.
+ *
+ * This sat in the "deliberately silent" list, which was wrong in the one
+ * direction that matters. A submission waits until somebody approves or rejects
+ * it, the client is the only person who can, and nothing told them it had
+ * arrived. They reloaded the page on a hunch and found work already waiting.
+ */
+describe("work arriving", () => {
+  it("tells the client, and says their money is still theirs until they approve", async () => {
+    const list = await recipientsFor(event({ type: "work_submitted", decision: undefined }));
+
+    expect(list).toHaveLength(1);
+    expect(list[0].to).toBe(CLIENT);
+    expect(list[0].message).toMatch(/stays in escrow until you approve/i);
+  });
+});
+
+/**
  * Progress is not news. Pushing "fetching applications…" to the bell teaches
  * people to ignore it, and the bell is how they find out they were paid.
  */
 describe("what is deliberately not a notification", () => {
-  it.each(["applications_fetched", "brief_generated", "work_submitted"])(
+  it.each(["applications_fetched", "brief_generated"])(
     "stays quiet on %s",
     async (type) => {
       expect(await recipientsFor(event({ type: type as AgentEvent["type"] }))).toEqual([]);
