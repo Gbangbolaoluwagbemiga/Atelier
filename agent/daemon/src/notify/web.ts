@@ -323,8 +323,27 @@ async function post(n: WebNotification, escrowId: string): Promise<boolean> {
       }),
       signal: AbortSignal.timeout(8000),
     });
+
+    /*
+     * Say when it fails. It used to just return false.
+     *
+     * A rejected POST here means somebody is not being told their work came
+     * back, or that they were paid — and the only symptom was a quiet bell. It
+     * cost two rounds of looking for a bug in the notification LOGIC, which was
+     * correct both times; the delivery was what was broken.
+     */
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(
+        `[notify] ${n.type} to ${n.to.slice(0, 10)}… rejected: HTTP ${res.status} ${body.slice(0, 160)}`,
+      );
+    }
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[notify] ${n.type} to ${n.to.slice(0, 10)}… failed:`,
+      err instanceof Error ? err.message : err,
+    );
     return false;
   }
 }

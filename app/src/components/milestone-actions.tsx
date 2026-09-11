@@ -45,6 +45,16 @@ interface MilestoneActionsProps {
    * other one reverts with a contract error nobody asked for.
    */
   managedByAgent?: boolean;
+  /**
+   * True while we do not yet know who manages this job.
+   *
+   * `manager === null` is both "the client runs it" and "we have not asked
+   * yet", so gating on managedByAgent alone rendered Approve / Reject /
+   * Dispute for a beat on every agent-run job before the answer arrived — the
+   * wrong control, on the highest-stakes decision on the page, offered and
+   * then withdrawn. Waiting is the honest state and it has to look like one.
+   */
+  managerLoading?: boolean;
 }
 
 export function MilestoneActions({
@@ -60,6 +70,7 @@ export function MilestoneActions({
   escrowReleasedAmount,
   escrowTotalAmount,
   managedByAgent = false,
+  managerLoading = false,
 }: MilestoneActionsProps) {
   const { wallet } = useWeb3();
   const { writeContractAsync } = useWriteContract();
@@ -89,7 +100,8 @@ export function MilestoneActions({
       milestone.status === "submitted" &&
       isPayer &&
       escrowStatus === "active" &&
-      !managedByAgent;
+      !managedByAgent &&
+      !managerLoading;
     return canApprove;
   };
 
@@ -451,6 +463,14 @@ export function MilestoneActions({
           Said rather than hidden: an empty space under a submitted milestone
           reads as the app forgetting to render something.
         */}
+        {/* Still finding out. Better than guessing wrong for a beat. */}
+        {managerLoading && milestone.status === "submitted" && isPayer && !isProjectDisputed && (
+          <div className="rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Checking who reviews this milestone…
+          </div>
+        )}
+
         {managedByAgent && milestone.status === "submitted" && isPayer && !isProjectDisputed && (
           <div className="rounded-lg border border-[var(--actor-agent)]/40 bg-[var(--actor-agent)]/10 px-3 py-2.5 text-sm">
             <div className="font-medium flex items-center gap-2">

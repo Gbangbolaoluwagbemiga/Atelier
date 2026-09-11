@@ -91,7 +91,7 @@ export function EscrowCard({
   /* Who decides on this job's milestones. The card already renders
      AutopilotControl from the same fact; the milestone buttons need it too, so
      the client and the agent cannot both act on one submission. */
-  const { manager: jobManager } = useJobManager(Number(escrow.id));
+  const { manager: jobManager, loaded: jobManagerLoaded } = useJobManager(Number(escrow.id));
 
   // ── Surplus / stuck-funds detection ───────────────────────────────────────
   // addJobFunds increases totalAmount but doesn't create new milestones, so
@@ -611,6 +611,7 @@ export function EscrowCard({
                         milestoneIndex={idx}
                         milestone={milestone}
                         managedByAgent={jobManager !== null}
+                        managerLoading={!jobManagerLoaded}
                         isPayer={escrow.isClient || false}
                         isBeneficiary={escrow.isFreelancer || false}
                         escrowStatus={escrow.status}
