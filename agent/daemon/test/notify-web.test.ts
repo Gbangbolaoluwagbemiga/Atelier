@@ -170,11 +170,80 @@ describe("an escalation", () => {
 });
 
 /**
- * Progress is not news. Pushing "scoring applicants…" to the bell teaches
+ * BEING SCORED IS AN OUTCOME, NOT PROGRESS.
+ *
+ * This event used to be deliberately silent, filed with "scoring applicants…"
+ * under the rule that progress is not news. That rule is right and it does not
+ * cover this one: the score is a judgement ABOUT the person, it is the thing
+ * that decides whether they get the work, and it was written to the decision
+ * log in full while the applicant was told nothing at all.
+ */
+describe("telling an applicant what they scored", () => {
+  it("sends the score and the reasoning, to that applicant only", async () => {
+    const list = await recipientsFor(
+      event({
+        type: "application_scored",
+        decision: {
+          id: "d1",
+          taskId: "5",
+          type: "application_scored",
+          target: WORKER,
+          score: 25,
+          reasoning: "No evidence of vector illustration work in the cover letter.",
+          timestamp: 1,
+        },
+      }),
+    );
+
+    expect(list).toHaveLength(1);
+    expect(list[0].to).toBe(WORKER);
+    expect(list[0].title).toContain("25/100");
+    // The reasoning, not just the number — it is the only part they can act on.
+    expect(list[0].message).toContain("vector illustration");
+  });
+
+  it("never tells one applicant about another's score", async () => {
+    const list = await recipientsFor(
+      event({
+        type: "application_scored",
+        decision: {
+          id: "d1", taskId: "5", type: "application_scored",
+          target: WORKER, score: 90, reasoning: "Strong.", timestamp: 1,
+        },
+      }),
+    );
+    // A comparative ranking is the client's to see in full. Broadcasting it
+    // would publish a judgement about a named person to their competitors.
+    expect(list.map((n) => n.to)).toEqual([WORKER]);
+  });
+
+  it("still says something useful when the score is missing", async () => {
+    const list = await recipientsFor(
+      event({
+        type: "application_scored",
+        decision: {
+          id: "d1", taskId: "5", type: "application_scored",
+          target: WORKER, reasoning: "", timestamp: 1,
+        } as never,
+      }),
+    );
+    expect(list).toHaveLength(1);
+    expect(list[0].title).toMatch(/has been read/i);
+  });
+
+  it("has nobody to tell when the decision names no applicant", async () => {
+    expect(
+      await recipientsFor(event({ type: "application_scored", decision: undefined })),
+    ).toEqual([]);
+  });
+});
+
+/**
+ * Progress is not news. Pushing "fetching applications…" to the bell teaches
  * people to ignore it, and the bell is how they find out they were paid.
  */
 describe("what is deliberately not a notification", () => {
-  it.each(["applications_fetched", "application_scored", "brief_generated", "work_submitted"])(
+  it.each(["applications_fetched", "brief_generated", "work_submitted"])(
     "stays quiet on %s",
     async (type) => {
       expect(await recipientsFor(event({ type: type as AgentEvent["type"] }))).toEqual([]);

@@ -19,6 +19,7 @@ import { notifyWeb } from "./notify/web.js";
 import { createAtelierGateway } from "./circle/gateway.js";
 import { listWhitelistedTokens } from "./web3/tokens.js";
 import { adoptDelegatedJobs } from "./agent/adoptDelegated.js";
+import * as handover from "./agent/handover.js";
 import { createAtelierPaywall, ORDER_FEE_USDC } from "./circle/x402-seller.js";
 import * as atelier from "./web3/atelier.js";
 import { graphQuery, isGraphConfigured } from "./graph/client.js";
@@ -26,7 +27,7 @@ import { GET_JOB_APPLICATIONS, GET_JOB_BY_ID, type GQLEscrow } from "./graph/que
 import * as store from "./store.js";
 import * as workers from "./workers/service.js";
 import * as telegram from "./workers/telegram.js";
-import { setLlmPausedUntil } from "./llm-status.js";
+import { isLlmRateLimit, setLlmPausedUntil } from "./llm-status.js";
 import { extractStatedBudget, generateBrief } from "./agent/BriefGenerator.js";
 import { verifyGoogleIdToken } from "./workers/google-auth.js";
 
@@ -669,6 +670,131 @@ const server = http.createServer(async (req, res) => {
    * suggestions the product offered was guaranteed to be rejected, and the only
    * way to find out was to spend a model call on it.
    */
+  /*
+   * What Autopilot would judge this job by — before the client signs it over.
+   *
+   * Read-only and unauthenticated on purpose: it reveals nothing that is not
+   * already on-chain in the escrow's own description, and requiring a signature
+   * to read your own job's criteria would put a wallet popup in front of a
+   * dialog whose entire job is to show you something.
+   */
+  if (req.method === "GET" && url.pathname === "/api/handover/preview") {
+    const escrowId = (url.searchParams.get("escrowId") ?? "").trim();
+    if (!/^\d+$/.test(escrowId)) return json(res, 400, { error: "escrowId is required" });
+    try {
+      const { criteria, title } = await handover.previewCriteria(escrowId);
+      const prefs = handover.getPrefs(escrowId);
+      return json(res, 200, {
+        escrowId,
+        title,
+        criteria,
+        applicationWindowMinutes: prefs?.applicationWindowMinutes ?? config.applicationWindowMinutes,
+        defaultWindowMinutes: config.applicationWindowMinutes,
+        minWindowMinutes: handover.MIN_WINDOW_MINUTES,
+        maxWindowMinutes: handover.MAX_WINDOW_MINUTES,
+        approved: prefs !== null,
+      });
+    } catch (err) {
+      return json(res, 500, { error: clientError(err) });
+    }
+  }
+
+  /*
+   * The client fixing those criteria and their review window.
+   *
+   * Signed the same way a cancellation is, and for the same reason: the escrow
+   * id is printed on every card, so an unsigned endpoint would let anyone
+   * rewrite the standard another client's job is judged by. The sentence names
+   * the escrow and the window, so a signature for one hand-over cannot be
+   * replayed onto a different job or a different window.
+   */
+  if (req.method === "POST" && url.pathname === "/api/handover/prefs") {
+    try {
+      const b = JSON.parse(await readBody(req)) as {
+        escrowId?: string;
+        criteria?: unknown;
+        applicationWindowMinutes?: unknown;
+        address?: string;
+        message?: string;
+        signature?: string;
+      };
+      const escrowId = (b.escrowId ?? "").trim();
+      if (!/^\d+$/.test(escrowId)) return json(res, 400, { error: "escrowId is required" });
+
+      const windowMinutes = handover.clampWindow(b.applicationWindowMinutes);
+      if (windowMinutes === null) {
+        return json(res, 400, {
+          error: `Choose a review window between ${handover.MIN_WINDOW_MINUTES} minute and ${handover.MAX_WINDOW_MINUTES} minutes.`,
+        });
+      }
+
+      const esc = await handover.readEscrow(escrowId);
+      if (!b.address || b.address.toLowerCase() !== esc.depositor.toLowerCase()) {
+        return json(res, 403, { error: "Only the client who funded this job can set how Autopilot runs it." });
+      }
+
+      const expected = handover.handoverMessage(esc.depositor, escrowId, windowMinutes);
+      if (b.message !== expected) return json(res, 400, { error: "That signature does not match these settings." });
+      const valid = await verifyMessage({
+        address: esc.depositor as `0x${string}`,
+        message: expected,
+        signature: (b.signature ?? "0x") as `0x${string}`,
+      }).catch(() => false);
+      if (!valid) return json(res, 401, { error: "Signature did not verify — this address did not authorise these settings." });
+
+      const criteria = Array.isArray(b.criteria)
+        ? b.criteria.map((c) => String(c).trim()).filter(Boolean).slice(0, 20)
+        : [];
+
+      handover.savePrefs(escrowId, {
+        criteria,
+        applicationWindowMinutes: windowMinutes,
+        approvedAt: Date.now(),
+      });
+
+      /*
+       * A job already adopted keeps running under the old brief otherwise. The
+       * client changed the standard on a job the poller is already sweeping, so
+       * the brief it reads has to change with it.
+       */
+      const task = store.listTasks(300).find((t) => t.escrowId === escrowId);
+      if (task?.briefJson) {
+        try {
+          const brief = JSON.parse(task.briefJson) as Record<string, unknown>;
+          if (criteria.length > 0) brief.criteria = criteria;
+          brief.applicationWindowMinutes = windowMinutes;
+          store.updateTaskBrief(task.id, JSON.stringify(brief));
+        } catch {
+          /* leave a malformed brief alone rather than replacing it with a guess */
+        }
+      }
+
+      return json(res, 200, { ok: true, escrowId, applicationWindowMinutes: windowMinutes, criteria });
+    } catch (err) {
+      return json(res, 500, { error: clientError(err) });
+    }
+  }
+
+  /*
+   * What a freelancer is being measured against.
+   *
+   * Telegram has printed criteria for a job since the bot existed; the web card
+   * showed a title and a budget. Same job, two different descriptions of what
+   * it takes to get paid — and the web was the one missing the answer.
+   */
+  if (req.method === "GET" && url.pathname === "/api/jobs/criteria") {
+    const escrowId = (url.searchParams.get("escrowId") ?? "").trim();
+    if (!/^\d+$/.test(escrowId)) return json(res, 400, { error: "escrowId is required" });
+    const { criteria, source } = handover.criteriaFor(escrowId);
+    const prefs = handover.getPrefs(escrowId);
+    return json(res, 200, {
+      escrowId,
+      criteria,
+      source,
+      applicationWindowMinutes: prefs?.applicationWindowMinutes ?? config.applicationWindowMinutes,
+    });
+  }
+
   if (req.method === "GET" && url.pathname === "/api/limits") {
     return json(res, 200, {
       maxJobBudgetUsdc: config.maxJobBudgetUsdc,
@@ -2139,7 +2265,7 @@ async function pollOnce() {
       // wait to serve.
       if (/413|too large/i.test(msg)) {
         console.error("[poller] prompt too large for the model — this will not resolve by waiting");
-      } else if (/rate limit|rate_limit|429/i.test(msg)) {
+      } else if (isLlmRateLimit(msg)) {
         // Being rate-limited says nothing about the submission, so it must not
         // spend one of its five chances. Otherwise a quiet afternoon of 429s
         // exhausts a perfectly good milestone's retries and strands the payout.
@@ -2269,7 +2395,27 @@ void (async () => {
   }
 })();
 
-setInterval(() => void pollOnce(), 15_000);
+/*
+ * One sweep at a time.
+ *
+ * setInterval does not wait for an async callback, so a sweep slower than the
+ * tick overlaps the next one. Both then read the "already scored" marker before
+ * either writes it, and the same applicant is sent to the model twice.
+ *
+ * Seen live the moment the chain fallback started carrying reads: the log walk
+ * plus a scoring call runs past 15s, and escrow 7's single applicant was scored
+ * twice fifteen seconds apart — two rankings, two no_suitable_applicant rows,
+ * double the tokens, against a budget that was already rate-limited.
+ *
+ * Skipping a tick costs nothing: the next one is fifteen seconds away and the
+ * work is idempotent by design.
+ */
+let sweeping = false;
+setInterval(() => {
+  if (sweeping) return;
+  sweeping = true;
+  void pollOnce().finally(() => { sweeping = false; });
+}, 15_000);
 
 // Second door into the worker layer. Dormant without a bot token; the daemon
 // boots and runs identically either way.

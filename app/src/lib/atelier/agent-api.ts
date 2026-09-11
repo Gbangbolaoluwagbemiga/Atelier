@@ -424,3 +424,100 @@ export async function previewBrief(
 
 /** Where a brief waits while the client is sent to the funding wizard. */
 export const AUTOPILOT_BRIEF_KEY = "atelier:autopilot-brief";
+
+/* ── Handing a job to Autopilot: what it will judge by ───────────────────── */
+
+export interface HandoverPreview {
+  escrowId: string;
+  title: string;
+  /** The acceptance criteria Autopilot generated from what is on-chain. */
+  criteria: string[];
+  applicationWindowMinutes: number;
+  defaultWindowMinutes: number;
+  minWindowMinutes: number;
+  maxWindowMinutes: number;
+  /** True once the client has already fixed these for this job. */
+  approved: boolean;
+}
+
+/**
+ * What Autopilot would work from, before the client signs it over.
+ *
+ * The daemon caches this per escrow on purpose: it is an LLM call behind a
+ * dialog, and a client who closes and reopens it must be shown the same
+ * standard they were reading a moment ago, not a freshly reworded one.
+ */
+export async function fetchHandoverPreview(
+  escrowId: number,
+  signal?: AbortSignal,
+): Promise<HandoverPreview> {
+  return get<HandoverPreview>(`/api/handover/preview?escrowId=${escrowId}`, signal);
+}
+
+/** The sentence the client signs. Must match the daemon's byte for byte. */
+export function handoverMessage(
+  address: string,
+  escrowId: number,
+  windowMinutes: number,
+): string {
+  return (
+    `Atelier: hand job #${escrowId} to Autopilot\n` +
+    `Review window: ${windowMinutes} minute(s)\n` +
+    `Client: ${address.toLowerCase()}`
+  );
+}
+
+/**
+ * Fix the criteria and the review window for one job.
+ *
+ * Signed rather than open, for the reason cancellation is: escrow ids are
+ * printed on every card, so an unsigned endpoint would let a stranger rewrite
+ * the standard somebody else's job is judged by.
+ */
+export async function saveHandoverPrefs(opts: {
+  escrowId: number;
+  criteria: string[];
+  applicationWindowMinutes: number;
+  address: string;
+  message: string;
+  signature: string;
+}): Promise<void> {
+  if (!AUTOPILOT_CONFIGURED) throw new AutopilotUnavailable();
+
+  const res = await fetch(`${BASE}/api/handover/prefs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      escrowId: String(opts.escrowId),
+      criteria: opts.criteria,
+      applicationWindowMinutes: opts.applicationWindowMinutes,
+      address: opts.address,
+      message: opts.message,
+      signature: opts.signature,
+    }),
+  });
+
+  const payload = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(payload.error ?? `Autopilot returned ${res.status}`);
+}
+
+export interface JobCriteria {
+  criteria: string[];
+  /** Where they came from — "none" means this job genuinely has none written. */
+  source: "approved" | "brief" | "none";
+  applicationWindowMinutes: number;
+}
+
+/**
+ * What a freelancer is measured against on an agent-run job.
+ *
+ * Telegram printed these from the day the bot existed and the web card did not,
+ * so the same commission read as two different jobs depending on where you
+ * found it. This is the web's answer to the same question.
+ */
+export async function fetchJobCriteria(
+  escrowId: number,
+  signal?: AbortSignal,
+): Promise<JobCriteria> {
+  return get<JobCriteria>(`/api/jobs/criteria?escrowId=${escrowId}`, signal);
+}

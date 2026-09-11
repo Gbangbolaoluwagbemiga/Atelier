@@ -602,6 +602,26 @@ export function setWorkerOwnWallet(id: string, address: string): void {
   db.prepare(`UPDATE workers SET wallet_address = ?, wallet_id = NULL, mode = 'own' WHERE id = ?`).run(address, id);
 }
 
+/*
+ * The same table, for the things that are not counters.
+ *
+ * `value` has always been TEXT — setPollerInt stringifies on the way in and
+ * Number()s on the way out — so a caller that wants to keep a string does not
+ * need a second table. Used for a client's hand-over choices: the acceptance
+ * criteria they approved and how long they want applications left open.
+ */
+export function getPollerText(key: string): string | null {
+  const row = db.prepare(`SELECT value FROM poller_state WHERE key = ?`).get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setPollerText(key: string, value: string): void {
+  db.prepare(
+    `INSERT INTO poller_state (key, value, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+  ).run(key, value, Date.now());
+}
+
 export function setPollerInt(key: string, value: number): void {
   db.prepare(
     `INSERT INTO poller_state (key, value, updated_at) VALUES (?, ?, ?)

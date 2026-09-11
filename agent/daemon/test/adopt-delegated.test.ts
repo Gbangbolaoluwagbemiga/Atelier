@@ -36,7 +36,9 @@ vi.mock("../src/web3/atelier.js", () => ({
 vi.mock("../src/circle/circleSigner.js", () => ({
   createCircleSigner: () => ({ address: AGENT }),
 }));
-vi.mock("../src/store.js", () => ({ insertTask, deleteTask, listTasks }));
+const getPollerText = vi.fn(() => null as string | null);
+const setPollerText = vi.fn();
+vi.mock("../src/store.js", () => ({ insertTask, deleteTask, listTasks, getPollerText, setPollerText }));
 vi.mock("../src/agent/BriefGenerator.js", () => ({ generateBrief }));
 vi.mock("../src/config.js", () => ({
   config: {

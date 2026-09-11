@@ -23,6 +23,7 @@ import { getPublicClient } from "../web3/atelier.js";
 import { createCircleSigner } from "../circle/circleSigner.js";
 import * as store from "../store.js";
 import { generateBrief } from "./BriefGenerator.js";
+import { getPrefs } from "./handover.js";
 
 const abi = atelierAbi as Abi;
 
@@ -223,6 +224,22 @@ export async function adoptDelegatedJobs(): Promise<number> {
 
       const secondsLeft = Number(esc.deadline) - Math.floor(Date.now() / 1000);
       brief.durationDays = Math.max(1, Math.ceil(secondsLeft / 86_400));
+
+      /*
+       * What the client approved on screen wins over what the model just wrote.
+       *
+       * The hand-over dialog shows the criteria and asks for a review window
+       * before the signature. Regenerating here and ignoring that would mean
+       * the client read one standard, agreed to it, and the agent quietly
+       * worked to another — the exact surprise the dialog exists to prevent.
+       * They may also have edited the criteria, and an edit nobody honours is
+       * worse than no edit box at all.
+       */
+      const approved = getPrefs(String(id));
+      if (approved) {
+        if (approved.criteria.length > 0) brief.criteria = approved.criteria;
+        brief.applicationWindowMinutes = approved.applicationWindowMinutes;
+      }
 
       briefJson = JSON.stringify(brief);
     } catch (err) {

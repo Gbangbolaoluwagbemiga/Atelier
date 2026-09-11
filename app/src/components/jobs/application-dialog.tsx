@@ -25,6 +25,8 @@ import {
 } from "@/lib/api";
 import { CONTRACTS } from "@/lib/web3/config";
 import { formatTokenAmount } from "@/lib/utils";
+import { JobCriteria } from "@/components/jobs/job-criteria";
+import { useJobManager } from "@/hooks/use-job-manager";
 
 interface MilestonePreview {
   description: string;
@@ -54,6 +56,10 @@ export function ApplicationDialog({
   const { toast } = useToast();
   const { wallet } = useWeb3();
   const { signMessageAsync } = useSignMessage();
+
+  /* Who runs this job decides whether there is a rubric to show. A person
+     reading a description judges differently from an agent scoring criteria. */
+  const { manager } = useJobManager(job?.id != null ? Number(job.id) : null);
   const [coverLetter, setCoverLetter] = useState("");
   const [proposedTimeline, setProposedTimeline] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -199,6 +205,16 @@ export function ApplicationDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/*
+            Before the milestones, because it changes whether the job is worth
+            applying to at all — and before the cover letter, because it is what
+            the cover letter should be answering.
+          */}
+          <JobCriteria
+            escrowId={job?.id != null ? Number(job.id) : null}
+            managedByAgent={manager !== null}
+          />
+
           {/* Milestone breakdown for this job — count + per-milestone funds */}
           <div>
             <Label className="mb-1.5 block">

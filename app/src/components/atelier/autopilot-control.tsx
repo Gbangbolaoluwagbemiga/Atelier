@@ -12,13 +12,22 @@
  * who can see the exit is much more likely to try the thing at all.
  */
 
-import { useState, useEffect } from "react";
-import { fetchLimits } from "@/lib/atelier/agent-api";
+import { useState, useEffect, useCallback } from "react";
+import { useSignMessage } from "wagmi";
+import {
+  fetchLimits,
+  fetchHandoverPreview,
+  fetchJobCriteria,
+  handoverMessage,
+  saveHandoverPrefs,
+  type HandoverPreview,
+} from "@/lib/atelier/agent-api";
 import { motion } from "framer-motion";
-import { Bot, Loader2, User } from "lucide-react";
+import { Bot, Loader2, User, Clock, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useJobManager } from "@/hooks/use-job-manager";
+import { useWeb3 } from "@/contexts/web3-context";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +65,37 @@ function criteriaIn(description: string | undefined): string[] {
     .map((line) => line.replace(/^•\s*/, ""));
 }
 
+function humanMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * The review windows worth offering, and why these.
+ *
+ * A fixed three minutes was the only answer the product had, which is right for
+ * a demo and wrong for a real commission — nobody finds, reads and applies to a
+ * job in three minutes. These span "I am showing someone this" to "give people
+ * a proper chance", and the client picks once, at the moment they hand over.
+ */
+/** "30 minutes", "4 hours", "3 days" — whichever unit reads naturally. */
+function describeWindow(minutes: number): string {
+  if (minutes < 60) return minutes === 1 ? "a minute" : `${minutes} minutes`;
+  if (minutes < 1440) {
+    const h = Math.round(minutes / 60);
+    return h === 1 ? "an hour" : `${h} hours`;
+  }
+  const d = Math.round(minutes / 1440);
+  return d === 1 ? "a day" : `${d} days`;
+}
+
+const WINDOW_CHOICES: { minutes: number; label: string; hint: string }[] = [
+  { minutes: 3, label: "3 minutes", hint: "Demo pace — hires almost immediately" },
+  { minutes: 30, label: "30 minutes", hint: "A quick job someone is waiting on" },
+  { minutes: 240, label: "4 hours", hint: "Enough for a working afternoon" },
+  { minutes: 1440, label: "24 hours", hint: "A real shot for people in other timezones" },
+  { minutes: 4320, label: "3 days", hint: "Specialist work worth waiting for" },
+];
+
 export function AutopilotControl({
   escrowId,
   /** Hide entirely when the connected wallet is not this job's client. */
@@ -77,18 +117,61 @@ export function AutopilotControl({
   const [windowMinutes, setWindowMinutes] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
-    fetchLimits()
-      .then((l) => { if (live) setWindowMinutes(l.applicationWindowMinutes ?? null); })
-      .catch(() => {});
+
+    /*
+     * This job's window, not the deployment's.
+     *
+     * It read /api/limits, which is the global default — so a client who had
+     * asked for a day still saw the card promise three minutes. The per-job
+     * answer lives with the job's criteria; fall back to the default only when
+     * the job has no answer of its own.
+     */
+    fetchJobCriteria(escrowId)
+      .then((c) => { if (live) setWindowMinutes(c.applicationWindowMinutes ?? null); })
+      .catch(() => {
+        fetchLimits()
+          .then((l) => { if (live) setWindowMinutes(l.applicationWindowMinutes ?? null); })
+          .catch(() => {});
+      });
     return () => { live = false; };
-  }, []);
+  }, [escrowId]);
 
   const { manager, loaded, busy, delegate, revoke } = useJobManager(escrowId);
+  const { wallet } = useWeb3();
   const { toast } = useToast();
+  const { signMessageAsync } = useSignMessage();
   const [pending, setPending] = useState<"delegate" | "revoke" | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  const criteria = criteriaIn(projectDescription);
+  /*
+   * What the agent will actually judge by, generated from the escrow before the
+   * client signs anything.
+   *
+   * The dialog used to say a hand-over "may judge against wording you have not
+   * seen" — which was true, and is a strange thing to ask somebody to accept.
+   * The criteria existed; adoptDelegated generated them the moment the
+   * delegation landed. They were simply generated after the point of no return.
+   */
+  const [preview, setPreview] = useState<HandoverPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [chosenWindow, setChosenWindow] = useState<number | null>(null);
+
+  const loadPreview = useCallback(() => {
+    if (!AUTOPILOT_CONFIGURED) return;
+    setPreviewError(null);
+    setPreview(null);
+    fetchHandoverPreview(escrowId)
+      .then((p) => {
+        setPreview(p);
+        setChosenWindow((w) => w ?? p.applicationWindowMinutes);
+      })
+      .catch((e) => setPreviewError(humanMessage(e)));
+  }, [escrowId]);
+
+  /* Written into the escrow at funding time — the fallback when the daemon
+     cannot be reached to generate anything. */
+  const storedCriteria = criteriaIn(projectDescription);
+  const criteria = preview?.criteria.length ? preview.criteria : storedCriteria;
 
   // Below every hook, so the guard cannot change how many run.
   if (!isClient) return null;
@@ -98,9 +181,52 @@ export function AutopilotControl({
     setPending("delegate");
     try {
       await delegate();
+
+      /*
+       * Record the window and criteria only AFTER the delegation is mined.
+       *
+       * Doing it first would leave settings behind for a job that never got
+       * handed over — if the client rejects the wallet prompt, or the
+       * transaction reverts, the daemon would be holding instructions for a job
+       * it does not manage.
+       *
+       * Deliberately not fatal. The hand-over itself is on-chain and already
+       * succeeded; failing the whole action here would tell a client their
+       * delegation did not work when it plainly did. They lose the custom
+       * window, not the job, so say exactly that.
+       */
+      const wantsCustom =
+        preview !== null &&
+        chosenWindow !== null &&
+        chosenWindow !== preview.defaultWindowMinutes;
+
+      if (wantsCustom && wallet.address) {
+        try {
+          const message = handoverMessage(wallet.address, escrowId, chosenWindow);
+          const signature = await signMessageAsync({ message });
+          await saveHandoverPrefs({
+            escrowId,
+            criteria: preview.criteria,
+            applicationWindowMinutes: chosenWindow,
+            address: wallet.address,
+            message,
+            signature,
+          });
+        } catch (e) {
+          toast({
+            title: "Autopilot is running this job",
+            description: `Your review window wasn't saved (${humanMessage(e)}), so it will use the default. Everything else is set.`,
+          });
+          return;
+        }
+      }
+
+      const windowLabel =
+        chosenWindow !== null ? describeWindow(chosenWindow) : null;
       toast({
         title: "Autopilot is running this job",
         description:
+          (windowLabel ? `Applications stay open for ${windowLabel}. ` : "") +
           "It can hire, review and pay. It can never move your money elsewhere, and disputes stay yours.",
       });
     } catch (e) {
@@ -108,6 +234,13 @@ export function AutopilotControl({
     } finally {
       setPending(null);
     }
+  };
+
+  /* Generate the criteria when the dialog opens, not on mount: it is an LLM
+     call, and most viewings of this card never open the dialog at all. */
+  const openHandover = () => {
+    setConfirming(true);
+    if (!preview) loadPreview();
   };
 
   const onRevoke = async () => {
@@ -146,7 +279,15 @@ export function AutopilotControl({
       transition={{ duration: 0.25 }}
       className={`${onAutopilot ? "actor-agent" : "actor-human"} rounded-xl actor-panel p-4 sm:p-5`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      {/*
+        Identity and action on one row; everything explanatory below it at full
+        width.
+
+        The button used to sit BESIDE the prose, which squeezed the paragraph
+        into a narrow column and made the card grow tall enough to push the rest
+        of the job off the screen. The text is the part that wants width.
+      */}
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="actor-chip">
             <span className="actor-dot" />
@@ -156,8 +297,34 @@ export function AutopilotControl({
           <h3 className="font-display text-lg font-semibold mt-2.5 actor-text">
             {onAutopilot ? "Autopilot is running this job" : "You are running this job"}
           </h3>
+        </div>
 
-          <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed max-w-prose">
+        <Button
+          variant={onAutopilot ? "outline" : "default"}
+          size="sm"
+          onClick={onAutopilot ? onRevoke : openHandover}
+          disabled={busy || (!onAutopilot && !AUTOPILOT_CONFIGURED)}
+          className={
+            onAutopilot
+              ? "shrink-0"
+              : "shrink-0 bg-[var(--actor-agent)] text-[var(--actor-agent-fg)] hover:bg-[var(--actor-agent)] hover:opacity-90"
+          }
+        >
+          {pending !== null && (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+          )}
+          {pending === null &&
+            (onAutopilot ? (
+              <User className="h-4 w-4 mr-2" aria-hidden="true" />
+            ) : (
+              <Bot className="h-4 w-4 mr-2" aria-hidden="true" />
+            ))}
+          {onAutopilot ? "Take back control" : "Hand to Autopilot"}
+        </Button>
+      </div>
+
+      <div>
+          <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
             {onAutopilot ? (
               <>
                 It briefs, hires, reviews and releases payment as{" "}
@@ -180,7 +347,7 @@ export function AutopilotControl({
                   <>
                     {" "}It leaves applications open for{" "}
                     <strong className="text-foreground">
-                      {windowMinutes === 1 ? "a minute" : `${windowMinutes} minutes`}
+                      {describeWindow(windowMinutes)}
                     </strong>{" "}
                     and then reads them all together, rather than hiring
                     whoever happened to apply first. Anyone who applies after
@@ -192,29 +359,6 @@ export function AutopilotControl({
               "You write the brief, choose the freelancer, and approve each milestone yourself."
             )}
           </p>
-        </div>
-
-        <Button
-          variant={onAutopilot ? "outline" : "default"}
-          onClick={onAutopilot ? onRevoke : () => setConfirming(true)}
-          disabled={busy || (!onAutopilot && !AUTOPILOT_CONFIGURED)}
-          className={
-            onAutopilot
-              ? "shrink-0"
-              : "shrink-0 bg-[var(--actor-agent)] text-[var(--actor-agent-fg)] hover:bg-[var(--actor-agent)] hover:opacity-90"
-          }
-        >
-          {pending !== null && (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-          )}
-          {pending === null &&
-            (onAutopilot ? (
-              <User className="h-4 w-4 mr-2" aria-hidden="true" />
-            ) : (
-              <Bot className="h-4 w-4 mr-2" aria-hidden="true" />
-            ))}
-          {onAutopilot ? "Take back control" : "Hand to Autopilot"}
-        </Button>
       </div>
 
       {!onAutopilot && !AUTOPILOT_CONFIGURED && (
@@ -260,32 +404,103 @@ export function AutopilotControl({
             )}
 
             <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1.5">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
                 It approves or rejects against
               </div>
+
+              {/*
+                Generated from the escrow before the signature, not after it.
+
+                This block used to say the agent "may judge against wording you
+                have not seen" — accurate, and an odd thing to ask anyone to
+                accept. The criteria were always written; they were just written
+                on the far side of the point of no return. Now the same
+                generator runs first, and what is on screen is what gets stored.
+              */}
               {criteria.length > 0 ? (
-                <ul className="space-y-1 text-muted-foreground">
-                  {criteria.map((c, i) => (
-                    <li key={i}>• {c}</li>
-                  ))}
-                </ul>
-              ) : (
-                /*
-                 * The honest case, and the reason this dialog exists. A job
-                 * created by hand stores only free text, so there are no agreed
-                 * criteria for the agent to read and it will derive its own
-                 * from the description. Say so rather than letting the client
-                 * find out when work is rejected against a standard they never
-                 * wrote.
-                 */
+                <>
+                  <ul className="space-y-1 text-muted-foreground">
+                    {criteria.map((c, i) => (
+                      <li key={i}>• {c}</li>
+                    ))}
+                  </ul>
+                  {preview?.criteria.length ? (
+                    <p className="text-xs text-muted-foreground/80 mt-2">
+                      Written by Autopilot from your title and description.
+                      Freelancers see these on the job before they apply.
+                    </p>
+                  ) : null}
+                </>
+              ) : previewError ? (
                 <p className="text-muted-foreground">
-                  This job has no acceptance criteria written into it — jobs
-                  posted through Autopilot store them, jobs created by hand do
-                  not. The agent will work them out from your description, so it
-                  may judge against wording you have not seen. You can take the
-                  job back at any point.
+                  Autopilot could not be reached to draft criteria
+                  ({previewError}). It will still work them out from your
+                  description when it picks the job up.
+                </p>
+              ) : preview === null && AUTOPILOT_CONFIGURED ? (
+                <p className="text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  Autopilot is drafting the criteria for this job…
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  This job has no acceptance criteria written into it. The agent
+                  will work them out from your description. You can take the job
+                  back at any point.
                 </p>
               )}
+            </div>
+
+            {/*
+              HOW LONG APPLICATIONS STAY OPEN.
+
+              Three minutes was hard-coded, which is a demo number: nobody finds,
+              reads and applies to a real commission inside three minutes, so
+              every job was effectively hired from whoever happened to be
+              watching. The daemon already honoured a per-job window — the brief
+              has carried the field all along — and nothing ever set it. This is
+              the moment to ask, because it is the moment the client is deciding
+              how much of the job to hand over.
+            */}
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                Leave applications open for
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {WINDOW_CHOICES.map((c) => {
+                  const active = chosenWindow === c.minutes;
+                  return (
+                    <button
+                      key={c.minutes}
+                      type="button"
+                      onClick={() => setChosenWindow(c.minutes)}
+                      aria-pressed={active}
+                      className={`text-left rounded-lg border px-3 py-2 transition-colors ${
+                        active
+                          ? "border-[var(--actor-agent)] bg-[var(--actor-agent)]/10"
+                          : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="font-medium">{c.label}</div>
+                      <div className="text-xs text-muted-foreground">{c.hint}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Autopilot reads every application together when the window
+                closes, so nobody wins by refreshing fastest. Anyone who applies
+                later is still scored on the next pass.
+                {preview && chosenWindow !== null &&
+                  chosenWindow !== preview.defaultWindowMinutes && (
+                    <>
+                      {" "}Changing this from the default asks for one signature —
+                      free, and no transaction.
+                    </>
+                  )}
+              </p>
             </div>
           </div>
 

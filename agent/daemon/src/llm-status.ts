@@ -34,3 +34,17 @@ export function llmPauseRemaining(): string {
   const mins = Math.ceil(ms / 60_000);
   return mins <= 1 ? "about a minute" : `about ${mins} minutes`;
 }
+
+/**
+ * True only for a rate limit that came from the language model.
+ *
+ * The poller's catch block sees every failure a task can produce, and the test
+ * used to be a bare /429/ on the message. "GraphQL HTTP 429" matched it, so The
+ * Graph rate-limiting the daemon paused the LLM for a minute and broke out of
+ * the task loop — a subgraph problem taking the agent's brain offline with it.
+ * Observed live for 55 minutes straight.
+ */
+export function isLlmRateLimit(msg: string): boolean {
+  if (/graphql|subgraph|\[graph\]/i.test(msg)) return false;
+  return /rate limit|rate_limit|429/i.test(msg);
+}

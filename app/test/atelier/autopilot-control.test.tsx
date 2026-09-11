@@ -35,9 +35,40 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 const fetchLimits = vi.fn().mockResolvedValue({ applicationWindowMinutes: 3 });
+/* The per-job window, which the card now prefers over the global default: a
+   client who asked for a day must not be shown the deployment's three minutes. */
+const fetchJobCriteria = vi.fn().mockResolvedValue({
+  criteria: [],
+  source: "none",
+  applicationWindowMinutes: 3,
+});
+const fetchHandoverPreview = vi.fn().mockResolvedValue({
+  escrowId: "1",
+  title: "A job",
+  criteria: [],
+  applicationWindowMinutes: 3,
+  defaultWindowMinutes: 3,
+  minWindowMinutes: 1,
+  maxWindowMinutes: 10080,
+  approved: false,
+});
+const saveHandoverPrefs = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/atelier/agent-api", () => ({
   AUTOPILOT_CONFIGURED: true,
   fetchLimits,
+  fetchJobCriteria,
+  fetchHandoverPreview,
+  saveHandoverPrefs,
+  handoverMessage: (a: string, id: number, w: number) =>
+    `Atelier: hand job #${id} to Autopilot\nReview window: ${w} minute(s)\nClient: ${a.toLowerCase()}`,
+}));
+
+/* The card signs only when the client changes the window from the default. */
+const signMessageAsync = vi.fn().mockResolvedValue("0xsig");
+vi.mock("wagmi", () => ({ useSignMessage: () => ({ signMessageAsync }) }));
+
+vi.mock("@/contexts/web3-context", () => ({
+  useWeb3: () => ({ wallet: { address: "0xc11e00000000000000000000000000000000000a" } }),
 }));
 
 const { AutopilotControl } = await import(
@@ -58,6 +89,28 @@ beforeEach(() => {
   };
   delegate.mockClear();
   revoke.mockClear();
+
+  /* Reset the resolved values too, not just the call lists. A test that sets a
+     persistent mockRejectedValue otherwise leaks its outage into every test
+     after it, and they fail for a reason that has nothing to do with them. */
+  signMessageAsync.mockClear().mockResolvedValue("0xsig");
+  saveHandoverPrefs.mockClear().mockResolvedValue(undefined);
+  fetchLimits.mockClear().mockResolvedValue({ applicationWindowMinutes: 3 });
+  fetchJobCriteria.mockClear().mockResolvedValue({
+    criteria: [],
+    source: "none",
+    applicationWindowMinutes: 3,
+  });
+  fetchHandoverPreview.mockClear().mockResolvedValue({
+    escrowId: "1",
+    title: "A job",
+    criteria: [],
+    applicationWindowMinutes: 3,
+    defaultWindowMinutes: 3,
+    minWindowMinutes: 1,
+    maxWindowMinutes: 10080,
+    approved: false,
+  });
 });
 
 describe("who may see it", () => {
@@ -195,6 +248,116 @@ describe("what the client is shown before handing over", () => {
     await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
     expect(delegate).toHaveBeenCalledOnce();
   });
+
+  /*
+   * THE CRITERIA ARE WRITTEN BEFORE THE SIGNATURE, NOT AFTER IT.
+   *
+   * The agent always generated them — adoptDelegated ran the brief generator
+   * the moment the delegation landed on-chain. It ran on the far side of the
+   * point of no return, so this dialog could only warn that the client "may be
+   * judged against wording you have not seen". Now the same generator runs
+   * first and the client reads the actual standard.
+   */
+  it("shows the criteria Autopilot drafted, over anything stored in the text", async () => {
+    fetchHandoverPreview.mockResolvedValue({
+      escrowId: "1",
+      title: "A job",
+      criteria: ["Ships as a Figma file", "Two rounds of revision included"],
+      applicationWindowMinutes: 3,
+      defaultWindowMinutes: 3,
+      minWindowMinutes: 1,
+      maxWindowMinutes: 10080,
+      approved: false,
+    });
+
+    render(<AutopilotControl escrowId={1} isClient projectDescription={WITH_CRITERIA} />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+
+    expect(await screen.findByText(/Ships as a Figma file/)).toBeInTheDocument();
+    expect(screen.getByText(/Freelancers see these on the job/i)).toBeInTheDocument();
+  });
+
+  it("admits it when Autopilot cannot be reached to draft them", async () => {
+    // Better than an empty list, which reads as "this job has no standard".
+    fetchHandoverPreview.mockRejectedValue(new Error("daemon offline"));
+
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Just make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+
+    expect(await screen.findByText(/could not be reached to draft criteria/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * HOW LONG APPLICATIONS STAY OPEN.
+ *
+ * Three minutes was hard-coded — a demo number. Nobody finds, reads and applies
+ * to a real commission in three minutes, so in practice every job went to
+ * whoever happened to be watching the board. The daemon has honoured a per-job
+ * window all along; nothing ever set it.
+ */
+describe("choosing the review window", () => {
+  it("offers the choice at the moment the client hands the job over", async () => {
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+
+    expect(await screen.findByRole("button", { name: /24 hours/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /3 minutes/i })).toBeInTheDocument();
+  });
+
+  it("costs no signature when the client keeps the default", async () => {
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await screen.findByRole("button", { name: /24 hours/i });
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(delegate).toHaveBeenCalled());
+    // The client already signed a transaction; a second popup that changes
+    // nothing is exactly the noise they complained about.
+    expect(signMessageAsync).not.toHaveBeenCalled();
+    expect(saveHandoverPrefs).not.toHaveBeenCalled();
+  });
+
+  it("records a changed window against the job, signed", async () => {
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /24 hours/i }));
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(saveHandoverPrefs).toHaveBeenCalled());
+    expect(saveHandoverPrefs.mock.calls[0][0]).toMatchObject({
+      escrowId: 1,
+      applicationWindowMinutes: 1440,
+    });
+  });
+
+  it("saves the window only after the hand-over is actually mined", async () => {
+    // Otherwise the daemon holds instructions for a job it does not manage —
+    // the client rejected the wallet prompt, or the transaction reverted.
+    delegate.mockRejectedValueOnce(new Error("user rejected"));
+
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /24 hours/i }));
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(delegate).toHaveBeenCalled());
+    expect(saveHandoverPrefs).not.toHaveBeenCalled();
+  });
+
+  it("keeps the job when only the window fails to save", async () => {
+    // The delegation is on-chain and already succeeded. Telling the client it
+    // failed would be false, and would send them to undo something that worked.
+    saveHandoverPrefs.mockRejectedValueOnce(new Error("daemon offline"));
+
+    render(<AutopilotControl escrowId={1} isClient projectDescription="Make me a logo." />);
+    await userEvent.click(screen.getByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /24 hours/i }));
+    await userEvent.click(screen.getByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(saveHandoverPrefs).toHaveBeenCalled());
+    expect(delegate).toHaveBeenCalledOnce();
+  });
 });
 
 /**
@@ -231,15 +394,35 @@ describe("when it will decide", () => {
     expect(await screen.findByText(/still picked up on the next pass/i)).toBeInTheDocument();
   });
 
-  it("reads the window from the daemon rather than assuming it", async () => {
+  /*
+   * THIS job's window, not the deployment's.
+   *
+   * The card read /api/limits, which is the global default, so a client who had
+   * asked for a day was still shown "3 minutes" on their own job — the one
+   * number on this card that the client themselves chose, reported wrong.
+   */
+  it("reads the window from the job, not the global default", async () => {
+    fetchJobCriteria.mockResolvedValue({
+      criteria: [],
+      source: "approved",
+      applicationWindowMinutes: 1440,
+    });
+    hookState.manager = MANAGER;
+    render(<AutopilotControl escrowId={1} isClient />);
+    expect(await screen.findByText(/a day/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the deployment default when the job has no answer", async () => {
+    fetchJobCriteria.mockRejectedValue(new Error("no such job"));
     fetchLimits.mockResolvedValue({ applicationWindowMinutes: 60 });
     hookState.manager = MANAGER;
     render(<AutopilotControl escrowId={1} isClient />);
-    expect(await screen.findByText(/60 minutes/)).toBeInTheDocument();
+    expect(await screen.findByText(/an hour/i)).toBeInTheDocument();
   });
 
   /* An unreachable daemon must not put a made-up number on the screen. */
   it("says nothing about timing when the daemon cannot be reached", async () => {
+    fetchJobCriteria.mockRejectedValue(new Error("offline"));
     fetchLimits.mockRejectedValue(new Error("offline"));
     hookState.manager = MANAGER;
     render(<AutopilotControl escrowId={1} isClient />);

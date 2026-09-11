@@ -16,7 +16,12 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 vi.mock("@/lib/web3/contract-service", () => ({
-  contractService: { getRating: vi.fn().mockResolvedValue(null) },
+  contractService: {
+    getRating: vi.fn().mockResolvedValue(null),
+    // The apply dialog asks who manages the job, to decide whether there are
+    // agent criteria to show. null = the client runs it themselves.
+    getJobManager: vi.fn().mockResolvedValue(null),
+  },
 }));
 
 // Everything below only mounts when the card is expanded — stub it out so

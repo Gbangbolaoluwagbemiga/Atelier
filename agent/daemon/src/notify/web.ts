@@ -177,6 +177,43 @@ export async function recipientsFor(event: AgentEvent): Promise<WebNotification[
     }
 
     /*
+     * YOUR APPLICATION WAS READ, AND HERE IS WHAT IT SCORED.
+     *
+     * The score existed from the first day an agent hired anyone. It decided
+     * who got the work, it was written into the decision log with its full
+     * reasoning, and the person it was about was never told. They watched a job
+     * they had applied to and saw nothing happen.
+     *
+     * Only ever to the applicant themselves. A comparative ranking is the
+     * client's to see in full — telling every applicant what the others scored
+     * would publish a judgement about a named person to their competitors.
+     */
+    case "application_scored": {
+      if (!worker) break;
+      const score = event.decision?.score;
+      const reasoning = (event.decision?.reasoning ?? "").trim();
+
+      out.push({
+        to: worker,
+        type: "application",
+        title:
+          typeof score === "number"
+            ? `Your application scored ${score}/100`
+            : "Your application has been read",
+        /*
+         * The reasoning, not just the number. A bare score tells someone they
+         * lost without telling them anything they can use; the agent already
+         * wrote why, and it is the only part of this that helps them write a
+         * better application next time.
+         */
+        message: reasoning
+          ? `${reasoning.slice(0, 380)}${reasoning.length > 380 ? "…" : ""}`
+          : "The agent has read your application against the job's acceptance criteria.",
+      });
+      break;
+    }
+
+    /*
      * The freelancer's money moved. This is the single most important thing the
      * bell has ever had to say, and it was the one it could not say at all when
      * the agent was the one approving.
