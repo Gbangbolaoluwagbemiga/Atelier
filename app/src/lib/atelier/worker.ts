@@ -58,6 +58,14 @@ export interface Worker {
   signedInAs?: string | null;
   /** True when this signed an existing person in rather than creating them. */
   returning?: boolean;
+  /**
+   * Their on-chain reputation, or null when it could not be read.
+   *
+   * A wallet user's dashboard has always shown this. A managed worker — the
+   * half of the marketplace that most needs a track record, because they
+   * arrived with no wallet and no history — had nowhere to build one.
+   */
+  rating?: { average: number; count: number } | null;
 }
 
 export interface Quest {

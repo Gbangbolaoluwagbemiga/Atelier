@@ -24,12 +24,13 @@
  */
 
 import { useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Briefcase, Hammer, Loader2, Send } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
+import { currentWorkerId } from "@/lib/atelier/worker";
 import { useFreelancerStatus } from "@/hooks/use-freelancer-status";
 import { useJobCreatorStatus } from "@/hooks/use-job-creator-status";
 import {
@@ -92,6 +93,23 @@ export default function MyJobsPage() {
       setParams({ tab: side }, { replace: true });
     }
   }, [loading, tabbed, requested, side, setParams]);
+
+  /*
+   * A MANAGED WORKER IS SIGNED IN, JUST NOT WITH A WALLET.
+   *
+   * This page assumes a connected wallet, which is right for the client side —
+   * you cannot hire without signing. But a freelancer on a managed wallet holds
+   * no key and never connects one, so every link that lands here dead-ended
+   * them on "Connect a wallet to see your jobs". Including the notification
+   * telling them a dispute over their own work had been decided: they tapped
+   * it, and Atelier told them they were nobody.
+   *
+   * Their jobs live on their own board. Send them there rather than explaining
+   * why this page cannot help.
+   */
+  if (!wallet.isConnected && currentWorkerId()) {
+    return <Navigate to="/get-hired" replace />;
+  }
 
   if (!wallet.isConnected) {
     return (

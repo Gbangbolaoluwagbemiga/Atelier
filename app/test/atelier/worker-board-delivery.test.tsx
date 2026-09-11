@@ -488,3 +488,60 @@ describe("attaching a file", () => {
     expect(submit.mock.calls[0][0].description).toBe("Done, see the repo.");
   });
 });
+
+
+/**
+ * A TRACK RECORD, FOR THE SIDE THAT ARRIVES WITHOUT ONE.
+ *
+ * The client's dashboard has always carried finished counts and a rating. A
+ * managed worker saw a balance and a list of tasks — and they are the half of
+ * the marketplace that most needs somewhere to build a reputation, because they
+ * turned up with no wallet and no history at all.
+ */
+describe("the standing facts about a worker", () => {
+  it("counts what is finished, running and still waiting on a decision", async () => {
+    myWork.mockResolvedValue([
+      { escrowId: "1", title: "a", budget: 1, status: "", icon: "", state: "completed" },
+      { escrowId: "2", title: "b", budget: 1, status: "", icon: "", state: "hired", canSubmit: true },
+      { escrowId: "3", title: "c", budget: 1, status: "", icon: "", state: "applied" },
+      { escrowId: "4", title: "d", budget: 1, status: "", icon: "", state: "lost" },
+    ]);
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    const finished = (await screen.findByText("Finished")).parentElement!;
+    expect(finished).toHaveTextContent("1");
+    expect(screen.getByText("In progress").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Applied").parentElement).toHaveTextContent("1");
+  });
+
+  it("shows the rating once there is one", async () => {
+    render(
+      <WorkerBoard
+        worker={{ ...WORKER, rating: { average: 4.5, count: 2 } } as never}
+        onWorkerChanged={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("4.5")).toBeInTheDocument();
+    expect(screen.getByText("2 jobs rated")).toBeInTheDocument();
+  });
+
+  it("says a first-timer's rating is still to come, not zero", async () => {
+    // A row of zeroes should read as a starting point, not a verdict.
+    render(
+      <WorkerBoard
+        worker={{ ...WORKER, rating: { average: 0, count: 0 } } as never}
+        onWorkerChanged={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("after your first job")).toBeInTheDocument();
+    expect(screen.getByText("Rating").parentElement).toHaveTextContent("—");
+  });
+
+  it("draws nothing rather than failing when the rating cannot be read", async () => {
+    render(<WorkerBoard worker={{ ...WORKER, rating: null } as never} onWorkerChanged={() => {}} />);
+    expect(await screen.findByText("Rating")).toBeInTheDocument();
+  });
+});

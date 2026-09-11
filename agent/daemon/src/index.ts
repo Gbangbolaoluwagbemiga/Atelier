@@ -1583,9 +1583,29 @@ const server = http.createServer(async (req, res) => {
        * seeing the email attached to it exposes nothing the id did not.
        */
       const { balance } = await workers.balance(id);
+
+      /*
+       * The standing facts about this person, which their board did not have.
+       *
+       * A wallet user's dashboard shows what they have finished and how they
+       * are rated; a managed worker saw a balance and a list. Same marketplace,
+       * and the half of it that most needs a track record — somebody with no
+       * wallet and no history — was the half with nowhere to build one.
+       *
+       * Non-fatal: a rating that cannot be read is left null and the board
+       * simply does not draw it, rather than the page failing over a star.
+       */
+      let rating: { average: number; count: number } | null = null;
+      try {
+        rating = await atelier.getAverageRating(worker.walletAddress as `0x${string}`);
+      } catch {
+        /* leave it null */
+      }
+
       return json(res, 200, {
         id: worker.id, handle: worker.handle, address: worker.walletAddress,
         mode: worker.mode, balance, signedInAs: worker.channelRef ?? null,
+        rating,
       });
     } catch {
       return json(res, 200, {
@@ -1836,10 +1856,18 @@ const scoredCountKey = (escrowId: string) => `scored_applications:${escrowId}`;
  */
 async function rateFreelancer(escrowId: string, brief: { milestones?: unknown[] }): Promise<void> {
   try {
-    const hire = store
-      .listDecisions(300)
-      .find((d: { task_id?: string; type?: string; target?: string }) => d.task_id === escrowId && d.type === "applicant_accepted" && d.target);
-    if (!hire?.target) return;
+    /*
+     * WHO WAS HIRED IS A CHAIN FACT.
+     *
+     * This looked for the agent's own applicant_accepted decision, so a job
+     * the CLIENT hired for by hand produced no rating at all — the freelancer
+     * did the work, got paid, and walked away with nothing on their record.
+     * The same reading cost a freelancer their whole board a few commits ago;
+     * it is the escrow that knows who is on it.
+     */
+    const esc = (await atelier.getEscrow(BigInt(escrowId))) as { beneficiary?: string };
+    const freelancer = esc.beneficiary;
+    if (!freelancer || /^0x0+$/i.test(freelancer)) return;
 
     const reviews = store
       .listDecisions(300)
@@ -1855,7 +1883,7 @@ async function rateFreelancer(escrowId: string, brief: { milestones?: unknown[] 
         : `Completed after ${rejections} revision round(s); all ${milestones} milestone(s) ultimately accepted.`;
 
     const txHash = await atelier.submitRating(BigInt(escrowId), score, review);
-    console.log(`[rating] ${hire.target} rated ${score}/5 for escrow ${escrowId} (${txHash})`);
+    console.log(`[rating] ${freelancer} rated ${score}/5 for escrow ${escrowId} (${txHash})`);
     broadcast({
       type: "task_completed",
       message: `On-chain rating recorded: ${score}/5 — ${review}`,

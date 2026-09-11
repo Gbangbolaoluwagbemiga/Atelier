@@ -120,6 +120,10 @@ export function WorkerBoard({
     return () => clearInterval(id);
   }, [refresh]);
 
+  const finished = work.filter((w) => w.state === "completed").length;
+  const inProgress = work.filter((w) => w.state === "hired").length;
+  const applied = work.filter((w) => w.state === "applied").length;
+
   /* Once, after the first load. Any later move is the person's own, and a poll
      that yanked them back to the other tab mid-typing would be maddening. */
   useEffect(() => {
@@ -204,6 +208,32 @@ export function WorkerBoard({
   return (
     <div className="space-y-10">
       <Earnings worker={worker} onWithdrawn={() => void refresh()} />
+
+      {/*
+        WHAT THEY HAVE DONE, AND HOW IT WENT.
+
+        The client's dashboard has always carried these; a managed worker saw a
+        balance and a list of tasks. Same marketplace, and the side that arrives
+        with no wallet and no history is the side that most needs somewhere to
+        build one.
+
+        Read from the work already loaded, not fetched again — the numbers
+        cannot disagree with the list they are describing.
+      */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Stat label="Finished" value={String(finished)} hint="paid in full" />
+        <Stat label="In progress" value={String(inProgress)} hint="on your bench" />
+        <Stat label="Applied" value={String(applied)} hint="awaiting a decision" />
+        <Stat
+          label="Rating"
+          value={worker.rating && worker.rating.count > 0 ? worker.rating.average.toFixed(1) : "—"}
+          hint={
+            worker.rating && worker.rating.count > 0
+              ? `${worker.rating.count} job${worker.rating.count === 1 ? "" : "s"} rated`
+              : "after your first job"
+          }
+        />
+      </div>
 
       {/*
         ONE AT A TIME, THE WAY MY JOBS DOES IT.
@@ -785,5 +815,20 @@ function Earnings({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * One standing number. Deliberately plain — these are facts about somebody's
+ * working life, and dressing them up would make a first-timer's row of zeroes
+ * feel like a verdict rather than a starting point.
+ */
+function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
+  return (
+    <div className="rounded-xl glass p-3.5">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-display text-2xl font-semibold mt-0.5">{value}</div>
+      <div className="text-xs text-muted-foreground mt-0.5">{hint}</div>
+    </div>
   );
 }
