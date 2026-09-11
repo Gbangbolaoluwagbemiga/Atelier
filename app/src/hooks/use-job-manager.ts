@@ -64,6 +64,29 @@ const managerWatchers = new Map<number, Set<(v: string | null) => void>>();
  */
 export const JOB_MANAGER_EVENT = "atelier:job-manager";
 
+/**
+ * What this browser has learned first-hand about who manages which job.
+ *
+ * The job board reads the daemon's task table, which lags a hand-over by the
+ * agent's next sweep. An event covers that gap only while both surfaces are
+ * mounted — and My Jobs and Browse Jobs are different routes, so navigating
+ * between them mounts a fresh board that asks the daemon and gets the old
+ * answer. The client hands a job over, walks to the board, and the badge is
+ * missing again.
+ *
+ * This cache is module-level, so it outlives the route change. It holds only
+ * what this browser read from the chain itself, which is the one thing it can
+ * be more current about than the daemon.
+ */
+export function knownJobManagers(): { managed: Set<string>; unmanaged: Set<string> } {
+  const managed = new Set<string>();
+  const unmanaged = new Set<string>();
+  for (const [escrowId, value] of managerCache) {
+    (value !== null ? managed : unmanaged).add(String(escrowId));
+  }
+  return { managed, unmanaged };
+}
+
 function publishManager(escrowId: number, value: string | null): void {
   managerCache.set(escrowId, value);
   for (const fn of managerWatchers.get(escrowId) ?? []) fn(value);

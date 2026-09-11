@@ -32,7 +32,7 @@ import {
   AUTOPILOT_CONFIGURED,
   fetchManagedEscrowIds,
 } from "@/lib/atelier/agent-api";
-import { JOB_MANAGER_EVENT } from "@/hooks/use-job-manager";
+import { JOB_MANAGER_EVENT, knownJobManagers } from "@/hooks/use-job-manager";
 
 /** Below the daemon's own 15s adoption sweep — see the note above. */
 const POLL_MS = 10_000;
@@ -86,7 +86,23 @@ export function useManagedEscrows(): {
     const read = () =>
       fetchManagedEscrowIds(controller.signal)
         .then((ids) => {
-          if (!cancelled) setManaged(ids);
+          if (cancelled) return;
+          /*
+           * Merged with what this browser read from the chain directly.
+           *
+           * The daemon is the right source for what the agent is ACTUALLY
+           * working on, and it lags a hand-over by a sweep. A client who just
+           * delegated then navigated here would see no badge — their own action
+           * undone by a slower source. Anything read from the chain in this
+           * session wins over the daemon's older view, in both directions: a
+           * fresh delegation shows at once, and a fresh revocation disappears
+           * at once.
+           */
+          const { managed: knownOn, unmanaged: knownOff } = knownJobManagers();
+          const merged = new Set(ids);
+          for (const id of knownOn) merged.add(id);
+          for (const id of knownOff) merged.delete(id);
+          setManaged(merged);
         })
         .catch(() => {
           /* Unreachable agent means no badges, not a broken board. */
