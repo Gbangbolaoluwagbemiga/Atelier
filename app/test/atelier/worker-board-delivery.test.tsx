@@ -54,6 +54,7 @@ beforeEach(() => {
     amountUsdc: 2,
     criteria: ["Screenshot confirming the role update", "No new issues introduced"],
     agentReviewed: true,
+    previousFeedback: null,
   });
   myWork.mockResolvedValue([
     { escrowId: "7", title: "fireball", budget: 5, status: "You were hired — send your work", icon: "🔨", state: "hired" },
@@ -183,5 +184,79 @@ describe("what the delivery box tells them", () => {
     await userEvent.click(screen.getByRole("button", { name: /submit for review/i }));
 
     await waitFor(() => expect(submit).toHaveBeenCalled());
+  });
+});
+
+
+/**
+ * WAITING, WITHOUT WORRYING.
+ *
+ * A stage with the reviewer and a stage nobody has looked at are the same
+ * silence from the freelancer's side. So is an agent that answers in minutes
+ * and a client who answers when they next open the tab. The board said nothing
+ * about any of it, and let them send the next stage anyway — which is how
+ * somebody delivers twice without ever receiving a verdict.
+ */
+describe("a stage already with the reviewer", () => {
+  const WAITING = {
+    escrowId: "7", title: "fireball", budget: 5,
+    status: "1 with the reviewer — the next stage opens once this one is decided",
+    icon: "⏳", state: "hired", awaitingReview: 1, approved: 0, needsRevision: 0,
+    milestoneCount: 2, canSubmit: false, reviewer: "agent" as const,
+  };
+
+  it("holds the button rather than inviting a second delivery", async () => {
+    myWork.mockResolvedValue([WAITING]);
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    expect(await screen.findByText("fireball")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send work/i })).not.toBeInTheDocument();
+  });
+
+  it("says an agent is reviewing, and that it is quick", async () => {
+    myWork.mockResolvedValue([WAITING]);
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    expect(await screen.findByText(/autopilot is reviewing/i)).toBeInTheDocument();
+    expect(screen.getByText(/few minutes/i)).toBeInTheDocument();
+  });
+
+  it("warns that a human reviewer can take longer", async () => {
+    myWork.mockResolvedValue([{ ...WAITING, reviewer: "client" }]);
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    expect(await screen.findByText(/client reviews this one themselves/i)).toBeInTheDocument();
+  });
+});
+
+describe("a stage sent back for changes", () => {
+  const SENT_BACK = {
+    escrowId: "7", title: "fireball", budget: 5,
+    status: "Changes requested — revise and send it again",
+    icon: "✏️", state: "hired", awaitingReview: 0, approved: 0, needsRevision: 1,
+    milestoneCount: 2, canSubmit: true, reviewer: "agent" as const,
+  };
+
+  it("lets them send again, and says the money is still theirs to win", async () => {
+    myWork.mockResolvedValue([SENT_BACK]);
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+
+    expect(await screen.findByRole("button", { name: /send work/i })).toBeInTheDocument();
+    expect(screen.getByText(/still locked in escrow for you/i)).toBeInTheDocument();
+  });
+
+  it("shows the reviewer's reason — the only part they can act on", async () => {
+    myWork.mockResolvedValue([SENT_BACK]);
+    deliveryTarget.mockResolvedValue({
+      escrowId: "7", index: 0, count: 2, description: "Stage one",
+      amountUsdc: 3, criteria: [], agentReviewed: true,
+      previousFeedback: "No deliverable was included — send a link to the work itself.",
+    });
+
+    render(<WorkerBoard worker={WORKER} onWorkerChanged={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: /send work/i }));
+
+    expect(await screen.findByText(/why this came back/i)).toBeInTheDocument();
+    expect(screen.getByText(/send a link to the work itself/i)).toBeInTheDocument();
   });
 });

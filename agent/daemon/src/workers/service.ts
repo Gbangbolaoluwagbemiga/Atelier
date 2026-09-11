@@ -427,6 +427,7 @@ export async function submit(
  */
 const MS_SUBMITTED = 1;
 const MS_APPROVED = 2;
+const MS_REJECTED = 3;
 
 async function resolveMilestone(escrowId: string): Promise<number> {
   /*
@@ -500,8 +501,58 @@ export interface WorkRow {
   approved: number;
   /** Total stages on this job. */
   milestoneCount: number;
+  /** Stages sent back for changes. */
+  needsRevision: number;
   /** False when every stage has been delivered — nothing left to send. */
   canSubmit: boolean;
+  /**
+   * Who decides on a submission — and therefore how long it should take.
+   *
+   * A freelancer waiting on a verdict has no way to tell a machine that answers
+   * in minutes from a person who answers when they next open the tab. Both look
+   * identical from their side: silence. Saying which is not decoration, it is
+   * the difference between waiting and worrying.
+   */
+  reviewer: "agent" | "client" | null;
+}
+
+/**
+ * Which escrows this address is on — from the index, not by walking the chain.
+ *
+ * The chain walk this replaces read FreelancerAccepted logs from the contract's
+ * deploy block in nine-thousand-block windows: seventy-six sequential round
+ * trips, gaining one more every nine thousand blocks. A freelancer's board took
+ * twenty seconds to open and was getting slower every day. This is the read an
+ * index exists for.
+ *
+ * ONLY the escrow ids come from here. The subgraph creates milestone entities
+ * when a milestone is first touched, so its milestone list is not the job's
+ * milestone list — escrow 7 reads back as one stage worth nothing called
+ * "everything", which is the submission, not the work. Counts and statuses stay
+ * on the chain, where there are only ever a handful of rows to read.
+ */
+async function hiredEscrowIds(me: `0x${string}`): Promise<string[]> {
+  try {
+    const { graphQuery, isGraphConfigured } = await import("../graph/client.js");
+    if (isGraphConfigured()) {
+      const { GET_JOBS_FOR_FREELANCER } = await import("../graph/queries.js");
+      const res = await graphQuery<{ escrows: { escrowId: string }[] }>(
+        GET_JOBS_FOR_FREELANCER,
+        { who: me.toLowerCase() },
+      );
+      return (res.escrows ?? []).map((e) => String(e.escrowId));
+    }
+  } catch (err) {
+    console.warn(
+      "[work] subgraph could not list hires, falling back to the chain:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  /* Slow, and correct. Worth it when the index is unreachable; not worth it
+     every time somebody opens their board. */
+  const ids = await atelier.hiredEscrowsFor(me).catch(() => [] as bigint[]);
+  return ids.map((id) => id.toString());
 }
 
 export async function myWork(workerId: string): Promise<WorkRow[]> {
@@ -520,8 +571,7 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
    * escrow with no way to see it, while the client's screen showed it assigned
    * to them.
    */
-  const hiredIds = await atelier.hiredEscrowsFor(me).catch(() => [] as bigint[]);
-  const hiredFor = new Set(hiredIds.map((id) => id.toString()));
+  const hiredFor = new Set(await hiredEscrowIds(me));
 
   /*
    * Candidates are the union of what the agent knows about and what the chain
@@ -572,7 +622,8 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
    * stage with no idea whether the first had even been looked at. Two
    * deliveries, one of them made blind.
    */
-  const progress = new Map<string, { awaiting: number; approved: number; count: number }>();
+  const progress = new Map<string, { awaiting: number; approved: number; rejected: number; count: number }>();
+  const reviewers = new Map<string, "agent" | "client">();
   await Promise.all(
     candidateIds.map(async (escrowId, i) => {
       if (!involvement[i]!.hired) return;
@@ -581,10 +632,17 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
         progress.set(escrowId, {
           awaiting: ms.filter((m) => Number(m.status) === MS_SUBMITTED).length,
           approved: ms.filter((m) => Number(m.status) === MS_APPROVED).length,
+          rejected: ms.filter((m) => Number(m.status) === MS_REJECTED).length,
           count: ms.length,
         });
       } catch {
         /* a chain hiccup leaves the row without a stage summary, not missing */
+      }
+
+      try {
+        reviewers.set(escrowId, (await atelier.jobManagerOf(BigInt(escrowId))) ? "agent" : "client");
+      } catch {
+        /* unknown — say nothing rather than promise a reviewer we cannot confirm */
       }
     }),
   );
@@ -651,27 +709,39 @@ export async function myWork(workerId: string): Promise<WorkRow[]> {
     const p = progress.get(escrowId);
     const awaitingReview = p?.awaiting ?? 0;
     const approved = p?.approved ?? 0;
+    const needsRevision = p?.rejected ?? 0;
     const milestoneCount = p?.count ?? 0;
-    /* Nothing left to send once every stage is delivered or paid. Offering the
-       button anyway invites a second delivery against a stage already sent. */
-    const canSubmit =
-      state === "hired" && (milestoneCount === 0 || approved + awaitingReview < milestoneCount);
 
-    if (state === "hired" && awaitingReview > 0) {
+    /*
+     * One delivery at a time.
+     *
+     * The board let somebody send stage two while stage one was still with the
+     * reviewer, which is how a person ends up having delivered twice without a
+     * single verdict. A rejected stage is different: that is precisely the
+     * thing they are being asked to send again.
+     */
+    const somethingToSend = milestoneCount === 0 || approved + awaitingReview < milestoneCount;
+    const canSubmit = state === "hired" && awaitingReview === 0 && somethingToSend;
+
+    if (state === "hired" && needsRevision > 0 && awaitingReview === 0) {
+      icon = "✏️";
+      status = "Changes requested — revise and send it again";
+    } else if (state === "hired" && awaitingReview > 0) {
       icon = "⏳";
       status =
         approved + awaitingReview >= milestoneCount && milestoneCount > 0
           ? awaitingReview === 1
             ? "Delivered — waiting on review"
             : `All ${milestoneCount} stages delivered — waiting on review`
-          : `${awaitingReview} delivered and awaiting review — ${milestoneCount - approved - awaitingReview} still to send`;
+          : `${awaitingReview} with the reviewer — the next stage opens once this one is decided`;
     } else if (state === "hired" && approved > 0 && milestoneCount > 0) {
       status = `${approved} of ${milestoneCount} approved and paid — send the next stage`;
     }
 
     out.push({
       escrowId, title, budget, status, icon, state,
-      awaitingReview, approved, milestoneCount, canSubmit,
+      awaitingReview, approved, needsRevision, milestoneCount, canSubmit,
+      reviewer: reviewers.get(escrowId) ?? null,
     });
   }
   return out;
@@ -700,6 +770,8 @@ export async function deliveryTarget(escrowId: string): Promise<{
   criteria: string[];
   /** True when an agent, not the client, will review this. */
   agentReviewed: boolean;
+  /** Why the last attempt at this stage was sent back, when it was. */
+  previousFeedback: string | null;
 }> {
   const index = await resolveMilestone(escrowId);
 
@@ -754,7 +826,29 @@ export async function deliveryTarget(escrowId: string): Promise<{
     /* unknown — say nothing rather than promise a reviewer we cannot confirm */
   }
 
-  return { escrowId, index, count, description, amountUsdc, criteria, agentReviewed };
+  /*
+   * What was wrong with the last attempt.
+   *
+   * The reviewer wrote it, it went into the decision log, and the person being
+   * asked to do the work again never saw it. "Changes requested" without the
+   * reason is just a rejection with extra steps — the feedback IS the useful
+   * part, and it is already written down.
+   */
+  let previousFeedback: string | null = null;
+  try {
+    const rejections = store
+      .listDecisions(300)
+      .filter(
+        (d: { task_id?: string; type?: string }) =>
+          d.task_id === escrowId && (d.type === "work_rejected" || d.type === "revision_requested"),
+      ) as { reasoning?: string; timestamp?: number }[];
+    const latest = rejections.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))[0];
+    previousFeedback = latest?.reasoning?.trim() || null;
+  } catch {
+    /* feedback is a bonus; never block a delivery over it */
+  }
+
+  return { escrowId, index, count, description, amountUsdc, criteria, agentReviewed, previousFeedback };
 }
 
 /**

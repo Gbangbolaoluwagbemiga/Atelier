@@ -183,13 +183,34 @@ export function WorkerBoard({
                   </div>
                 </div>
 
-                {/* What is already with the client, so a second delivery is never
-                    made in the dark. */}
+                {/*
+                  WHO IS HOLDING THIS, AND ROUGHLY FOR HOW LONG.
+
+                  A freelancer waiting on a verdict cannot tell an agent that
+                  answers in minutes from a client who answers when they next
+                  open the tab — both look like silence. The wait is the same
+                  either way; the worry is not.
+                */}
                 {(w.awaitingReview ?? 0) > 0 && deliveringTo !== w.escrowId && (
                   <p className="text-xs text-muted-foreground mt-2">
                     {w.awaitingReview === 1
-                      ? "One stage is with the reviewer. You will hear as soon as it is approved and paid."
-                      : `${w.awaitingReview} stages are with the reviewer. You will hear as each is approved and paid.`}
+                      ? "One stage is with the reviewer."
+                      : `${w.awaitingReview} stages are with the reviewer.`}{" "}
+                    {w.reviewer === "agent"
+                      ? "Autopilot is reviewing — that usually takes a few minutes."
+                      : w.reviewer === "client"
+                        ? "The client reviews this one themselves, so it can take longer than an agent would."
+                        : "You will hear as soon as it is decided."}{" "}
+                    The next stage opens once this one is decided.
+                  </p>
+                )}
+
+                {/* Sent back. The one state where doing nothing is the wrong move. */}
+                {(w.needsRevision ?? 0) > 0 && (w.awaitingReview ?? 0) === 0 && deliveringTo !== w.escrowId && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Your last delivery was sent back with feedback. Open{" "}
+                    <span className="text-foreground">Send work</span> to read it
+                    and resend — the money is still locked in escrow for you.
                   </p>
                 )}
 
@@ -224,6 +245,19 @@ export function WorkerBoard({
                             </span>
                           )}
                         </div>
+
+                        {/* What was wrong last time — written by the reviewer,
+                            and never shown to the person asked to fix it. */}
+                        {target.previousFeedback && (
+                          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                            <div className="text-xs uppercase tracking-wide mb-1">
+                              Why this came back
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {target.previousFeedback}
+                            </p>
+                          </div>
+                        )}
 
                         {target.criteria.length > 0 && (
                           <div>

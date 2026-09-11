@@ -93,6 +93,16 @@ export interface WorkItem {
    * stage without ever learning what happened to the last one.
    */
   canSubmit?: boolean;
+  /** Stages sent back for changes. */
+  needsRevision?: number;
+  /**
+   * Who decides on a submission — and therefore how long it should take.
+   *
+   * An agent answers in minutes; a client answers when they next open the tab.
+   * From the freelancer's side both look identical: silence. Saying which is
+   * the difference between waiting and worrying.
+   */
+  reviewer?: "agent" | "client" | null;
 }
 
 /* ── Session ─────────────────────────────────────────────────────────────── */
@@ -240,6 +250,8 @@ export interface DeliveryTarget {
   criteria: string[];
   /** True when an agent, not the client, reviews this submission. */
   agentReviewed: boolean;
+  /** Why the last attempt at this stage was sent back, when it was. */
+  previousFeedback?: string | null;
 }
 
 /**

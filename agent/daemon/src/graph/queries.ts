@@ -121,3 +121,40 @@ export interface GQLEscrow {
   milestones: GQLMilestone[];
   applications: GQLApplication[];
 }
+
+/**
+ * Every job this person was hired for.
+ *
+ * WHY THIS EXISTS
+ *
+ * "What work is mine" was answered by walking FreelancerAccepted logs from the
+ * contract's deploy block in windowed getLogs calls — seventy-six sequential
+ * round trips, growing by one every nine thousand blocks. A freelancer's board
+ * took twenty seconds to load and was getting slower every day the chain
+ * advanced. That is exactly the read an index exists for.
+ *
+ * Keyed on beneficiary rather than the acceptance event, so it answers the
+ * question directly: the escrow names who is on it now. The chain walk stays as
+ * the fallback for when the subgraph cannot answer.
+ */
+export const GET_JOBS_FOR_FREELANCER = `
+  query GetJobsForFreelancer($who: Bytes!) {
+    escrows(
+      where: { beneficiary: $who }
+      orderBy: createdAt
+      orderDirection: desc
+      first: 100
+    ) {
+      escrowId
+      status
+      totalAmount
+      projectTitle
+      milestones(orderBy: milestoneIndex, orderDirection: asc) {
+        milestoneIndex
+        amount
+        description
+        status
+      }
+    }
+  }
+`;

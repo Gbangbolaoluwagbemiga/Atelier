@@ -26,6 +26,7 @@ const hiredEscrowsFor = vi.fn();
 const hasApplied = vi.fn();
 const getEscrow = vi.fn();
 const getMilestones = vi.fn();
+const jobManagerOf = vi.fn();
 
 vi.mock("../src/store.js", () => ({
   getWorker: (id: string) => getWorker(id),
@@ -43,6 +44,7 @@ vi.mock("../src/web3/atelier.js", () => ({
   hasApplied: (id: bigint, a: string) => hasApplied(id, a),
   getEscrow: (id: bigint) => getEscrow(id),
   getMilestones: (id: bigint) => getMilestones(id),
+  jobManagerOf: (id: bigint) => jobManagerOf(id),
 }));
 
 /* service.ts reads a job's criteria through handover, which imports the brief
@@ -65,6 +67,7 @@ beforeEach(() => {
   hasApplied.mockResolvedValue(false);
   getEscrow.mockResolvedValue({ projectTitle: "fireball", totalAmount: 5_000_000n, status: 0 });
   getMilestones.mockResolvedValue([{ status: 0 }, { status: 0 }]);
+  jobManagerOf.mockResolvedValue(null);
 });
 
 describe("a job the client hired for by hand", () => {
@@ -169,16 +172,42 @@ describe("when the chain will not answer", () => {
  * idea whether the first had been looked at. Two deliveries, one made blind.
  */
 describe("a job with work already delivered", () => {
-  it("says a stage is with the reviewer instead of asking again", async () => {
+  it("holds the next stage while one is still with the reviewer", async () => {
     hiredEscrowsFor.mockResolvedValue([7n]);
     getMilestones.mockResolvedValue([{ status: 1 }, { status: 0 }]); // 1 = submitted
 
     const [row] = await myWork("w1");
 
     expect(row.awaitingReview).toBe(1);
-    expect(row.status).toMatch(/awaiting review/i);
-    // One stage is still unsent, so there is still something to do.
+    expect(row.status).toMatch(/with the reviewer/i);
+    // One delivery at a time. Otherwise somebody sends two stages without ever
+    // receiving a verdict on the first.
+    expect(row.canSubmit).toBe(false);
+  });
+
+  it("asks again, with the reason, when a stage is sent back", async () => {
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    getMilestones.mockResolvedValue([{ status: 3 }, { status: 0 }]); // 3 = rejected
+
+    const [row] = await myWork("w1");
+
+    expect(row.needsRevision).toBe(1);
+    expect(row.status).toMatch(/changes requested/i);
+    // A rejected stage is exactly what they are being asked to send again.
     expect(row.canSubmit).toBe(true);
+  });
+
+  it("says whether a machine or a person will decide", async () => {
+    // A freelancer waiting on a verdict cannot tell an agent that answers in
+    // minutes from a client who answers when they next open the tab. Both look
+    // like silence.
+    hiredEscrowsFor.mockResolvedValue([7n]);
+    jobManagerOf.mockResolvedValue("0x6073dfbf2dbd479f87afd5683eaf02d8ad9bf308");
+
+    expect((await myWork("w1"))[0].reviewer).toBe("agent");
+
+    jobManagerOf.mockResolvedValue(null);
+    expect((await myWork("w1"))[0].reviewer).toBe("client");
   });
 
   it("stops offering the button when every stage is delivered", async () => {
