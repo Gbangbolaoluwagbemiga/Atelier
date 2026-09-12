@@ -218,9 +218,15 @@ contract JobManagerTest is JobManagerBase {
         vm.expectRevert(Atelier.Unauthorized.selector);
         sf.withdrawJobFunds(id, 10e6, 0);
 
+        // setMilestones is the surface that can now raise a job's total, so
+        // the one-way key has to be barred from it too.
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 10e6;
+        string[] memory reqs = new string[](1);
+        reqs[0] = "manager tries to rewrite the job";
         vm.prank(manager);
         vm.expectRevert(Atelier.Unauthorized.selector);
-        sf.addJobFunds(id, 10e6, 0);
+        sf.setMilestones(id, amounts, reqs);
     }
 
     /* ─────────── ADR test 4 — revocation bites immediately ─────────── */

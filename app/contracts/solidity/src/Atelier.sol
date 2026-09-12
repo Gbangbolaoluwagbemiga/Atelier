@@ -63,11 +63,18 @@ import "./yield/IAtelierYield.sol";
  *     for functions that small.
  *
  * The fix was architectural, not a trim: productive escrow lives in
- * AtelierYield, reached through a single controller pointer. This contract is
- * now 23,611 bytes with ~965 to spare, and the split is better design anyway —
- * custodying money and deciding where it earns are different jobs with
- * different risk profiles, and the second can now be replaced or disconnected
- * without touching the first.
+ * AtelierYield, reached through a single controller pointer, and the split is
+ * better design anyway — custodying money and deciding where it earns are
+ * different jobs with different risk profiles, and the second can now be
+ * replaced or disconnected without touching the first.
+ *
+ * A third data point, from adding setMilestones later: the margin had drifted
+ * down to 146 bytes and the new function needed 940, so it did not fit. What
+ * paid for it was not a trim either — the 17-field Milestone struct literal was
+ * written out twice, at creation and when rewriting the list, and collapsing
+ * both into one private _pushMilestone freed ~1,473 bytes. Duplicated struct
+ * literals are the cheapest thing to look for when this contract is full; the
+ * margin afterwards was 995, wider than before the feature was added.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 contract Atelier is
@@ -488,25 +495,7 @@ contract Atelier is
         esc.projectDescription = projectDescription;
 
         for (uint256 i; i < milestoneAmounts.length; ++i) {
-            escrowMilestones[escrowId].push(Milestone({
-                amount: milestoneAmounts[i],
-                description: "",
-                requirements: milestoneDescriptions[i],
-                status: MilestoneStatus.NotStarted,
-                submittedAt: 0,
-                approvedAt: 0,
-                disputedAt: 0,
-                disputedBy: address(0),
-                disputeReason: "",
-                rejectionReason: "",
-                resolvedAt: 0,
-                resolvedBy: address(0),
-                proposedAmount: 0,
-                proposedDescription: "",
-                resolutionFreelancerAmount: 0,
-                resolutionClientAmount: 0,
-                resolutionReason: ""
-            }));
+            _pushMilestone(escrowId, milestoneAmounts[i], milestoneDescriptions[i]);
         }
 
         escrowedAmount[token] += totalAmount;
@@ -1144,45 +1133,72 @@ contract Atelier is
     }
 
     /**
-     * @notice Add more funds to an open job (before freelancer is assigned)
-     *         and allocate them to a specific milestone so the sum invariant
-     *         (sum(milestoneAmounts) == totalAmount) is always maintained.
-     * @param milestoneIndex The milestone that receives the additional funds.
+     * @notice Rewrite the milestone list on a job nobody has started.
+     * @dev Add, remove, reorder and re-word in one call, settling the change in
+     *      total either way. This REPLACES addJobFunds, which could only grow a
+     *      milestone that already existed: adding a stage meant cancelling the
+     *      job and posting it again, and cancellation is priced to discourage
+     *      exactly that — free three times, then 5%, 10%, 15%, plus a penalty
+     *      scaled to the applications already received. Wanting a second
+     *      milestone is not abuse, and should not cost a client their fee.
+     *
+     *      Wholesale replacement is safe here precisely BECAUSE nothing has
+     *      started. Every milestone is NotStarted, so no index is in flight for
+     *      submit, approve or dispute to be silently re-pointed by — which is
+     *      the trap that makes editing an array of milestones dangerous at any
+     *      other moment in a job's life.
+     *
+     *      Guards are addJobFunds': the depositor only, before work starts,
+     *      while the escrow is Pending.
      */
-    function addJobFunds(uint256 escrowId, uint256 additionalAmount, uint256 milestoneIndex)
-        external payable nonReentrant whenNotPaused
-    {
+    function setMilestones(
+        uint256 escrowId,
+        uint256[] calldata amounts,
+        string[] calldata requirements
+    ) external payable nonReentrant whenNotPaused {
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
-        // Same rule as cancelJob: before work starts, the job is still the
-        // client's to adjust.
         if (esc.workStarted) revert CannotCancelAssignedJob();
         if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
-        if (additionalAmount == 0) revert InvalidAmount();
+        uint256 n = amounts.length;
+        if (n == 0 || n != requirements.length) revert InvalidConfig();
 
-        // Validate milestone index before any state changes
-        Milestone storage m = _getMilestone(escrowId, milestoneIndex);
-        if (m.status != MilestoneStatus.NotStarted) revert MilestoneAlreadyProcessed();
-
-        uint256 additionalFee = (additionalAmount * platformFeeBP) / 10000;
-        uint256 totalDeposit = additionalAmount + additionalFee;
-
-        if (esc.token == NATIVE_TOKEN) {
-            if (msg.value != totalDeposit) revert InvalidAmount();
-        } else {
-            if (msg.value != 0) revert InvalidAmount();
-            IERC20(esc.token).safeTransferFrom(msg.sender, address(this), totalDeposit);
-        }
+        uint256 newTotal;
+        for (uint256 i; i < n; ++i) newTotal += amounts[i];
+        if (newTotal == 0) revert InvalidAmount();
 
         uint256 oldTotal = esc.totalAmount;
-        esc.totalAmount += additionalAmount;
-        esc.platformFee += additionalFee;
-        m.amount += additionalAmount; // keep sum invariant
+        if (newTotal > oldTotal) {
+            uint256 add = newTotal - oldTotal;
+            uint256 addFee = (add * platformFeeBP) / 10000;
+            if (esc.token == NATIVE_TOKEN) {
+                if (msg.value != add + addFee) revert InvalidAmount();
+            } else {
+                if (msg.value != 0) revert InvalidAmount();
+                IERC20(esc.token).safeTransferFrom(msg.sender, address(this), add + addFee);
+            }
+            esc.platformFee += addFee;
+            escrowedAmount[esc.token] += add;
+            totalFeesByToken[esc.token] += addFee;
+        } else if (newTotal < oldTotal) {
+            if (msg.value != 0) revert InvalidAmount();
+            uint256 back = oldTotal - newTotal;
+            // The fee follows the money, exactly as withdrawJobFunds refunds it.
+            uint256 feeBack = (back * platformFeeBP) / 10000;
+            esc.platformFee -= feeBack;
+            escrowedAmount[esc.token] -= back;
+            totalFeesByToken[esc.token] -= feeBack;
+            _doTransfer(esc.token, address(this), esc.depositor, back + feeBack);
+        } else {
+            if (msg.value != 0) revert InvalidAmount();
+        }
 
-        escrowedAmount[esc.token] += additionalAmount;
-        totalFeesByToken[esc.token] += additionalFee;
-
-        emit JobFundsUpdated(escrowId, oldTotal, esc.totalAmount, true);
+        delete escrowMilestones[escrowId];
+        for (uint256 i; i < n; ++i) {
+            _pushMilestone(escrowId, amounts[i], requirements[i]);
+        }
+        esc.totalAmount = newTotal;
+        emit JobFundsUpdated(escrowId, oldTotal, newTotal, newTotal > oldTotal);
     }
 
     /**
@@ -1467,6 +1483,20 @@ contract Atelier is
     }
 
     /* ===================== INTERNAL HELPERS ===================== */
+
+    /**
+     * @dev The one place a milestone is created. Written twice — once at
+     *      creation, once when a client rewrites the list — and a 17-field
+     *      struct literal is expensive enough that duplicating it cost more
+     *      than the function it was blocking. Pushing the zero-value struct and
+     *      assigning the two fields that are not zero is also smaller than
+     *      spelling out fifteen zeroes.
+     */
+    function _pushMilestone(uint256 escrowId, uint256 amount, string calldata requirements) private {
+        Milestone storage m = escrowMilestones[escrowId].push();
+        m.amount = amount;
+        m.requirements = requirements;
+    }
 
     function _requireEscrow(uint256 escrowId) private view returns (Escrow storage) {
         Escrow storage esc = escrows[escrowId];
