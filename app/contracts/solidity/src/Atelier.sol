@@ -392,7 +392,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.8.0-fee-waived-for-work";
+        return "3.9.0-editable-milestones";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.

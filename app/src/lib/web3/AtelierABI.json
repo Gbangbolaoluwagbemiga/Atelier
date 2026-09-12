@@ -1412,6 +1412,29 @@
     },
     {
       "type": "function",
+      "name": "setMilestones",
+      "inputs": [
+        {
+          "name": "escrowId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "amounts",
+          "type": "uint256[]",
+          "internalType": "uint256[]"
+        },
+        {
+          "name": "requirements",
+          "type": "string[]",
+          "internalType": "string[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
       "name": "setPlatformFee",
       "inputs": [
         {
@@ -3125,6 +3148,7 @@
     "revokeJobManager(uint256)": "7ed694de",
     "setFeeCollector(address)": "a42dce80",
     "setJobManager(uint256,address)": "0735ab86",
+    "setMilestones(uint256,uint256[],string[])": "cc1b30c8",
     "setPlatformFee(uint256)": "12e8e2c3",
     "setYieldController(address)": "1e4fe3a2",
     "startWork(uint256)": "03a250f9",
@@ -6172,7 +6196,7 @@
             "details": "The reason is deliberately NOT a parameter. Calldata is cheap but      the runtime is 420 bytes from EIP-170, and a freelancer's \"I'm      booked until March\" belongs in the message thread where the client      can reply to it, not in an event nobody reads. The UI sends it there."
           },
           "deleteEscrow(uint256)": {
-            "details": "Requires zero remaining funds — i.e. all value has been paid out,      refunded, or the escrow was cancelled with nothing deposited.      Status must be Released, Refunded, Expired, or Cancelled.      This deletes the storage slot; the escrow ID can never be reused."
+            "details": "Requires zero remaining funds \u2014 i.e. all value has been paid out,      refunded, or the escrow was cancelled with nothing deposited.      Status must be Released, Refunded, Expired, or Cancelled.      This deletes the storage slot; the escrow ID can never be reused."
           },
           "extendDeadline(uint256,uint256)": {
             "details": "Only the depositor can extend. Extension must be at least 1 day."
@@ -6204,13 +6228,13 @@
             }
           },
           "revokeJobManager(uint256)": {
-            "details": "Depositor only. Effective on the next call — a revoked manager's very      next transaction reverts. This is the client's escape hatch and must      never depend on the manager's cooperation or on a timelock."
+            "details": "Depositor only. Effective on the next call \u2014 a revoked manager's very      next transaction reverts. This is the client's escape hatch and must      never depend on the manager's cooperation or on a timelock."
           },
           "setJobManager(uint256,address)": {
-            "details": "Depositor only. The manager may hire, approve and reject. It may not      dispute, cancel, extend, add or withdraw funds, re-appoint, or become      the beneficiary — see the jobManager mapping for the invariant.      Appointing a new manager replaces the previous one outright; there is      deliberately no list. One job, one manager, so \"who did this\" always      has exactly one answer."
+            "details": "Depositor only. The manager may hire, approve and reject. It may not      dispute, cancel, extend, add or withdraw funds, re-appoint, or become      the beneficiary \u2014 see the jobManager mapping for the invariant.      Appointing a new manager replaces the previous one outright; there is      deliberately no list. One job, one manager, so \"who did this\" always      has exactly one answer."
           },
           "setYieldController(address)": {
-            "details": "address(0) disables productive escrow entirely and is the safe      default. Everything else about yield — venues, buffers, opt-in,      accounting — is the controller's business."
+            "details": "address(0) disables productive escrow entirely and is the safe      default. Everything else about yield \u2014 venues, buffers, opt-in,      accounting \u2014 is the controller's business."
           },
           "submitRating(uint256,uint8,string)": {
             "details": "Each participant may rate the other exactly once per escrow."
@@ -6246,7 +6270,7 @@
             "notice": "Create a milestone-based escrow."
           },
           "declineAssignment(uint256)": {
-            "notice": "Hand back a job you were named on, before you start it. A directly assigned escrow puts someone's name on a job they never agreed to. Their only ways out were to ignore it — leaving the client's money locked and the client waiting on someone who was never coming — or to start work they did not want. Neither is consent. Declining turns the escrow into an open job: the money stays exactly where it is, the client keeps their brief and their milestones, and anybody can now apply. That is better for both sides than a refund, because the client usually wants the work done rather than their deposit back."
+            "notice": "Hand back a job you were named on, before you start it. A directly assigned escrow puts someone's name on a job they never agreed to. Their only ways out were to ignore it \u2014 leaving the client's money locked and the client waiting on someone who was never coming \u2014 or to start work they did not want. Neither is consent. Declining turns the escrow into an open job: the money stays exactly where it is, the client keeps their brief and their milestones, and anybody can now apply. That is better for both sides than a refund, because the client usually wants the work done rather than their deposit back."
           },
           "deleteEscrow(uint256)": {
             "notice": "Permanently delete an escrow record (owner only)."
@@ -6258,7 +6282,7 @@
             "notice": "Returns all currently authorized arbiters. "
           },
           "getAverageRating(address)": {
-            "notice": "Returns average rating (scaled ×100) and count for an address.         e.g. average = 450 means 4.50 stars."
+            "notice": "Returns average rating (scaled \u00d7100) and count for an address.         e.g. average = 450 means 4.50 stars."
           },
           "getRating(uint256,address)": {
             "notice": "Returns the rating a specific rater gave in an escrow (0 if not rated). "
@@ -6273,7 +6297,7 @@
             "notice": "Whether `who` may currently manage `escrowId`."
           },
           "jobManager(uint256)": {
-            "notice": "Autopilot: a per-escrow manager who may do the LABOUR of managing a job — hiring, approving, rejecting — on behalf of the depositor, and nothing else. This exists so that a client can delegate the work of running a job to an agent WITHOUT handing over the money. Before it, the only way an agent could manage a job was to be the depositor itself, which made the client a custodial creditor with no on-chain standing: no approval rights, and — worse — no ability to dispute, since disputeMilestone admits only the depositor and the beneficiary. THE ONE-WAY KEY, the invariant this whole feature rests on:     No action available to a manager can cause value to reach the manager. It holds structurally rather than by inspection: the only value-moving call a manager has is approveMilestone, and that pays esc.beneficiary and nothing else. So the guard that keeps it true is simply that a manager can never BE the beneficiary — enforced at both ends, in setJobManager and in acceptFreelancer, because the beneficiary of an open job is assigned after the manager is appointed. What this does NOT prevent: a manager hiring a confederate. No contract can tell an arm's-length hire from a collusive one. That risk is bounded off-chain instead — the depositor keeps dispute rights, can revoke the manager at any moment, and funds only one job at a time. Do not let the permission table imply otherwise."
+            "notice": "Autopilot: a per-escrow manager who may do the LABOUR of managing a job \u2014 hiring, approving, rejecting \u2014 on behalf of the depositor, and nothing else. This exists so that a client can delegate the work of running a job to an agent WITHOUT handing over the money. Before it, the only way an agent could manage a job was to be the depositor itself, which made the client a custodial creditor with no on-chain standing: no approval rights, and \u2014 worse \u2014 no ability to dispute, since disputeMilestone admits only the depositor and the beneficiary. THE ONE-WAY KEY, the invariant this whole feature rests on:     No action available to a manager can cause value to reach the manager. It holds structurally rather than by inspection: the only value-moving call a manager has is approveMilestone, and that pays esc.beneficiary and nothing else. So the guard that keeps it true is simply that a manager can never BE the beneficiary \u2014 enforced at both ends, in setJobManager and in acceptFreelancer, because the beneficiary of an open job is assigned after the manager is appointed. What this does NOT prevent: a manager hiring a confederate. No contract can tell an arm's-length hire from a collusive one. That risk is bounded off-chain instead \u2014 the depositor keeps dispute rights, can revoke the manager at any moment, and funds only one job at a time. Do not let the permission table imply otherwise."
           },
           "proposeMilestoneChange(uint256,uint256,uint256,string)": {
             "notice": "Freelancer proposes changes to a milestone"
@@ -6288,7 +6312,7 @@
             "notice": "Hand capital to the yield controller for deployment."
           },
           "reopenJob(uint256)": {
-            "notice": "Put the unfinished part of an arbitrated job back on the board. The alternative to taking the money back. A dispute means this client and this freelancer are done, but it does not mean the work stopped being worth doing — and the client may prefer the job finished to refunded. WHAT THE NEXT FREELANCER INHERITS Everything, and that is the point. Nothing is erased: the previous freelancer's submissions stay on their milestones, the dispute reason and the arbiter's ruling stay where they were written, and the evidence trail is untouched. So whoever picks this up can read what was delivered, what the disagreement was, and how it was settled, before deciding whether they can finish it. A job reopened with its history hidden would just be a trap with a budget attached. Only milestones nobody has submitted are back in play. Paid work stays paid, and delivered-but-unapproved work stays with the milestone it belongs to."
+            "notice": "Put the unfinished part of an arbitrated job back on the board. The alternative to taking the money back. A dispute means this client and this freelancer are done, but it does not mean the work stopped being worth doing \u2014 and the client may prefer the job finished to refunded. WHAT THE NEXT FREELANCER INHERITS Everything, and that is the point. Nothing is erased: the previous freelancer's submissions stay on their milestones, the dispute reason and the arbiter's ruling stay where they were written, and the evidence trail is untouched. So whoever picks this up can read what was delivered, what the disagreement was, and how it was settled, before deciding whether they can finish it. A job reopened with its history hidden would just be a trap with a budget attached. Only milestones nobody has submitted are back in play. Paid work stays paid, and delivered-but-unapproved work stays with the milestone it belongs to."
           },
           "resolveDispute(uint256,uint256,uint256,uint256,string)": {
             "notice": "Multi-sig arbiter dispute resolution."
@@ -6312,7 +6336,7 @@
             "notice": "Withdraw funds from a specific milestone on an open job         (before freelancer is assigned). Reduces both totalAmount and         the chosen milestone's amount to keep the sum invariant."
           },
           "yieldController()": {
-            "notice": "Escrowed capital sits idle for weeks between a job being funded and a milestone being approved. The controller at this address puts the genuinely idle portion to work. IT LIVES IN A SEPARATE CONTRACT, and that is not only a size decision. Deciding where capital earns is a different job from custodying it, with a different risk profile — so it can be replaced, paused or disconnected without touching the contract holding other people's money. Set it to address(0) and this escrow behaves exactly as it did before the feature existed. (It is also what brought Atelier back under EIP-170. Combined, the two were 26.2KB against a 24,576-byte deploy limit — the feature could not ship at all, and trimming the escrow to make room would have made this contract smaller and worse.) THE INVARIANT, which the controller holds and this contract relies on:     Cash plus deployed capital never falls below what is owed. A failing venue can DELAY a payout. It cannot lose the money."
+            "notice": "Escrowed capital sits idle for weeks between a job being funded and a milestone being approved. The controller at this address puts the genuinely idle portion to work. IT LIVES IN A SEPARATE CONTRACT, and that is not only a size decision. Deciding where capital earns is a different job from custodying it, with a different risk profile \u2014 so it can be replaced, paused or disconnected without touching the contract holding other people's money. Set it to address(0) and this escrow behaves exactly as it did before the feature existed. (It is also what brought Atelier back under EIP-170. Combined, the two were 26.2KB against a 24,576-byte deploy limit \u2014 the feature could not ship at all, and trimming the escrow to make room would have made this contract smaller and worse.) THE INVARIANT, which the controller holds and this contract relies on:     Cash plus deployed capital never falls below what is owed. A failing venue can DELAY a payout. It cannot lose the money."
           }
         },
         "version": 1

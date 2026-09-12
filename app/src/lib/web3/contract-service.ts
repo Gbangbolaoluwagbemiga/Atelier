@@ -41,21 +41,6 @@ const YIELD_ABI = [
 ] as const;
 
 /**
- * AHEAD OF THE PROXY, ON PURPOSE.
- *
- * AtelierABI.json mirrors what is DEPLOYED, and the implementation behind the
- * live proxy does not have `setMilestones` yet. Swapping that file early would
- * take `addJobFunds` with it — which the deployed contract does have and the
- * current UI still calls — so the two surfaces coexist until the upgrade and
- * the app asks the chain which one is actually there.
- */
-const EDITING_ABI = [
-  { type: "function", name: "setMilestones", stateMutability: "payable",
-    inputs: [{ type: "uint256" }, { type: "uint256[]" }, { type: "string[]" }],
-    outputs: [] },
-] as const;
-
-/**
  * The selector for setMilestones(uint256,uint256[],string[]).
  *
  * A deployed contract's dispatch table carries the selector of every function
@@ -1179,7 +1164,7 @@ export class ContractService {
   ): Promise<`0x${string}`> {
     return write({
       address: this.addr,
-      abi: EDITING_ABI,
+      abi: AtelierABI.abi,
       functionName: "setMilestones",
       args: [
         BigInt(params.escrow_id),
