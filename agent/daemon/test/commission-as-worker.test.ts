@@ -30,6 +30,7 @@ const workerBalance = vi.fn();
 const dripGas = vi.fn();
 const createSignerFor = vi.fn(() => ({ address: ME }));
 const setJobManager = vi.fn();
+const setYieldOptIn = vi.fn();
 
 vi.mock("../src/store.js", () => ({
   getWorker: (id: string) => getWorker(id),
@@ -48,6 +49,7 @@ vi.mock("../src/store.js", () => ({
 vi.mock("../src/web3/atelier.js", () => ({
   createEscrow: (p: unknown, s: unknown) => createEscrow(p, s),
   setJobManager: (a: bigint, b: string, c: unknown) => setJobManager(a, b, c),
+  setYieldOptIn: (a: bigint, b: boolean, c: unknown) => setYieldOptIn(a, b, c),
   quoteDeposit: (t: bigint) => quoteDeposit(t),
   hiredEscrowsFor: vi.fn(),
   hasApplied: vi.fn(),
@@ -101,6 +103,7 @@ beforeEach(() => {
   dripGas.mockResolvedValue(undefined);
   createEscrow.mockResolvedValue({ escrowId: 12n, txHash: "0xtx" });
   setJobManager.mockResolvedValue("0xhandover");
+  setYieldOptIn.mockResolvedValue("0xyield");
 });
 
 describe("posting a job from a managed wallet", () => {
@@ -241,6 +244,56 @@ describe("handing it to Autopilot", () => {
     await expect(commissionAsWorker({ ...GOOD, handToAutopilot: true })).resolves.toMatchObject({
       escrowId: "12",
       handedOver: false,
+    });
+  });
+});
+
+
+/**
+ * THE YIELD TERM, WRITTEN WHILE NOBODY IS RELYING ON IT.
+ *
+ * The browser flow has always offered this and the agent endpoint silently
+ * skipped it — escrow 9, posted through the new route, came out with no choice
+ * made at all while 7 and 8 were both opted in.
+ *
+ * Opting in only ever moves in the poster's favour and the freelancer's: the
+ * platform fee is waived, so they approve less today, and 60% of anything
+ * earned goes to whoever does the work. So it defaults on. It stays a parameter
+ * rather than a constant because the contract is emphatic that this is the
+ * depositor's call, and it can never be changed once given.
+ */
+describe("putting the escrow to work", () => {
+  it("opts in by default, signed by the depositor", async () => {
+    await commissionAsWorker(GOOD);
+
+    expect(setYieldOptIn).toHaveBeenCalledWith(12n, true, { address: ME });
+  });
+
+  it("can be declined", async () => {
+    await commissionAsWorker({ ...GOOD, putToWork: false });
+    expect(setYieldOptIn).not.toHaveBeenCalled();
+  });
+
+  it("writes the term BEFORE handing the job over", async () => {
+    // The window closes when work starts, and the agent starts collecting
+    // applications the moment it is manager. Order is the whole guarantee.
+    const order: string[] = [];
+    setYieldOptIn.mockImplementation(async () => void order.push("yield"));
+    setJobManager.mockImplementation(async () => void order.push("handover"));
+
+    await commissionAsWorker({ ...GOOD, handToAutopilot: true });
+
+    expect(order).toEqual(["yield", "handover"]);
+  });
+
+  it("still reports the job posted when only the term failed", async () => {
+    // The money is safe. A term that only ever improves the job is not worth
+    // failing a funded commission over.
+    setYieldOptIn.mockRejectedValue(new Error("no controller attached"));
+
+    await expect(commissionAsWorker(GOOD)).resolves.toMatchObject({
+      escrowId: "12",
+      earning: false,
     });
   });
 });

@@ -408,7 +408,15 @@ export async function commission(input: {
   durationDays: number;
   milestones: { description: string; amount: number }[];
   handToAutopilot?: boolean;
-}): Promise<{ escrowId: string; txHash: string; taskId: string; handedOver: boolean }> {
+  /** Put the escrow to work while it waits. Defaults on. */
+  putToWork?: boolean;
+}): Promise<{
+  escrowId: string;
+  txHash: string;
+  taskId: string;
+  handedOver: boolean;
+  earning: boolean;
+}> {
   return call("/api/worker/commission", {
     method: "POST",
     body: JSON.stringify(input),

@@ -362,14 +362,14 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**921 tests.** The contract suite went from zero.
+**925 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
 | Contract | **165** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
 | Frontend | **439** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job, and what the board does when a read fails |
 | Backend | **71** | Route handlers, which browsers may call them, what they do when the database is unreachable, and that two spellings of an address are one person |
-| Daemon | **198** | Who the agent tells, who it hires, which jobs it picks up, whether it pays — and the difference between "nothing" and "could not find out" |
+| Daemon | **202** | Who the agent tells, who it hires, which jobs it picks up, whether it pays — and the difference between "nothing" and "could not find out" |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 A disproportionate share of the recent ones are about a single failure shape:
@@ -383,7 +383,7 @@ it has been found now has a test naming the incident.
 (cd app/contracts/solidity && forge test)   # 165
 (cd app && npm test)                        # 439
 (cd backend && npx vitest run)              # 71
-(cd agent/daemon && npm test)               # 198
+(cd agent/daemon && npm test)               # 202
 (cd app && npm run e2e)                     # 48 — needs all three services up
 
 # Typecheck the web app with `npm run typecheck`, never `tsc --noEmit`:

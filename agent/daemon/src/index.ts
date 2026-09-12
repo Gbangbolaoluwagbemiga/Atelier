@@ -1652,6 +1652,7 @@ const server = http.createServer(async (req, res) => {
         durationDays?: number;
         milestones?: { description: string; amount: number }[];
         handToAutopilot?: boolean;
+        putToWork?: boolean;
       };
       if (!b.workerId) return json(res, 400, { error: "workerId is required" });
       if (!b.title?.trim()) return json(res, 400, { error: "title is required" });
@@ -1669,6 +1670,7 @@ const server = http.createServer(async (req, res) => {
           durationDays: Number(b.durationDays ?? 7),
           milestones: b.milestones,
           handToAutopilot: b.handToAutopilot !== false,
+          putToWork: b.putToWork !== false,
         }),
       );
     } catch (err) {

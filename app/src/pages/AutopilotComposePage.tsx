@@ -73,6 +73,20 @@ export default function AutopilotComposePage() {
   const [limits, setLimits] = useState<AgentLimits | null>(null);
   const [tokens, setTokens] = useState<WhitelistedToken[] | null>(null);
   const [payToken, setPayToken] = useState<string>("");
+  /*
+   * Put the escrow to work while it waits.
+   *
+   * On by default because it only ever moves in both parties' favour — the
+   * platform fee is waived, so the poster approves less today, and 60% of
+   * anything earned goes to whoever does the work. Shown rather than assumed
+   * because it is a TERM OF THE JOB the contract will not let anybody change
+   * afterwards, and a term nobody was shown is a term nobody agreed to.
+   *
+   * Only rendered on the managed path: a wallet client answers the same
+   * question on their own funding screen, and asking twice would be two
+   * answers to one question.
+   */
+  const [putToWork, setPutToWork] = useState(true);
   const [brief, setBrief] = useState<AutopilotBrief | null>(null);
   const [thinking, setThinking] = useState(false);
   const [funding, setFunding] = useState(false);
@@ -185,14 +199,16 @@ export default function AutopilotComposePage() {
             amount: m.amount,
           })),
           handToAutopilot: true,
+          putToWork,
         });
 
         toast(
           posted.handedOver
             ? {
                 title: "Posted, funded, and handed to Autopilot",
-                description:
-                  "Autopilot is collecting applications. Watch it work from My Jobs.",
+                description: posted.earning
+                  ? "Autopilot is collecting applications, and the escrow earns while it waits. Watch it from My Jobs."
+                  : "Autopilot is collecting applications. Watch it work from My Jobs.",
               }
             : {
                 title: "Posted and funded — not yet handed over",
@@ -465,6 +481,26 @@ export default function AutopilotComposePage() {
                   </select>
                 )}
               </Field>
+
+              {!wallet.isConnected && managedWorker && (
+                <label className="rounded-xl actor-panel p-4 flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={putToWork}
+                    onChange={(e) => setPutToWork(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium">Let the escrow earn while it waits</span>
+                    <span className="block text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Your platform fee is waived, so you fund less today, and
+                      60% of anything the escrow earns goes to the freelancer.
+                      It is a term of the job — once somebody is hired on the
+                      strength of it, nobody can switch it off, including us.
+                    </span>
+                  </span>
+                </label>
+              )}
 
               {/*
                 The review window, in whichever unit the client is thinking in.

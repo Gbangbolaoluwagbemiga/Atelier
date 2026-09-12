@@ -1473,7 +1473,29 @@ export async function commissionAsWorker(input: {
    * the hand-over was wired in there.
    */
   handToAutopilot?: boolean;
-}): Promise<{ escrowId: string; txHash: string; taskId: string; handedOver: boolean }> {
+  /**
+   * Put the escrow to work while it waits.
+   *
+   * DEFAULTED ON, NOT DONE SILENTLY.
+   *
+   * Opting in only ever moves in the poster's favour and the freelancer's: the
+   * platform fee is waived, so they approve less today, and 60% of anything
+   * earned goes to whoever does the work. That is a good default.
+   *
+   * It is still a parameter rather than a hard-coded true, because the contract
+   * is emphatic that this is the depositor's call — "it is their capital at
+   * risk, so the answer is theirs" — and it can never be changed once given.
+   * A default the caller can see and override is a choice; a constant buried in
+   * the daemon is Atelier answering a question that was addressed to them.
+   */
+  putToWork?: boolean;
+}): Promise<{
+  escrowId: string;
+  txHash: string;
+  taskId: string;
+  handedOver: boolean;
+  earning: boolean;
+}> {
   const worker = store.getWorker(input.workerId);
   if (!worker) throw new UserFacingError("Unknown worker.");
 
@@ -1568,6 +1590,28 @@ export async function commissionAsWorker(input: {
      * as a failure to post. The job exists and is funded; it simply is not
      * delegated yet, and the client can hand it over from My Jobs.
      */
+    /*
+     * The yield term, before the hand-over.
+     *
+     * Both are second transactions on an escrow that already holds the money,
+     * so neither can turn a funded job into a failed one — but the ORDER
+     * matters. The window closes when work starts, and the agent begins
+     * collecting applications the moment it is manager, so the term is written
+     * while nobody is relying on it yet.
+     */
+    let earning = false;
+    if (input.putToWork !== false) {
+      try {
+        await atelier.setYieldOptIn(escrowId, true, signer);
+        earning = true;
+      } catch (err) {
+        console.warn(
+          "[commission] funded but not put to work:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
     let handedOver = false;
     if (input.handToAutopilot) {
       try {
@@ -1581,7 +1625,7 @@ export async function commissionAsWorker(input: {
       }
     }
 
-    return { escrowId: escrowId.toString(), txHash, taskId, handedOver };
+    return { escrowId: escrowId.toString(), txHash, taskId, handedOver, earning };
   } catch (err) {
     /* Otherwise the row sits at "briefing" forever and the stats bar counts it
        as work in progress that nobody is doing. */

@@ -98,6 +98,61 @@ export interface CreateEscrowParams {
  * sentence explaining why.
  */
 /**
+ * Put this escrow to work while it waits — or decline to, once and for all.
+ *
+ * WHY IT LIVES ON THE CONTROLLER
+ *
+ * `setYieldOptIn` is on AtelierYield, not on the escrow contract, and the
+ * controller's address is read off the escrow rather than configured — a
+ * redeployed controller should not need an env var updated in three places, and
+ * a stale one would silently write the term into a contract nobody consults.
+ *
+ * WHY THE DEPOSITOR HAS TO SIGN IT
+ *
+ * The controller rejects anybody else, which is the point: it is their capital
+ * being deployed. Atelier can execute the instruction, the way it executes an
+ * application or a delivery, but it cannot be the one deciding.
+ */
+export async function setYieldOptIn(
+  escrowId: bigint,
+  optedIn: boolean,
+  /** Defaults to the agent's own wallet, which is the depositor on /api/hire. */
+  signerOverride?: CircleSigner,
+): Promise<`0x${string}`> {
+  const signer = signerOverride ?? createCircleSigner();
+  const client = getPublicClient();
+
+  const controller = (await client.readContract({
+    address: config.atelierAddress,
+    abi,
+    functionName: "yieldController",
+  })) as `0x${string}`;
+
+  if (/^0x0{40}$/i.test(controller)) {
+    throw new Error("No yield controller is attached, so there is nothing to opt into.");
+  }
+
+  const hash = await signer.walletClient.writeContract({
+    chain: arcTestnet,
+    account: signer.address,
+    address: controller,
+    abi: [
+      {
+        type: "function",
+        name: "setYieldOptIn",
+        stateMutability: "nonpayable",
+        inputs: [{ type: "uint256" }, { type: "bool" }],
+        outputs: [],
+      },
+    ] as const,
+    functionName: "setYieldOptIn",
+    args: [escrowId, optedIn],
+  });
+  await client.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/**
  * Hand a job to a manager, signed by whoever owns it.
  *
  * Only ever existed in the browser, because only a browser client had ever

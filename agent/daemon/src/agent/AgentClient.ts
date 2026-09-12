@@ -104,6 +104,33 @@ export class AgentClient {
       // JSON.stringify()-ing it just showed up as gibberish on a real, live-facing surface.
       projectDescription: `${instruction}\n\nCriteria hash (verifies the brief hasn't changed): ${brief.briefHash}`,
     });
+    /*
+     * Put its own capital to work while the job waits.
+     *
+     * This is the ONE place the decision is genuinely the agent's to make,
+     * and the distinction is the whole reason it is safe: here the agent IS the
+     * depositor. It commissioned the work through /api/hire, it funded the
+     * escrow from its own treasury, and the controller will only accept the
+     * depositor's signature — so opting in commits nobody but itself.
+     *
+     * On an Autopilot job the depositor is the client, and the same call
+     * reverts with Unauthorized. That is not a limitation to work around; it is
+     * the line that makes "the agent manages the job, never the money" true,
+     * and this is what it looks like on the side of the line where the money
+     * really is the agent's.
+     *
+     * Non-fatal. The job is funded and real either way, and a commission is not
+     * worth failing over a term that only ever improves it.
+     */
+    try {
+      await atelier.setYieldOptIn(escrowId, true);
+    } catch (err) {
+      console.warn(
+        "[agent] escrow funded but not put to work:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+
     this.emit("job_posted", `Job posted on-chain. Escrow ID: ${escrowId}. $${brief.budget} locked in escrow.`, {
       escrowId: escrowId.toString(),
       amountUsdc: brief.budget.toString(),
