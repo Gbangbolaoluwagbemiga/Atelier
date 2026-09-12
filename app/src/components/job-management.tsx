@@ -337,10 +337,28 @@ export function JobManagement({
             amount: usdcToWei(parseFloat(m.amount)).toString(),
             requirements: m.requirements.trim(),
           })),
+          depositor: wallet.address || "",
         },
         writeContractAsync,
       );
-      if (publicClient && hash) await publicClient.waitForTransactionReceipt({ hash });
+
+      /*
+       * A MINED TRANSACTION IS NOT A SUCCESSFUL ONE.
+       *
+       * This waited for the receipt and then ignored what it said, so the first
+       * real edit reverted on a missing allowance and the card announced
+       * "Stages updated. You funded 2.00 USDC more" over a job that had not
+       * changed by a cent. The same mistake was fixed in use-job-manager.ts
+       * earlier and not carried across to here.
+       */
+      if (publicClient && hash) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        if (receipt.status === "reverted") {
+          throw new Error(
+            "The transaction was mined but reverted, so the stages are unchanged. Nothing was charged beyond gas.",
+          );
+        }
+      }
 
       toast({
         title: "Stages updated",

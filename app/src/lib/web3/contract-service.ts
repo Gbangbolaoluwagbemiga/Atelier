@@ -1157,21 +1157,66 @@ export class ContractService {
     params: {
       escrow_id: number;
       milestones: { amount: string; requirements: string }[];
-      /** Extra owed when the total goes up. Zero on a reduction or a reshuffle. */
-      value?: bigint;
+      depositor: string;
     },
     write: WagmiWrite,
   ): Promise<`0x${string}`> {
+    const amounts = params.milestones.map((m) => BigInt(m.amount));
+    const newTotal = amounts.reduce((a, b) => a + b, 0n);
+
+    const escrow = await this.getEscrow(params.escrow_id);
+    if (!escrow) throw new Error("Escrow not found");
+
+    const isNative = escrow.token === ZERO_ADDRESS;
+    const token = escrow.token as `0x${string}`;
+    const oldTotal = BigInt(escrow.totalAmount);
+
+    /*
+     * MONEY ONLY MOVES WHEN THE TOTAL GOES UP.
+     *
+     * The contract pulls `increase + fee` with safeTransferFrom, which needs an
+     * allowance first — the first version of this skipped the approve entirely
+     * and the transaction reverted while the UI said "Stages updated". A
+     * reduction or a reshuffle sends nothing and must not ask for an approval
+     * it does not need.
+     */
+    let deposit = 0n;
+    if (newTotal > oldTotal) {
+      ({ deposit } = await this.quoteDeposit(newTotal - oldTotal));
+
+      if (!isNative) {
+        const { createPublicClient, http } = await import("viem");
+        const { arcTestnet } = await import("@/providers/WalletProvider");
+        const { erc20Abi } = await import("@/lib/web3/abis");
+
+        const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
+        const allowance = (await publicClient.readContract({
+          address: token,
+          abi: erc20Abi,
+          functionName: "allowance",
+          args: [params.depositor as `0x${string}`, this.addr],
+        })) as bigint;
+
+        if (allowance < deposit) {
+          const approveHash = await write({
+            address: token,
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [this.addr, deposit],
+          });
+          /* Wait for it. Sending setMilestones against an allowance that has
+             not been mined yet fails exactly like having no allowance at all. */
+          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+        }
+      }
+    }
+
     return write({
       address: this.addr,
       abi: AtelierABI.abi,
       functionName: "setMilestones",
-      args: [
-        BigInt(params.escrow_id),
-        params.milestones.map((m) => BigInt(m.amount)),
-        params.milestones.map((m) => m.requirements),
-      ],
-      ...(params.value ? { value: params.value } : {}),
+      args: [BigInt(params.escrow_id), amounts, params.milestones.map((m) => m.requirements)],
+      value: isNative ? deposit : 0n,
     });
   }
 
