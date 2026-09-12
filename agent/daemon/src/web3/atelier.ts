@@ -584,6 +584,110 @@ export async function hasApplied(escrowId: bigint, who: `0x${string}`): Promise<
 }
 
 /**
+ * Every job currently open for applications, straight from the chain.
+ *
+ * WHY THIS EXISTS
+ *
+ * The Telegram board read the daemon's own task table, so a freelancer in the
+ * bot saw only jobs THIS agent had posted or adopted. A job commissioned by a
+ * different agent, run manually by its client, or managed by another deployment
+ * of this daemon was invisible to them — open, funded, and impossible to find —
+ * while the web board, which reads the chain, listed it. Two doors into the same
+ * marketplace showing different marketplaces.
+ *
+ * Open means: still Pending, nobody hired yet, deadline not passed. One
+ * multicall for the escrows and one for the milestones, so the whole board is
+ * two requests regardless of size.
+ */
+export async function openEscrows(): Promise<
+  {
+    escrowId: bigint;
+    title: string;
+    description: string;
+    totalAmount: bigint;
+    deadline: bigint;
+    milestones: { description: string; amount: bigint }[];
+  }[]
+> {
+  const client = getPublicClient();
+
+  const next = (await client.readContract({
+    address: config.atelierAddress,
+    abi,
+    functionName: "nextEscrowId",
+  })) as bigint;
+
+  if (next <= 1n) return [];
+  const ids = Array.from({ length: Number(next) - 1 }, (_, i) => BigInt(i + 1));
+
+  const escrows = await client.multicall({
+    contracts: ids.map((id) => ({
+      address: config.atelierAddress,
+      abi,
+      functionName: "getEscrow" as const,
+      args: [id] as const,
+    })),
+    allowFailure: true,
+  });
+
+  /*
+   * A failed read is skipped, not counted as "not open".
+   *
+   * This is a board, not an answer about one job: showing four of five open
+   * jobs is a worse board, showing five of five is right, and claiming a job
+   * does not exist because a read failed is the mistake this codebase keeps
+   * paying for. The caller merges with the task table either way, so a gap here
+   * degrades the list rather than emptying it.
+   */
+  const PENDING = 0;
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const open: { id: bigint; esc: Record<string, unknown> }[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const r = escrows[i];
+    if (r?.status !== "success") continue;
+    const esc = r.result as {
+      beneficiary: string;
+      status: number;
+      deadline: bigint;
+      workStarted: boolean;
+    };
+    if (Number(esc.status) !== PENDING) continue;
+    if (esc.workStarted) continue;
+    if (!/^0x0{40}$/i.test(esc.beneficiary)) continue; // already hired
+    if (esc.deadline <= now) continue;
+    open.push({ id: ids[i]!, esc: esc as unknown as Record<string, unknown> });
+  }
+  if (open.length === 0) return [];
+
+  const stages = await client.multicall({
+    contracts: open.map(({ id }) => ({
+      address: config.atelierAddress,
+      abi,
+      functionName: "getMilestones" as const,
+      args: [id] as const,
+    })),
+    allowFailure: true,
+  });
+
+  return open.map(({ id, esc }, i) => {
+    const ms = stages[i]?.status === "success"
+      ? (stages[i]!.result as readonly { amount: bigint; requirements: string; description: string }[])
+      : [];
+    return {
+      escrowId: id,
+      title: String(esc.projectTitle ?? `Job #${id}`),
+      description: String(esc.projectDescription ?? ""),
+      totalAmount: esc.totalAmount as bigint,
+      deadline: esc.deadline as bigint,
+      milestones: ms.map((m) => ({
+        description: m.requirements || m.description || "",
+        amount: m.amount,
+      })),
+    };
+  });
+}
+
+/**
  * Every escrow this address was hired for, straight from the chain.
  *
  * WHY THE CHAIN AND NOT THE TASK TABLE

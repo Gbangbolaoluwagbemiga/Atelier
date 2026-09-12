@@ -124,7 +124,14 @@ export interface Quest {
 }
 
 /** Open commissions, optionally marked up for one worker. */
-export function openQuests(): Quest[] {
+/**
+ * The board, from the daemon's own jobs only.
+ *
+ * Kept separate because it is synchronous and free, and the merged board below
+ * builds on it. Everything the agent posted or adopted carries a real brief —
+ * criteria, stages, an application window — which the chain alone cannot give.
+ */
+export function ownQuests(): Quest[] {
   return store
     // Same reason as the poller's window: open jobs are filtered out of the
     // most-recent N, so N has to outrun the finished ones stacking up in front.
@@ -149,6 +156,69 @@ export function openQuests(): Quest[] {
 }
 
 /**
+ * EVERY OPEN JOB, NOT JUST THIS AGENT'S.
+ *
+ * The Telegram board read the task table and nothing else, so a freelancer in
+ * the bot saw only jobs THIS daemon had posted or adopted. A job commissioned by
+ * another agent, run manually by its client, or managed by a different
+ * deployment of this same daemon was open, funded, and invisible to them — while
+ * the web board, which reads the chain, listed it. Two doors into one
+ * marketplace, showing different marketplaces, and the codebase says in three
+ * places that both doors are supposed to be the same door.
+ *
+ * The task table still wins where it has a row: it holds the generated brief,
+ * the acceptance criteria and the application window, none of which exist
+ * on-chain. The chain fills in everything else, described from the escrow's own
+ * title, description and milestones.
+ *
+ * A chain read that fails leaves the agent's own jobs listed rather than
+ * emptying the board — the merge is additive in both directions.
+ */
+export async function openQuests(): Promise<Quest[]> {
+  const own = ownQuests();
+  const mine = new Set(own.map((q) => q.escrowId));
+
+  let onChain: Awaited<ReturnType<typeof atelier.openEscrows>>;
+  try {
+    onChain = await atelier.openEscrows();
+  } catch (err) {
+    console.warn(
+      "[quests] chain could not list open jobs, showing this agent's own:",
+      err instanceof Error ? err.message : err,
+    );
+    return own;
+  }
+
+  const extra: Quest[] = onChain
+    .filter((e) => !mine.has(e.escrowId.toString()))
+    .map((e) => {
+      const deadlineMs = Number(e.deadline) * 1000;
+      return {
+        escrowId: e.escrowId.toString(),
+        title: e.title,
+        budget: Number(e.totalAmount) / 1e6,
+        /* From the escrow's own deadline, rounded up, so a job with hours left
+           reads as a day rather than as zero. */
+        durationDays: Math.max(1, Math.ceil((deadlineMs - Date.now()) / 86_400_000)),
+        /* The criteria live in the brief, which only exists for jobs this agent
+           holds. Saying nothing is better than inventing acceptance criteria
+           somebody could be judged against. */
+        criteria: [],
+        category: categoryLabel(categoryOf(e.description)),
+        milestones: e.milestones.map((m) => ({
+          description: m.description,
+          amount: Number(m.amount) / 1e6,
+        })),
+        /* No application window on chain: the client or their agent decides when
+           to judge. The deadline is the honest outer bound. */
+        closesAt: deadlineMs,
+      };
+    });
+
+  return [...own, ...extra];
+}
+
+/**
  * The same board, marked with what this person has already applied to.
  *
  * Separate from openQuests() because it costs one chain read per job: the plain
@@ -157,7 +227,7 @@ export function openQuests(): Quest[] {
  */
 export async function openQuestsFor(workerId: string): Promise<Quest[]> {
   const worker = store.getWorker(workerId);
-  const quests = openQuests();
+  const quests = await openQuests();
   if (!worker?.walletAddress) return quests;
   const address = worker.walletAddress as `0x${string}`;
   return Promise.all(

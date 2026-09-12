@@ -219,7 +219,7 @@ function matchesFilter(q: { title: string; criteria: string[]; budget: number; c
 }
 
 async function showJobs(chatId: number, tgUserId: number, filter = "", page = 0) {
-  const all = workers.openQuests();
+  const all = await workers.openQuests();
   const quests = all.filter((q) => matchesFilter(q, filter));
 
   if (all.length === 0) {
