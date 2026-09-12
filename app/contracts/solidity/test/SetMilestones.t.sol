@@ -92,6 +92,32 @@ contract SetMilestonesTest is JobManagerBase {
         assertEq(bytes(ms[0].description).length, 0);
     }
 
+    /**
+     * NOTHING WAS TAKEN AWAY.
+     *
+     * addJobFunds was removed, so the one thing it could do has to still be
+     * reachable: top up a single milestone, pay the fee on the addition, leave
+     * every other stage alone. It is a strict subset of a list rewrite, and
+     * this is the test that says so rather than the commit message.
+     */
+    function test_toppingUpOneMilestone_whatAddJobFundsDid() public {
+        uint256 id = _createOpenJob(); // 300 + 600
+        uint256 before = usdc.balanceOf(client);
+
+        // The old call was addJobFunds(id, 10e6, 0). The new one says the same
+        // thing by sending the list back with stage one raised by 10.
+        vm.prank(client);
+        sf.setMilestones(id, _amounts(M1 + 10e6, M2, NONE), _reqs(2));
+
+        Atelier.Milestone[] memory ms = sf.getMilestones(id);
+        assertEq(ms.length, 2, "still two stages");
+        assertEq(ms[0].amount, M1 + 10e6, "the topped-up stage");
+        assertEq(ms[1].amount, M2, "the other stage is untouched");
+        assertEq(sf.getEscrow(id).totalAmount, BUDGET + 10e6);
+        // 10 for the work and 0.25 in fee — the same arithmetic addJobFunds did.
+        assertEq(before - usdc.balanceOf(client), 10_250_000);
+    }
+
     /* ─────────────── Who may, and when ─────────────── */
 
     function test_onlyTheDepositorMayEdit() public {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWriteContract, usePublicClient } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useNotifications } from "@/contexts/notification-context";
 import { CONTRACTS } from "@/lib/web3/config";
-import { PlusCircle, MinusCircle, XCircle, AlertTriangle, Info } from "lucide-react";
+import { PlusCircle, MinusCircle, XCircle, AlertTriangle, Info, ListPlus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -263,6 +263,107 @@ export function JobManagement({
     }
   };
 
+  /* ── Editing the stage list ────────────────────────────────────────────────
+   *
+   * Asked for directly, and the old answer was "cancel and post it again" —
+   * addJobFunds could only grow a stage that already existed. Cancelling is
+   * priced to discourage exactly that: free three times, then 5%, 10%, 15%,
+   * plus a penalty scaled to the applications already received. Deciding a job
+   * needs one more stage is not abuse.
+   *
+   * The editor sends the list the client is LOOKING AT, not a delta. That is
+   * deliberate: setMilestones replaces, so a list assembled from a stale or
+   * failed read would quietly drop stages. What is on screen is what they are
+   * agreeing to.
+   */
+  const [editOpen, setEditOpen] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [draft, setDraft] = useState<{ amount: string; requirements: string }[]>([]);
+
+  /* Whether the DEPLOYED contract has the function. The source is ahead of the
+     proxy, so this is asked of the chain rather than assumed — the editor
+     appears the moment the implementation is upgraded, with no app redeploy. */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { ContractService } = await import("@/lib/web3/contract-service");
+        const ok = await new ContractService(CONTRACTS.ATELIER_ESCROW).supportsMilestoneEditing();
+        if (!cancelled) setCanEdit(ok);
+      } catch {
+        /* Leave it hidden. A button that reverts is worse than one absent. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function openEditor() {
+    setDraft(
+      (milestones ?? []).map((m) => ({
+        amount: weiToUsdc(m.amount).toString(),
+        requirements: m.description ?? "",
+      })),
+    );
+    setEditOpen(true);
+  }
+
+  const draftTotal = draft.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
+  const draftDelta = draftTotal - currentTotal;
+  const draftValid =
+    draft.length > 0 &&
+    draft.every((m) => (parseFloat(m.amount) || 0) > 0 && m.requirements.trim().length > 0);
+
+  const handleSaveMilestones = async () => {
+    if (!draftValid) {
+      toast({
+        title: "Every stage needs an amount and a description",
+        description: "Remove any you do not want rather than leaving them blank.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { ContractService } = await import("@/lib/web3/contract-service");
+      const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
+
+      const hash = await cs.setMilestones(
+        {
+          escrow_id: Number(escrowId),
+          milestones: draft.map((m) => ({
+            amount: usdcToWei(parseFloat(m.amount)).toString(),
+            requirements: m.requirements.trim(),
+          })),
+        },
+        writeContractAsync,
+      );
+      if (publicClient && hash) await publicClient.waitForTransactionReceipt({ hash });
+
+      toast({
+        title: "Stages updated",
+        description:
+          draftDelta > 0
+            ? `You funded ${draftDelta.toFixed(2)} USDC more, plus the fee on it.`
+            : draftDelta < 0
+              ? `${Math.abs(draftDelta).toFixed(2)} USDC came back to you, with its fee.`
+              : "Same budget, different stages.",
+      });
+      setEditOpen(false);
+      onUpdate?.();
+    } catch (error: any) {
+      toast({
+        title: "Could not update the stages",
+        description: error?.shortMessage || error?.message || "Transaction failed",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Card className="glass border-primary/20 p-4 mt-4">
@@ -274,6 +375,109 @@ export function JobManagement({
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {/* ── Edit the stages ──────────────────────────────────────────────
+            Shown only when the deployed contract can actually do it, so this
+            ships before the upgrade without offering a button that reverts. */}
+        {canEdit && (
+          <Dialog open={editOpen} onOpenChange={setEditOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2" onClick={openEditor}>
+                <ListPlus className="h-4 w-4" aria-hidden="true" />
+                Edit stages
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Edit the stages</DialogTitle>
+                <DialogDescription>
+                  Add, remove or re-word them while nobody has started. Once a
+                  freelancer begins, the stages are the deal and this closes.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 max-h-[45vh] overflow-y-auto pr-1">
+                {draft.map((m, i) => (
+                  <div key={i} className="rounded-lg border border-border/50 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-xs text-muted-foreground">Stage {i + 1}</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-destructive"
+                        onClick={() => setDraft(draft.filter((_, j) => j !== i))}
+                        disabled={draft.length === 1}
+                        title={draft.length === 1 ? "A job needs at least one stage" : "Remove this stage"}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <Input
+                      value={m.requirements}
+                      onChange={(e) =>
+                        setDraft(draft.map((d, j) => (j === i ? { ...d, requirements: e.target.value } : d)))
+                      }
+                      placeholder="What this stage has to contain"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={m.amount}
+                        onChange={(e) =>
+                          setDraft(draft.map((d, j) => (j === i ? { ...d, amount: e.target.value } : d)))
+                        }
+                        className="w-32"
+                      />
+                      <span className="text-xs text-muted-foreground">USDC</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 w-full"
+                onClick={() => setDraft([...draft, { amount: "", requirements: "" }])}
+              >
+                <PlusCircle className="h-4 w-4" aria-hidden="true" />
+                Add a stage
+              </Button>
+
+              {/* The money consequence, before they sign rather than after. */}
+              <div className="rounded-lg bg-muted/40 p-3 text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">New budget</span>
+                  <span className="tabular-nums">{draftTotal.toFixed(2)} USDC</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    {draftDelta > 0 ? "You will fund" : draftDelta < 0 ? "Comes back to you" : "No change"}
+                  </span>
+                  <span className="tabular-nums">
+                    {draftDelta === 0 ? "—" : `${Math.abs(draftDelta).toFixed(2)} USDC`}
+                  </span>
+                </div>
+                {draftDelta !== 0 && (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    The platform fee follows it, {draftDelta > 0 ? "charged on the increase" : "refunded on the reduction"}.
+                  </p>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveMilestones} disabled={isSubmitting || !draftValid}>
+                  {isSubmitting ? "Saving…" : "Save the stages"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
         {/* ── Add Funds Dialog ─────────────────────────────────────────── */}
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>

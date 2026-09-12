@@ -40,6 +40,31 @@ const YIELD_ABI = [
     inputs: [{ type: "bool" }], outputs: [] },
 ] as const;
 
+/**
+ * AHEAD OF THE PROXY, ON PURPOSE.
+ *
+ * AtelierABI.json mirrors what is DEPLOYED, and the implementation behind the
+ * live proxy does not have `setMilestones` yet. Swapping that file early would
+ * take `addJobFunds` with it — which the deployed contract does have and the
+ * current UI still calls — so the two surfaces coexist until the upgrade and
+ * the app asks the chain which one is actually there.
+ */
+const EDITING_ABI = [
+  { type: "function", name: "setMilestones", stateMutability: "payable",
+    inputs: [{ type: "uint256" }, { type: "uint256[]" }, { type: "string[]" }],
+    outputs: [] },
+] as const;
+
+/**
+ * The selector for setMilestones(uint256,uint256[],string[]).
+ *
+ * A deployed contract's dispatch table carries the selector of every function
+ * it answers, so finding it in the runtime bytecode is a reliable answer to
+ * "is this live yet" — cheaper and safer than calling and reading the revert,
+ * which costs gas and is indistinguishable from a guard legitimately refusing.
+ */
+export const SET_MILESTONES_SELECTOR = "cc1b30c8";
+
 export class ContractService {
   private client;
   private contract: any; // typed loosely to avoid viem generic constraints
@@ -1081,6 +1106,87 @@ export class ContractService {
       abi: AtelierABI.abi,
       functionName: "cancelJob",
       args: [BigInt(params.escrow_id)],
+    });
+  }
+
+  /**
+   * Whether the deployed contract can rewrite a job's milestone list.
+   *
+   * Asked of the chain rather than assumed, because the source is ahead of the
+   * proxy: this ships before the upgrade so the editor can appear the moment
+   * the implementation changes, with no second deploy of the app.
+   *
+   * Reading the dispatch table beats calling and catching the revert — a revert
+   * costs gas and is indistinguishable from a guard legitimately refusing, so
+   * it would answer "no" for a client who simply started work already.
+   */
+  async supportsMilestoneEditing(): Promise<boolean> {
+    try {
+      /*
+       * THE SELECTORS ARE IN THE IMPLEMENTATION, NOT THE PROXY.
+       *
+       * The first version of this read the proxy's own bytecode and answered
+       * "no" for every function — including addJobFunds, which is unarguably
+       * deployed. A UUPS proxy's code is the delegating stub; the dispatch
+       * table lives in the implementation behind it. The unit test passed
+       * because it fed the checker a made-up string, and only asking the real
+       * chain showed it up.
+       *
+       * The implementation address is in the ERC-1967 slot, which is where a
+       * proxy is required to keep it precisely so it can be found this way.
+       */
+      const IMPLEMENTATION_SLOT =
+        "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as const;
+
+      const raw = await this.client.getStorageAt({
+        address: this.addr,
+        slot: IMPLEMENTATION_SLOT,
+      });
+
+      /* A bare contract rather than a proxy: look at its own code. */
+      const target =
+        raw && !/^0x0*$/.test(raw)
+          ? (`0x${raw.slice(-40)}` as Address)
+          : this.addr;
+
+      const code = await this.client.getBytecode({ address: target });
+      return !!code && code.toLowerCase().includes(SET_MILESTONES_SELECTOR);
+    } catch {
+      /* Unknown is not "yes". A button that reverts on a funded escrow is worse
+         than one that is briefly absent, so this is the one read in the app
+         whose safe default is to show less. */
+      return false;
+    }
+  }
+
+  /**
+   * Rewrite a job's milestone list — add, remove, reorder, re-word.
+   *
+   * The whole list, not a delta, so the caller has to send what the job should
+   * BECOME. That is the right shape for an editor the client is looking at, and
+   * the wrong shape for anything derived from a stale read: this replaces, so a
+   * list assembled from a failed fetch would quietly drop stages. Callers build
+   * it from what is on screen, which is what the person is agreeing to.
+   */
+  async setMilestones(
+    params: {
+      escrow_id: number;
+      milestones: { amount: string; requirements: string }[];
+      /** Extra owed when the total goes up. Zero on a reduction or a reshuffle. */
+      value?: bigint;
+    },
+    write: WagmiWrite,
+  ): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: EDITING_ABI,
+      functionName: "setMilestones",
+      args: [
+        BigInt(params.escrow_id),
+        params.milestones.map((m) => BigInt(m.amount)),
+        params.milestones.map((m) => m.requirements),
+      ],
+      ...(params.value ? { value: params.value } : {}),
     });
   }
 
