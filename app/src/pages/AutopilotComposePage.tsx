@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useManagedWorker } from "@/hooks/use-managed-worker";
 import { useWriteContract } from "wagmi";
 import { useCreateEscrow } from "@/hooks/use-escrows";
 import { contractService } from "@/lib/web3/contract-service";
@@ -57,6 +58,7 @@ export default function AutopilotComposePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { wallet } = useWeb3();
+  const { worker: managedWorker } = useManagedWorker();
   const createEscrow = useCreateEscrow();
   const { writeContractAsync } = useWriteContract();
 
@@ -243,28 +245,63 @@ export default function AutopilotComposePage() {
    *
    * Placed below every hook, so the gate never changes how many run, and above
    * both conditional returns. It gates on a BROWSER wallet specifically:
-   * managed Circle accounts are the freelancer side of the product, they earn
-   * from escrows rather than funding them, and Browse Jobs and Get Hired stay
-   * open with no wallet at all.
+   * posting funds an escrow, and funding is signed by the depositor.
+   *
+   * TWO DIFFERENT PEOPLE HIT THIS WALL, AND IT USED TO SAY THE SAME THING TO
+   * BOTH.
+   *
+   * Somebody with no account needs to connect a wallet, and "connect a wallet"
+   * is exactly right for them. Somebody signed in with a managed account is
+   * looking at a header showing their own address and their own balance while
+   * the page tells them to connect a wallet — so the product appears not to
+   * know its own state, and the sentence reads as a bug rather than a boundary.
+   *
+   * They are told the actual reason instead. It is a scope line, not a
+   * technical one: the daemon already signs on a managed worker's instruction
+   * every time they apply or deliver, so nothing here is impossible. It is
+   * simply not built, and saying so is better than implying their account is
+   * broken.
    */
   if (!wallet.isConnected) {
     return (
       <div className="container mx-auto px-4 py-20 sm:py-28 max-w-lg text-center">
         <h1 className="font-display text-2xl sm:text-3xl font-bold">
-          Connect a wallet to post a job
+          {managedWorker ? "Hiring needs a wallet you sign for" : "Connect a wallet to post a job"}
         </h1>
         <p className="text-muted-foreground mt-3 leading-relaxed">
-          Autopilot manages the job, but the money stays yours the whole way —
-          funded from your wallet, held by the escrow contract, and the agent can
-          never pay itself. So there is a wallet to connect first.
+          {managedWorker ? (
+            <>
+              You are signed in as{" "}
+              <span className="text-foreground">{managedWorker.handle}</span>,
+              with a wallet we hold for you. That is built for earning — apply,
+              deliver, get paid, withdraw, all without a private key.
+              <br />
+              <br />
+              Posting is the other side of the table: it funds an escrow, and
+              the escrow answers to whoever signed for it. Connect a wallet you
+              hold the keys to and you can do both from the same browser.
+            </>
+          ) : (
+            <>
+              Autopilot manages the job, but the money stays yours the whole way
+              — funded from your wallet, held by the escrow contract, and the
+              agent can never pay itself. So there is a wallet to connect first.
+            </>
+          )}
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
           <Button asChild variant="outline">
             <Link to="/jobs">Browse jobs instead</Link>
           </Button>
-          <Button asChild variant="outline">
-            <Link to="/post">Back to modes</Link>
-          </Button>
+          {managedWorker ? (
+            <Button asChild variant="outline">
+              <Link to="/get-hired">Back to your work</Link>
+            </Button>
+          ) : (
+            <Button asChild variant="outline">
+              <Link to="/post">Back to modes</Link>
+            </Button>
+          )}
         </div>
       </div>
     );
