@@ -55,6 +55,34 @@ function weiToUsdc(wei: string): number {
   return parseFloat(wei) / 10 ** DECIMALS;
 }
 
+/**
+ * Wait for a transaction, and believe the receipt.
+ *
+ * A MINED TRANSACTION IS NOT A SUCCESSFUL ONE. All three handlers on this card
+ * awaited the receipt and then ignored `status`, so a revert rendered a success
+ * toast: "Funds withdrawn ✓ — 4.000000 USDC removed from Milestone 1" over a
+ * job whose chain state had not moved. The client goes looking for money that
+ * was never sent, and the only evidence is a toast that lied.
+ *
+ * It is a function rather than three inline checks because this exact mistake
+ * has now been made in four places in this codebase — use-job-manager.ts, and
+ * every handler here — and the fix kept not travelling. There is one place to
+ * get it right now.
+ */
+async function settle(
+  publicClient: { waitForTransactionReceipt: (a: { hash: `0x${string}` }) => Promise<{ status: string }> } | undefined,
+  hash: `0x${string}` | undefined,
+  whatDidNotHappen: string,
+): Promise<void> {
+  if (!publicClient || !hash) return;
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status === "reverted") {
+    throw new Error(
+      `The transaction was mined but reverted, so ${whatDidNotHappen}. Nothing was charged beyond gas.`,
+    );
+  }
+}
+
 function usdcToWei(usdc: number): bigint {
   return BigInt(Math.round(usdc * 10 ** DECIMALS));
 }
@@ -131,9 +159,7 @@ export function JobManagement({
       );
 
       // Wait for the block to be confirmed before refreshing UI state
-      if (publicClient && addHash) {
-        await publicClient.waitForTransactionReceipt({ hash: addHash });
-      }
+      await settle(publicClient, addHash, "no funds were added");
 
       toast({
         title: "Funds added ✓",
@@ -199,9 +225,7 @@ export function JobManagement({
       );
 
       // Wait for confirmation before refreshing
-      if (publicClient && withdrawHash) {
-        await publicClient.waitForTransactionReceipt({ hash: withdrawHash });
-      }
+      await settle(publicClient, withdrawHash, "nothing was withdrawn");
 
       toast({
         title: "Funds withdrawn ✓",
@@ -351,14 +375,7 @@ export function JobManagement({
        * changed by a cent. The same mistake was fixed in use-job-manager.ts
        * earlier and not carried across to here.
        */
-      if (publicClient && hash) {
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        if (receipt.status === "reverted") {
-          throw new Error(
-            "The transaction was mined but reverted, so the stages are unchanged. Nothing was charged beyond gas.",
-          );
-        }
-      }
+      await settle(publicClient, hash, "the stages are unchanged");
 
       toast({
         title: "Stages updated",

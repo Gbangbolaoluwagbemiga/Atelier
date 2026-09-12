@@ -416,7 +416,7 @@ handler offering only the permitted calls proves nothing.
 |---|---|
 | Network | Arc EVM Testnet · chain `5042002` |
 | Proxy (**the contract**) | [`0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE`](https://testnet.arcscan.app/address/0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE) |
-| Implementation | `0x030145459a20266da76d441b7e432a4262d99b8f` · `3.9.0-editable-milestones` |
+| Implementation | `0x4E0c0e7919b00980D1d8A67c9F33629a78fb84C8` · `3.9.1-fee-follows-the-escrow` |
 | Yield controller | [`0x44E5e128B084750694BB0B295713832cfe1750bB`](https://testnet.arcscan.app/address/0x44E5e128B084750694BB0B295713832cfe1750bB) |
 | Testnet venue | [`0xe6775B67963efE7e9F4B4e1621Ec08f8DAf97907`](https://testnet.arcscan.app/address/0xe6775B67963efE7e9F4B4e1621Ec08f8DAf97907) — `SponsoredVault`, which earns nothing and says so |
 | USDC | `0x3600000000000000000000000000000000000000` |
@@ -529,7 +529,7 @@ stake, which is on the roadmap rather than claimed.
 **Productive escrow is deployed.** The yield layer moved into `AtelierYield`, a
 companion contract, which brought Atelier from 26.2KB to 23,611 bytes — under
 EIP-170's limit with ~965 to spare. The live proxy was upgraded in place to
-`3.9.0-editable-milestones` with the escrow counter intact, which is what the UUPS work
+`3.9.1-fee-follows-the-escrow` with the escrow counter intact, which is what the UUPS work
 was for.
 
 **The Uniswap v4 leg is written and proven on a fork.** `UniswapV4StableAdapter`
