@@ -1635,6 +1635,47 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  /**
+   * A managed worker posting a job of their own.
+   *
+   * The counterpart to /api/worker/apply: same account, same wallet, other side
+   * of the table. Their Circle wallet is the depositor, so the escrow answers to
+   * them — not to Atelier and not to the agent.
+   */
+  if (req.method === "POST" && url.pathname === "/api/worker/commission") {
+    try {
+      const b = JSON.parse(await readBody(req)) as {
+        workerId?: string;
+        instruction?: string;
+        title?: string;
+        budgetUsdc?: number;
+        durationDays?: number;
+        milestones?: { description: string; amount: number }[];
+        handToAutopilot?: boolean;
+      };
+      if (!b.workerId) return json(res, 400, { error: "workerId is required" });
+      if (!b.title?.trim()) return json(res, 400, { error: "title is required" });
+      if (!Array.isArray(b.milestones) || b.milestones.length === 0) {
+        return json(res, 400, { error: "at least one milestone is required" });
+      }
+      return json(
+        res,
+        200,
+        await workers.commissionAsWorker({
+          workerId: b.workerId,
+          instruction: (b.instruction ?? b.title).trim(),
+          title: b.title,
+          budgetUsdc: Number(b.budgetUsdc ?? 0),
+          durationDays: Number(b.durationDays ?? 7),
+          milestones: b.milestones,
+          handToAutopilot: b.handToAutopilot !== false,
+        }),
+      );
+    } catch (err) {
+      return json(res, 500, { error: clientError(err) });
+    }
+  }
+
   /** Graduation to self-custody — the bot's /link, which the web could not do. */
   if (req.method === "POST" && url.pathname === "/api/worker/switch-wallet") {
     try {

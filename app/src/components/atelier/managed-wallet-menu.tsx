@@ -12,7 +12,7 @@
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Copy, ExternalLink, LogOut, RefreshCw, Wallet } from "lucide-react";
+import { Check, Copy, ExternalLink, KeyRound, LogOut, RefreshCw, Wallet } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +22,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { forgetWorker, type Worker } from "@/lib/atelier/worker";
+import { forgetWorker, linkOwnWallet, type Worker } from "@/lib/atelier/worker";
+import { useWeb3 } from "@/contexts/web3-context";
+import { toastError } from "@/lib/atelier/errors";
 
 const EXPLORER = (
   (import.meta.env.VITE_ARC_EXPLORER_URL as string | undefined) ??
@@ -44,6 +46,39 @@ export function ManagedWalletMenu({
 }) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const { wallet, connectWallet } = useWeb3();
+  const connectedAddress = wallet.isConnected ? wallet.address : null;
+
+  /**
+   * Hand this account its own keys.
+   *
+   * Connecting comes first when there is nothing connected — asking somebody to
+   * type an address is how a balance ends up swept to a typo that is still a
+   * valid address, and no validation can catch that one.
+   */
+  async function graduate() {
+    if (!connectedAddress) {
+      await connectWallet();
+      return;
+    }
+    setSwitching(true);
+    try {
+      await linkOwnWallet({ workerId: worker.id, address: connectedAddress });
+      toast({
+        title: "This account is yours now",
+        description:
+          "Your history came with you and anything held for you was sent across. You sign for yourself from here.",
+      });
+      setLinking(false);
+      onRefresh();
+    } catch (e) {
+      toast(toastError("Could not switch to your wallet", e));
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   /**
    * `balance` is null when the daemon could not read it — an RPC hiccup, not a
@@ -172,6 +207,77 @@ export function ManagedWalletMenu({
             My work and earnings
           </Link>
         </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/*
+          GRADUATION TO SELF-CUSTODY.
+          The daemon has had this since the Telegram bot's /link, and the client
+          function has been exported this whole time with nothing calling it —
+          so the honest answer to "how do I stop you holding my keys" was "you
+          cannot, from here". The trade is stated on every screen that mentions
+          this wallet; the way out of it should not be the one thing missing.
+
+          It is not a plain menu item because it MOVES MONEY: the switch sweeps
+          this wallet to the new address first, or the balance is stranded in a
+          wallet nobody is using any more. Somebody should read that sentence
+          before it happens, not after.
+        */}
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.preventDefault();
+            setLinking(true);
+          }}
+        >
+          <KeyRound className="mr-2 h-4 w-4" aria-hidden="true" />
+          Use my own wallet
+        </DropdownMenuItem>
+
+        {linking && (
+          <div className="px-2 py-2 border-t border-border/40 mt-1">
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {connectedAddress ? (
+                <>
+                  Your history moves to{" "}
+                  <span className="font-mono text-foreground">
+                    {connectedAddress.slice(0, 6)}…{connectedAddress.slice(-4)}
+                  </span>
+                  , and anything in this wallet is sent there first. Atelier
+                  stops signing for you — you sign for yourself from then on.
+                </>
+              ) : (
+                <>
+                  Connect the wallet you want to use first. Your history and
+                  your balance follow it, and Atelier stops holding keys for
+                  you.
+                </>
+              )}
+            </p>
+            <div className="flex gap-2 mt-2">
+              <Button
+                size="sm"
+                className="h-7 text-xs flex-1"
+                disabled={switching}
+                onClick={() => void graduate()}
+              >
+                {switching
+                  ? "Switching…"
+                  : connectedAddress
+                    ? "Switch to it"
+                    : "Connect a wallet"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => setLinking(false)}
+                disabled={switching}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
 
         <DropdownMenuSeparator />
 

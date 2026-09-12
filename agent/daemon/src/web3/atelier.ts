@@ -88,8 +88,72 @@ export interface CreateEscrowParams {
  * at all. Every "Locked in Escrow" row that ever appeared there came from an
  * unrelated event falling through a catch-all.
  */
-export async function createEscrow(params: CreateEscrowParams): Promise<{ escrowId: bigint; txHash: `0x${string}` }> {
-  const signer = createCircleSigner();
+/**
+ * What funding a job of this size actually costs, fee included.
+ *
+ * Exported because a caller who is about to spend somebody else's custodial
+ * balance has to be able to check it is there FIRST. Letting the transaction
+ * discover it instead means a managed worker signs an approve, pays gas for it,
+ * and then watches createEscrow revert — out of pocket, with no job and no
+ * sentence explaining why.
+ */
+/**
+ * Hand a job to a manager, signed by whoever owns it.
+ *
+ * Only ever existed in the browser, because only a browser client had ever
+ * posted a job — the agent commissions work for itself and has no reason to
+ * delegate. A managed worker posting one does: they chose Autopilot, and
+ * without this their escrow would be funded and unmanaged, which is a manual
+ * job wearing an Autopilot label.
+ *
+ * The depositor signs. That is the one-way key being handed over deliberately
+ * by its owner, not Atelier appointing itself.
+ */
+export async function setJobManager(
+  escrowId: bigint,
+  manager: `0x${string}`,
+  signer: CircleSigner,
+): Promise<`0x${string}`> {
+  const hash = await signer.walletClient.writeContract({
+    chain: arcTestnet,
+    account: signer.address,
+    address: config.atelierAddress,
+    abi,
+    functionName: "setJobManager",
+    args: [escrowId, manager],
+  });
+  await getPublicClient().waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+export async function quoteDeposit(totalAmount: bigint): Promise<{ deposit: bigint; fee: bigint }> {
+  const [deposit, fee] = (await getPublicClient().readContract({
+    address: config.atelierAddress,
+    abi,
+    functionName: "quoteDeposit",
+    args: [totalAmount],
+  })) as [bigint, bigint];
+  return { deposit, fee };
+}
+
+export async function createEscrow(
+  params: CreateEscrowParams,
+  /**
+   * Who funds it, defaulting to the agent's own treasury.
+   *
+   * The depositor is whoever signs, and the depositor is the one the contract
+   * answers to — refunds, cancellation, the yield term. So this is not a
+   * plumbing detail: passing a different signer here changes whose money is at
+   * stake and who holds the rights over it for the life of the job.
+   *
+   * The agent signs when an AI commissions work through /api/hire. A managed
+   * worker's own wallet signs when they post a job themselves, which is the
+   * whole point of letting somebody with no private key sit on either side of
+   * the table.
+   */
+  signerOverride?: CircleSigner,
+): Promise<{ escrowId: bigint; txHash: `0x${string}` }> {
+  const signer = signerOverride ?? createCircleSigner();
   const client = getPublicClient();
 
   const [deposit] = (await client.readContract({

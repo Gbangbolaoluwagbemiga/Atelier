@@ -32,6 +32,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useManagedWorker } from "@/hooks/use-managed-worker";
+import { commission } from "@/lib/atelier/worker";
 import { useWriteContract } from "wagmi";
 import { useCreateEscrow } from "@/hooks/use-escrows";
 import { contractService } from "@/lib/web3/contract-service";
@@ -157,9 +158,54 @@ export default function AutopilotComposePage() {
    * freelancer here would leave it nothing to do.
    */
   async function handleFund() {
-    if (!brief || !wallet.address) return;
+    if (!brief) return;
+    if (!wallet.address && !managedWorker) return;
     setFunding(true);
     try {
+      /*
+       * A managed worker posts through the daemon, because they hold no key.
+       *
+       * Everything up to here is identical — same instruction, same generated
+       * brief, same edits — and only the signature differs: their Circle wallet
+       * is the depositor, so the escrow answers to them exactly as it would if
+       * they had signed it in a browser extension. The daemon does the approve,
+       * the createEscrow and the hand-over in one call, because three round
+       * trips through a browser for transactions it is signing anyway would be
+       * three chances to strand a half-posted job.
+       */
+      if (!wallet.isConnected && managedWorker) {
+        const posted = await commission({
+          workerId: managedWorker.id,
+          instruction: trimmed,
+          title: brief.title,
+          budgetUsdc: total,
+          durationDays: Math.max(1, brief.durationDays),
+          milestones: brief.milestones.map((m) => ({
+            description: m.description,
+            amount: m.amount,
+          })),
+          handToAutopilot: true,
+        });
+
+        toast(
+          posted.handedOver
+            ? {
+                title: "Posted, funded, and handed to Autopilot",
+                description:
+                  "Autopilot is collecting applications. Watch it work from My Jobs.",
+              }
+            : {
+                title: "Posted and funded — not yet handed over",
+                description:
+                  "The job is open and your money is in escrow, but Autopilot was not given it. Hand it over from My Jobs.",
+              },
+        );
+        navigate("/my-jobs");
+        return;
+      }
+
+      if (!wallet.address) return;
+
       const description = [
         // First line, so it is trivial to strip and impossible to miss.
         categoryMarker(category),
@@ -238,70 +284,54 @@ export default function AutopilotComposePage() {
   /*
    * Ask for the wallet before the work, not after it.
    *
-   * Funding an escrow is signed by the client's own wallet, so composing a
-   * brief without one always ended at "Connect a wallet to fund this" — after
-   * the client had written an instruction and spent a model call on it. The
-   * dead end was at the bottom of the stairs.
+   * Funding an escrow is signed by the depositor, so composing a brief with no
+   * account at all always ended at "Connect a wallet to fund this" — after the
+   * client had written an instruction and spent a model call on it. The dead
+   * end was at the bottom of the stairs.
    *
    * Placed below every hook, so the gate never changes how many run, and above
-   * both conditional returns. It gates on a BROWSER wallet specifically:
-   * posting funds an escrow, and funding is signed by the depositor.
+   * both conditional returns.
    *
-   * TWO DIFFERENT PEOPLE HIT THIS WALL, AND IT USED TO SAY THE SAME THING TO
-   * BOTH.
+   * IT NO LONGER GATES ON A BROWSER WALLET.
    *
-   * Somebody with no account needs to connect a wallet, and "connect a wallet"
-   * is exactly right for them. Somebody signed in with a managed account is
-   * looking at a header showing their own address and their own balance while
-   * the page tells them to connect a wallet — so the product appears not to
-   * know its own state, and the sentence reads as a bug rather than a boundary.
+   * It used to, on the reasoning that "managed Circle accounts are the
+   * freelancer side of the product, they earn from escrows rather than funding
+   * them". That was a scope line dressed as a rule, and it contradicted the
+   * decision recorded in nav.ts — the two dashboards were merged into one
+   * because most people here hire someone one week and take a job the next. A
+   * door that only opens outward makes that false for everybody who came
+   * through it.
    *
-   * They are told the actual reason instead. It is a scope line, not a
-   * technical one: the daemon already signs on a managed worker's instruction
-   * every time they apply or deliver, so nothing here is impossible. It is
-   * simply not built, and saying so is better than implying their account is
-   * broken.
+   * A managed worker now posts through the daemon, which signs with their own
+   * Circle wallet. So the only person who still meets this wall is somebody
+   * with no account of either kind, and "connect a wallet" is exactly right
+   * for them.
    */
-  if (!wallet.isConnected) {
+  if (!wallet.isConnected && !managedWorker) {
     return (
       <div className="container mx-auto px-4 py-20 sm:py-28 max-w-lg text-center">
         <h1 className="font-display text-2xl sm:text-3xl font-bold">
-          {managedWorker ? "Hiring needs a wallet you sign for" : "Connect a wallet to post a job"}
+          Connect a wallet to post a job
         </h1>
         <p className="text-muted-foreground mt-3 leading-relaxed">
-          {managedWorker ? (
-            <>
-              You are signed in as{" "}
-              <span className="text-foreground">{managedWorker.handle}</span>,
-              with a wallet we hold for you. That is built for earning — apply,
-              deliver, get paid, withdraw, all without a private key.
-              <br />
-              <br />
-              Posting is the other side of the table: it funds an escrow, and
-              the escrow answers to whoever signed for it. Connect a wallet you
-              hold the keys to and you can do both from the same browser.
-            </>
-          ) : (
-            <>
-              Autopilot manages the job, but the money stays yours the whole way
-              — funded from your wallet, held by the escrow contract, and the
-              agent can never pay itself. So there is a wallet to connect first.
-            </>
-          )}
+          Autopilot manages the job, but the money stays yours the whole way —
+          funded from your wallet, held by the escrow contract, and the agent can
+          never pay itself. So there is a wallet to connect first.
+        </p>
+        <p className="text-muted-foreground mt-3 text-sm">
+          No wallet at all?{" "}
+          <Link to="/get-hired" className="text-foreground underline underline-offset-4">
+            Get an account
+          </Link>{" "}
+          — Atelier holds one for you, and you can post from it too.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
           <Button asChild variant="outline">
             <Link to="/jobs">Browse jobs instead</Link>
           </Button>
-          {managedWorker ? (
-            <Button asChild variant="outline">
-              <Link to="/get-hired">Back to your work</Link>
-            </Button>
-          ) : (
-            <Button asChild variant="outline">
-              <Link to="/post">Back to modes</Link>
-            </Button>
-          )}
+          <Button asChild variant="outline">
+            <Link to="/post">Back to modes</Link>
+          </Button>
         </div>
       </div>
     );

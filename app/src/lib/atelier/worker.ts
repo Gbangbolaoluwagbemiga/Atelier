@@ -388,6 +388,33 @@ export async function withdraw(input: {
   });
 }
 
+/**
+ * Post a job, funded from the managed wallet.
+ *
+ * The other side of the table for somebody with no private key. Their Circle
+ * wallet is the depositor, so the escrow answers to them — not to Atelier and
+ * not to the agent, which is the same rule a wallet client gets.
+ *
+ * `handedOver` is reported separately because the hand-over is a second
+ * transaction and can fail on its own, after the money is already safe. A job
+ * that is funded but not delegated is a real state, and calling it a failure
+ * would send somebody looking for a refund on an escrow that exists.
+ */
+export async function commission(input: {
+  workerId: string;
+  instruction: string;
+  title: string;
+  budgetUsdc: number;
+  durationDays: number;
+  milestones: { description: string; amount: number }[];
+  handToAutopilot?: boolean;
+}): Promise<{ escrowId: string; txHash: string; taskId: string; handedOver: boolean }> {
+  return call("/api/worker/commission", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 /** Swap a managed wallet for one whose keys the person holds. History follows. */
 export async function linkOwnWallet(input: {
   workerId: string;

@@ -1431,3 +1431,161 @@ export async function switchToOwnWallet(workerId: string, addressInput: `0x${str
   store.setWorkerOwnWallet(workerId, address);
   return store.getWorker(workerId)!;
 }
+
+/**
+ * POST A JOB FROM A MANAGED WALLET.
+ *
+ * The supply side of this marketplace was allowed to earn and nothing else. A
+ * managed worker could apply, deliver, be paid and withdraw, and the moment
+ * they wanted to hire somebody the app told them to connect a wallet — while
+ * showing them their own address and balance in the header.
+ *
+ * That was a scope line dressed up as a rule. Nothing about custody forbids it:
+ * this daemon already signs `applyToJob`, `startWork`, `submitMilestone` and
+ * `withdraw` on a worker's instruction, and every one of those moves value or
+ * commits them to work. Funding an escrow is the same act with a different
+ * function selector.
+ *
+ * It also contradicted a decision already made elsewhere in the product — the
+ * two dashboards were merged into one because "most people here hire someone
+ * one week and take a job the next". A door that only opens outward makes that
+ * sentence false for everybody who came through it.
+ *
+ * WHAT THIS IS CAREFUL ABOUT
+ *
+ * It spends somebody's custodial balance, so every check happens BEFORE the
+ * first signature. A revert after an approve costs them gas and leaves them
+ * with no job and no explanation, and they have no mempool to go and read.
+ */
+export async function commissionAsWorker(input: {
+  workerId: string;
+  instruction: string;
+  title: string;
+  budgetUsdc: number;
+  durationDays: number;
+  milestones: { description: string; amount: number }[];
+  /**
+   * Hand it to Autopilot once it is funded.
+   *
+   * A second transaction, because the escrow has to exist before it can have a
+   * manager. Without it the job is funded and unmanaged — a manual job wearing
+   * an Autopilot label, which is exactly the bug the browser flow had before
+   * the hand-over was wired in there.
+   */
+  handToAutopilot?: boolean;
+}): Promise<{ escrowId: string; txHash: string; taskId: string; handedOver: boolean }> {
+  const worker = store.getWorker(input.workerId);
+  if (!worker) throw new UserFacingError("Unknown worker.");
+
+  /* Throws with the right sentence for somebody who brought their own keys —
+     Atelier cannot sign for them, and should not pretend otherwise. */
+  const signer = signerFor(worker);
+
+  const milestones = input.milestones.filter((m) => m.description.trim() && m.amount > 0);
+  if (milestones.length === 0) {
+    throw new UserFacingError("A job needs at least one milestone with a description and an amount.");
+  }
+
+  /*
+   * The milestones ARE the budget.
+   *
+   * createEscrow rejects a mismatch outright, and a revert here would be the
+   * expensive way to learn it. Compared in integer base units, because 0.1 +
+   * 0.2 is famously not 0.3 and a job funded to the cent should not fail on
+   * the cent.
+   */
+  const toBase = (usdc: number) => BigInt(Math.round(usdc * 1e6));
+  const milestoneAmounts = milestones.map((m) => toBase(m.amount));
+  const total = milestoneAmounts.reduce((a, b) => a + b, 0n);
+  const budget = toBase(input.budgetUsdc);
+  if (total !== budget) {
+    throw new UserFacingError(
+      `The milestones add up to ${Number(total) / 1e6} USDC but the budget is ${input.budgetUsdc} USDC. They have to match.`,
+    );
+  }
+  if (total <= 0n) throw new UserFacingError("The budget has to be more than zero.");
+
+  /*
+   * Can they actually afford it, fee included?
+   *
+   * The platform fee is charged on top of the budget, so somebody with exactly
+   * their budget in the wallet cannot post — and the number they need to see is
+   * the total, not the shortfall against a figure they never entered.
+   */
+  const { deposit, fee } = await atelier.quoteDeposit(total);
+  const held = toBase(Number(await workerBalance(worker.walletAddress as `0x${string}`)));
+  if (held < deposit) {
+    throw new UserFacingError(
+      `Posting this needs ${Number(deposit) / 1e6} USDC — ${input.budgetUsdc} for the work and ${Number(fee) / 1e6} in platform fee. Your wallet holds ${Number(held) / 1e6}.`,
+    );
+  }
+
+  /* Signing costs gas, and a managed wallet is topped up rather than funded. */
+  await dripGas(worker.walletAddress as `0x${string}`).catch(() => {
+    /* Already has enough, or the faucet is empty — the write below will say so
+       far more precisely than a guess here would. */
+  });
+
+  const taskId = crypto.randomUUID();
+  store.insertTask({
+    id: taskId,
+    escrowId: null,
+    instruction: input.instruction,
+    /* "human" — this is a person hiring, and the decision log should not credit
+       an agent for a commission a person wrote and paid for. */
+    clientType: "human",
+    status: "briefing",
+    briefJson: null,
+    clientAddress: worker.walletAddress,
+  });
+
+  try {
+    const { escrowId, txHash } = await atelier.createEscrow(
+      {
+        totalAmount: total,
+        durationDays: BigInt(Math.max(1, Math.round(input.durationDays))),
+        milestoneAmounts,
+        milestoneDescriptions: milestones.map((m) => m.description.trim()),
+        projectTitle: input.title.trim().slice(0, 90),
+        projectDescription: input.instruction.trim(),
+      },
+      signer,
+    );
+
+    store.updateTaskBrief(
+      taskId,
+      JSON.stringify({
+        title: input.title.trim().slice(0, 90),
+        budget: input.budgetUsdc,
+        durationDays: input.durationDays,
+        milestones,
+      }),
+    );
+    store.updateTaskStatus(taskId, "posted", escrowId.toString());
+
+    /*
+     * The money is already safe at this point, so a failure here must not read
+     * as a failure to post. The job exists and is funded; it simply is not
+     * delegated yet, and the client can hand it over from My Jobs.
+     */
+    let handedOver = false;
+    if (input.handToAutopilot) {
+      try {
+        await atelier.setJobManager(escrowId, config.circleWalletAddress as `0x${string}`, signer);
+        handedOver = true;
+      } catch (err) {
+        console.warn(
+          "[commission] funded but not handed to Autopilot:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
+    return { escrowId: escrowId.toString(), txHash, taskId, handedOver };
+  } catch (err) {
+    /* Otherwise the row sits at "briefing" forever and the stats bar counts it
+       as work in progress that nobody is doing. */
+    store.updateTaskStatus(taskId, "failed");
+    throw err;
+  }
+}

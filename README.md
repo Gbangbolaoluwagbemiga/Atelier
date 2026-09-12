@@ -210,6 +210,13 @@ The trade is stated where someone can act on it rather than buried: **we hold
 the keys.** Withdraw to an address you own, or bring your own wallet from the
 start and sign everything yourself.
 
+The door opens both ways. A managed worker can post and fund a job as well as
+take one — their own Circle wallet is the depositor, so the escrow answers to
+them exactly as it would if they had signed it in a browser extension, and they
+can hand it to Autopilot in the same step. And when they want their own keys,
+one button moves the account, the history and the balance to a wallet they
+control; Atelier stops signing for them from then on.
+
 Behind the door is a board that has to work for somebody holding no wallet at
 all: the stage they are delivering against and the criteria it will be judged
 on, the reviewer's verdict criterion by criterion when work comes back, an
@@ -355,14 +362,14 @@ Open **http://localhost:5173**.
 
 ## Testing
 
-**901 tests.** The contract suite went from zero.
+**921 tests.** The contract suite went from zero.
 
 | Suite | Count | What it covers |
 |---|--:|---|
 | Contract | **165** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
-| Frontend | **434** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job, and what the board does when a read fails |
+| Frontend | **439** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job, and what the board does when a read fails |
 | Backend | **71** | Route handlers, which browsers may call them, what they do when the database is unreachable, and that two spellings of an address are one person |
-| Daemon | **183** | Who the agent tells, who it hires, which jobs it picks up, whether it pays — and the difference between "nothing" and "could not find out" |
+| Daemon | **198** | Who the agent tells, who it hires, which jobs it picks up, whether it pays — and the difference between "nothing" and "could not find out" |
 | Full-stack E2E | **48** | Real browser against real services — Playwright |
 
 A disproportionate share of the recent ones are about a single failure shape:
@@ -374,9 +381,9 @@ it has been found now has a test naming the incident.
 
 ```bash
 (cd app/contracts/solidity && forge test)   # 165
-(cd app && npm test)                        # 434
+(cd app && npm test)                        # 439
 (cd backend && npx vitest run)              # 71
-(cd agent/daemon && npm test)               # 183
+(cd agent/daemon && npm test)               # 198
 (cd app && npm run e2e)                     # 48 — needs all three services up
 
 # Typecheck the web app with `npm run typecheck`, never `tsc --noEmit`:
