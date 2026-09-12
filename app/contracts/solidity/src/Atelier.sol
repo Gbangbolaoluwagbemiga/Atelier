@@ -73,8 +73,13 @@ import "./yield/IAtelierYield.sol";
  * paid for it was not a trim either — the 17-field Milestone struct literal was
  * written out twice, at creation and when rewriting the list, and collapsing
  * both into one private _pushMilestone freed ~1,473 bytes. Duplicated struct
- * literals are the cheapest thing to look for when this contract is full; the
- * margin afterwards was 995, wider than before the feature was added.
+ * literals are the cheapest thing to look for when this contract is full.
+ *
+ * A LESSON ABOUT THE ORDER OF THOSE TWO MOVES, which cost nothing but is worth
+ * writing down: addJobFunds was deleted first, to buy 316 bytes toward the 794
+ * still needed. The dedup then freed five times that, and the deletion had
+ * stopped being necessary without anybody noticing. It was restored. Check
+ * whether a sacrifice is still required after the real fix lands.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 contract Atelier is
@@ -1199,6 +1204,59 @@ contract Atelier is
         }
         esc.totalAmount = newTotal;
         emit JobFundsUpdated(escrowId, oldTotal, newTotal, newTotal > oldTotal);
+    }
+
+    /**
+     * @notice Add more funds to one milestone of a job nobody has started.
+     * @dev KEPT ALONGSIDE setMilestones, deliberately, after being removed and
+     *      put back. It was removed to make room — setMilestones needed 940
+     *      bytes and there were 146 — and then deduplicating the Milestone
+     *      struct literal freed 1,473, at which point the reason had gone and
+     *      the removal had not.
+     *
+     *      It earns its place on safety, not just on space. This takes a DELTA:
+     *      it cannot drop a stage, because it never names the ones it is not
+     *      touching. setMilestones takes the whole list, so a caller working
+     *      from a stale or failed read can silently delete work the client
+     *      still wanted. For "put another 10 in", the narrow call is the one
+     *      that cannot go wrong, and the general one is there for the job it
+     *      was actually built for.
+     * @param milestoneIndex The milestone that receives the additional funds.
+     */
+    function addJobFunds(uint256 escrowId, uint256 additionalAmount, uint256 milestoneIndex)
+        external payable nonReentrant whenNotPaused
+    {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+        // Same rule as cancelJob: before work starts, the job is still the
+        // client's to adjust.
+        if (esc.workStarted) revert CannotCancelAssignedJob();
+        if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
+        if (additionalAmount == 0) revert InvalidAmount();
+
+        // Validate milestone index before any state changes
+        Milestone storage m = _getMilestone(escrowId, milestoneIndex);
+        if (m.status != MilestoneStatus.NotStarted) revert MilestoneAlreadyProcessed();
+
+        uint256 additionalFee = (additionalAmount * platformFeeBP) / 10000;
+        uint256 totalDeposit = additionalAmount + additionalFee;
+
+        if (esc.token == NATIVE_TOKEN) {
+            if (msg.value != totalDeposit) revert InvalidAmount();
+        } else {
+            if (msg.value != 0) revert InvalidAmount();
+            IERC20(esc.token).safeTransferFrom(msg.sender, address(this), totalDeposit);
+        }
+
+        uint256 oldTotal = esc.totalAmount;
+        esc.totalAmount += additionalAmount;
+        esc.platformFee += additionalFee;
+        m.amount += additionalAmount; // keep sum invariant
+
+        escrowedAmount[esc.token] += additionalAmount;
+        totalFeesByToken[esc.token] += additionalFee;
+
+        emit JobFundsUpdated(escrowId, oldTotal, esc.totalAmount, true);
     }
 
     /**

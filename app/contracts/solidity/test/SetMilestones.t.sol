@@ -93,13 +93,42 @@ contract SetMilestonesTest is JobManagerBase {
     }
 
     /**
-     * NOTHING WAS TAKEN AWAY.
+     * THE SAME JOB, THE OTHER WAY ROUND.
      *
-     * addJobFunds was removed, so the one thing it could do has to still be
-     * reachable: top up a single milestone, pay the fee on the addition, leave
-     * every other stage alone. It is a strict subset of a list rewrite, and
-     * this is the test that says so rather than the commit message.
+     * addJobFunds still exists — it was removed to make room, put back once
+     * deduplicating the Milestone struct literal made room, and kept because it
+     * is the SAFER of the two for what it does. It takes a delta, so it cannot
+     * drop a stage; setMilestones takes the whole list, so a caller working
+     * from a stale read can.
+     *
+     * This asserts they agree on the arithmetic, so the narrow call staying
+     * around never becomes a second, subtly different answer.
      */
+    function test_theTwoRoutesAgreeOnToppingUpAStage() public {
+        // addJobFunds(id, 10e6, 0) and the equivalent list rewrite must leave
+        // the escrow in the same state and cost the client the same.
+        uint256 viaDelta = _createOpenJob();
+        uint256 beforeDelta = usdc.balanceOf(client);
+        vm.prank(client);
+        sf.addJobFunds(viaDelta, 10e6, 0);
+        uint256 spentViaDelta = beforeDelta - usdc.balanceOf(client);
+
+        uint256 viaList = _createOpenJob();
+        uint256 beforeList = usdc.balanceOf(client);
+        vm.prank(client);
+        sf.setMilestones(viaList, _amounts(M1 + 10e6, M2, NONE), _reqs(2));
+        uint256 spentViaList = beforeList - usdc.balanceOf(client);
+
+        assertEq(spentViaDelta, spentViaList, "same cost");
+        assertEq(
+            sf.getEscrow(viaDelta).totalAmount,
+            sf.getEscrow(viaList).totalAmount,
+            "same total"
+        );
+        assertEq(sf.getMilestones(viaDelta)[0].amount, sf.getMilestones(viaList)[0].amount);
+        assertEq(sf.getMilestones(viaDelta)[1].amount, sf.getMilestones(viaList)[1].amount);
+    }
+
     function test_toppingUpOneMilestone_whatAddJobFundsDid() public {
         uint256 id = _createOpenJob(); // 300 + 600
         uint256 before = usdc.balanceOf(client);

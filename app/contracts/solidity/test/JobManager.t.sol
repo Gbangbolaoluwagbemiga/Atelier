@@ -218,8 +218,12 @@ contract JobManagerTest is JobManagerBase {
         vm.expectRevert(Atelier.Unauthorized.selector);
         sf.withdrawJobFunds(id, 10e6, 0);
 
-        // setMilestones is the surface that can now raise a job's total, so
-        // the one-way key has to be barred from it too.
+        vm.prank(manager);
+        vm.expectRevert(Atelier.Unauthorized.selector);
+        sf.addJobFunds(id, 10e6, 0);
+
+        // Every surface that can move a job's total, not just the one that
+        // existed when this test was written. setMilestones can raise it too.
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 10e6;
         string[] memory reqs = new string[](1);
