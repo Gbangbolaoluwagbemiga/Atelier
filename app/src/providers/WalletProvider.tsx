@@ -78,8 +78,24 @@ createAppKit({
   },
 });
 
+/*
+ * WHY THE BALANCE NEEDED A HARD REFRESH.
+ *
+ * `refetchOnWindowFocus: false` told every wagmi query — the wallet balance
+ * among them — never to re-read when you come back to the tab. So the one
+ * moment a person is most likely to want a fresh number, having just signed
+ * something in their wallet or watched a withdrawal land, was precisely the
+ * moment nothing refetched. Reloading the page was the only way to see your own
+ * money move.
+ *
+ * It is on now, with a short staleTime so returning to the tab repeatedly does
+ * not turn into a request per glance. The chain is the source of truth and it
+ * changes without asking us.
+ */
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { refetchOnWindowFocus: false, retry: false } },
+  defaultOptions: {
+    queries: { refetchOnWindowFocus: true, staleTime: 10_000, retry: false },
+  },
 });
 
 export const WalletProvider = ({ children }: { children: React.ReactNode }) => (

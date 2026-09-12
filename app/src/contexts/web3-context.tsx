@@ -26,7 +26,18 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const { disconnect } = useDisconnect();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
-  const { data: balanceData, refetch: refetchBalance } = useBalance({ address });
+  /*
+   * Polled as well as refetched on focus.
+   *
+   * A withdrawal or an escrow funding changes this number without the browser
+   * doing anything, and the header is where people look to confirm it happened.
+   * Fifteen seconds is slow enough to be invisible against one balance read and
+   * fast enough that nobody reaches for the reload button.
+   */
+  const { data: balanceData, refetch: refetchBalance } = useBalance({
+    address,
+    query: { refetchInterval: 15_000 },
+  });
   const { open } = useAppKit();
 
   const [isOwner] = useState(false);

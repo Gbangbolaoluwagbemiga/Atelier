@@ -73,6 +73,10 @@ async function settle(
   publicClient: { waitForTransactionReceipt: (a: { hash: `0x${string}` }) => Promise<{ status: string }> } | undefined,
   hash: `0x${string}` | undefined,
   whatDidNotHappen: string,
+  /* Called on success, because every caller here moves the client's own money
+     and the header is where they look to confirm it. Waiting up to fifteen
+     seconds for the next poll is how "did that work?" starts. */
+  onSettled?: () => void,
 ): Promise<void> {
   if (!publicClient || !hash) return;
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -81,6 +85,7 @@ async function settle(
       `The transaction was mined but reverted, so ${whatDidNotHappen}. Nothing was charged beyond gas.`,
     );
   }
+  onSettled?.();
 }
 
 function usdcToWei(usdc: number): bigint {
@@ -101,7 +106,7 @@ export function JobManagement({
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const { toast } = useToast();
-  const { wallet } = useWeb3();
+  const { wallet, refreshBalance } = useWeb3();
   const { addCrossWalletNotification } = useNotifications();
 
   // ── Add Funds ────────────────────────────────────────────────────────────
@@ -159,7 +164,7 @@ export function JobManagement({
       );
 
       // Wait for the block to be confirmed before refreshing UI state
-      await settle(publicClient, addHash, "no funds were added");
+      await settle(publicClient, addHash, "no funds were added", () => void refreshBalance());
 
       toast({
         title: "Funds added ✓",
@@ -225,7 +230,7 @@ export function JobManagement({
       );
 
       // Wait for confirmation before refreshing
-      await settle(publicClient, withdrawHash, "nothing was withdrawn");
+      await settle(publicClient, withdrawHash, "nothing was withdrawn", () => void refreshBalance());
 
       toast({
         title: "Funds withdrawn ✓",
@@ -375,7 +380,7 @@ export function JobManagement({
        * changed by a cent. The same mistake was fixed in use-job-manager.ts
        * earlier and not carried across to here.
        */
-      await settle(publicClient, hash, "the stages are unchanged");
+      await settle(publicClient, hash, "the stages are unchanged", () => void refreshBalance());
 
       toast({
         title: "Stages updated",
