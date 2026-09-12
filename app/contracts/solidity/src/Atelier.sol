@@ -392,7 +392,7 @@ contract Atelier is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.9.0-editable-milestones";
+        return "3.9.1-fee-follows-the-escrow";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -1175,7 +1175,7 @@ contract Atelier is
         uint256 oldTotal = esc.totalAmount;
         if (newTotal > oldTotal) {
             uint256 add = newTotal - oldTotal;
-            uint256 addFee = (add * platformFeeBP) / 10000;
+            uint256 addFee = _feeShare(esc, add);
             if (esc.token == NATIVE_TOKEN) {
                 if (msg.value != add + addFee) revert InvalidAmount();
             } else {
@@ -1188,8 +1188,8 @@ contract Atelier is
         } else if (newTotal < oldTotal) {
             if (msg.value != 0) revert InvalidAmount();
             uint256 back = oldTotal - newTotal;
-            // The fee follows the money, exactly as withdrawJobFunds refunds it.
-            uint256 feeBack = (back * platformFeeBP) / 10000;
+            // The fee follows the money, at the rate this escrow actually pays.
+            uint256 feeBack = _feeShare(esc, back);
             esc.platformFee -= feeBack;
             escrowedAmount[esc.token] -= back;
             totalFeesByToken[esc.token] -= feeBack;
@@ -1238,7 +1238,7 @@ contract Atelier is
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);
         if (m.status != MilestoneStatus.NotStarted) revert MilestoneAlreadyProcessed();
 
-        uint256 additionalFee = (additionalAmount * platformFeeBP) / 10000;
+        uint256 additionalFee = _feeShare(esc, additionalAmount);
         uint256 totalDeposit = additionalAmount + additionalFee;
 
         if (esc.token == NATIVE_TOKEN) {
@@ -1302,7 +1302,7 @@ contract Atelier is
         if (m.status != MilestoneStatus.NotStarted) revert MilestoneAlreadyProcessed();
         if (withdrawAmount > m.amount) revert InvalidAmount(); // can't reduce below zero
 
-        uint256 feeToRefund = (withdrawAmount * platformFeeBP) / 10000;
+        uint256 feeToRefund = _feeShare(esc, withdrawAmount);
         uint256 oldTotal = esc.totalAmount;
 
         esc.totalAmount -= withdrawAmount;
@@ -1550,6 +1550,28 @@ contract Atelier is
      *      assigning the two fields that are not zero is also smaller than
      *      spelling out fifteen zeroes.
      */
+    /**
+     * @dev What fee belongs to `part` of this escrow, at the rate this escrow
+     *      actually pays.
+     *
+     * NOT platformFeeBP. A job put to work has its fee waived outright at
+     * creation — `fee = putToWork ? 0 : ...` — and three functions that adjust
+     * a funded job all assumed the standard rate anyway. On a waived escrow
+     * that meant addJobFunds and setMilestones CHARGED a fee the client had
+     * been told they would not pay, and withdrawJobFunds tried to refund one
+     * that was never taken, underflowing and reverting: the client could put
+     * money into such a job and never take it out again.
+     *
+     * Scaling by what the escrow holds is right at both ends. A waived escrow
+     * has platformFee 0, so every adjustment is fee-free, for ever. A charged
+     * one keeps the ratio it was created with. And a refund can never exceed
+     * what was collected, which is what the underflow was really saying.
+     */
+    function _feeShare(Escrow storage esc, uint256 part) private view returns (uint256) {
+        if (esc.platformFee == 0 || esc.totalAmount == 0) return 0;
+        return (part * esc.platformFee) / esc.totalAmount;
+    }
+
     function _pushMilestone(uint256 escrowId, uint256 amount, string calldata requirements) private {
         Milestone storage m = escrowMilestones[escrowId].push();
         m.amount = amount;
